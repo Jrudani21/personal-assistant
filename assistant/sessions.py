@@ -41,6 +41,37 @@ def export_markdown(chat: dict) -> str:
     return "\n".join(lines)
 
 
+def search_chats(query: str) -> list[dict]:
+    """Case-insensitive search over chat titles and message content.
+    Returns matches newest-first with a short snippet of the hit."""
+    q = query.lower().strip()
+    if not q:
+        return list_chats()
+    files = sorted(CHATS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+    results = []
+    for f in files:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        title = data.get("title", "New chat")
+        snippet = None
+        if q in title.lower():
+            snippet = title
+        else:
+            for m in data.get("messages", []):
+                content = m.get("content", "")
+                idx = content.lower().find(q)
+                if idx != -1:
+                    start = max(0, idx - 40)
+                    end = min(len(content), idx + len(q) + 40)
+                    snippet = ("..." if start > 0 else "") + content[start:end] + ("..." if end < len(content) else "")
+                    break
+        if snippet is not None:
+            results.append({"id": data["id"], "title": title, "snippet": snippet})
+    return results
+
+
 def list_chats() -> list[dict]:
     """Newest first, by file mtime."""
     files = sorted(CHATS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)

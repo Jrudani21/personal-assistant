@@ -40,13 +40,19 @@ with st.sidebar:
             use_container_width=True,
         )
 
+    search_q = st.text_input("Search chats", key="chat_search", placeholder="search...", label_visibility="collapsed")
     st.caption("Chats")
-    for c in sessions.list_chats():
+    chat_list = sessions.search_chats(search_q) if search_q.strip() else sessions.list_chats()
+    if search_q.strip() and not chat_list:
+        st.caption("No matches.")
+    for c in chat_list:
         cols = st.columns([5, 1])
         active = c["id"] == st.session_state.chat["id"]
         if cols[0].button(("● " if active else "") + c["title"], key=f"load_{c['id']}", use_container_width=True):
             st.session_state.chat = sessions.load(c["id"])
             st.rerun()
+        if c.get("snippet") and c["snippet"] != c["title"]:
+            cols[0].caption(c["snippet"])
         if cols[1].button("🗑", key=f"del_{c['id']}"):
             sessions.delete(c["id"])
             if active:
