@@ -89,20 +89,6 @@ affects every project you use Claude Code on, not just this one:
 ## Deferred — bigger effort, not attempted this session (avoiding a rushed
 half-implementation of something you haven't seen the design for)
 
-- **Conversation summarization / compaction for long chats** (medium effort)
-  — now has a concrete, source-grounded design after reading prime-agent's
-  actual `compaction.ts`: estimate tokens with a chars/4 heuristic (no
-  tokenizer dependency needed), pick a cut point that keeps the last N
-  messages verbatim, summarize everything older into a fixed template
-  (Goal / Constraints / Progress / Key Decisions / Next Steps) with an
-  explicit instruction to preserve exact file paths, function names, error
-  messages. **Deliberately not implemented yet** — it's a real design
-  decision I don't want to make unilaterally: does the summary get spliced
-  in only for the API call (recomputed, and re-summarized, every turn once
-  past threshold — wasteful) or persisted back into the actual chat history
-  (changes what you see in the chat UI and what gets exported/searched)?
-  Also needs a threshold tuned to your actual Ollama `num_ctx`, which I
-  don't know. Tell me which tradeoff you want and I'll build it.
 - **Persistent Python REPL session** (medium-large effort) — `run_python`
   currently spins a fresh subprocess per call with no state; a long-lived
   kernel would let multi-step pandas/stats workflows keep variables alive
@@ -115,6 +101,42 @@ half-implementation of something you haven't seen the design for)
   only rewrites on rare full edits (compaction). Real but minor win
   (crash-safety, O(1) vs O(n) writes) — only worth it if chat files get
   large. Their own research note called this "not urgent."
+
+## Shipped — round 3: conversation compaction
+
+Implemented `assistant/compaction.py`. Resolved the round-2 tradeoff without
+picking a side: the cache lives in `chat['compaction']`, a field outside
+`chat['messages']` entirely — the chat UI, export, and search all iterate
+`messages` only, so they never see anything different. Only what's sent to
+Ollama changes.
+
+- Trigger: history estimated over 4000 tokens (chars/4 heuristic), leaving
+  headroom in the real `OLLAMA_CONTEXT_LENGTH=8192` on this machine
+  (confirmed via `ollama show`/`ollama ps`, not guessed) for system prompt +
+  tool schemas + response.
+- Cut point always lands on a `user`-role message, snapped to buckets of 10
+  so the cache survives many turns instead of re-summarizing on every
+  message — verified with a synthetic 62-message history that cuts never
+  land mid tool-call round (would otherwise send Ollama an orphaned tool
+  result and error).
+- One extra LLM call to summarize the old portion into a fixed template
+  (Goal/Constraints/Progress/Key decisions/Next steps); cached and reused
+  until the cut point shifts.
+- Degrades to raw history if summarization fails (Ollama down) — verified
+  via the `OLLAMA_HOST` outage-simulation trick, no crash, no bad cache
+  written.
+- Wired into `app.py`'s single `stream_chat` call site via
+  `compaction.get_llm_messages(chat, model)`.
+
+Tested: unit tests on the safe-cut logic (multiple targets, all land on
+`user`), short-chat passthrough (returns the same object, no-op), full
+trigger with a real 80-message synthetic chat via the actual model
+(compacted to 21 messages, cache verified stable across repeat calls,
+original `chat['messages']` left at full 80), outage fallback, and a full
+path test through the real `stream_chat` — asked about the most recent of
+40 numbered facts, correctly answered from the verbatim tail. All test
+chats cleaned up after (`sessions.delete`), no leftover data. `py_compile`
+clean, Streamlit restarted clean on :8501.
 
 ## Resolved this round
 

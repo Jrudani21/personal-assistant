@@ -5,7 +5,7 @@ import streamlit as st
 import ollama
 
 from assistant.llm import stream_chat
-from assistant import memory, sessions, rag, reminders, todo, voice
+from assistant import compaction, memory, sessions, rag, reminders, todo, voice
 
 st.set_page_config(page_title="Personal Assistant", page_icon="🧠", layout="centered")
 
@@ -216,8 +216,9 @@ if prompt:
             with tool_box.expander(f"Used {len(tool_log)} tool{'s' if len(tool_log) != 1 else ''}", expanded=False):
                 st.markdown("\n\n".join(tool_log))
 
+        llm_messages = compaction.get_llm_messages(st.session_state.chat, model)
         reply = st.write_stream(
-            stream_chat(model, st.session_state.chat["messages"], on_tool_call=on_tool_call)
+            stream_chat(model, llm_messages, on_tool_call=on_tool_call)
         )
 
         if speak_replies and reply.strip():
