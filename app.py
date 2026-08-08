@@ -5,9 +5,37 @@ import streamlit as st
 import ollama
 
 from assistant.llm import stream_chat
-from assistant import memory, sessions, rag, voice
+from assistant import memory, sessions, rag, reminders, todo, voice
 
 st.set_page_config(page_title="Personal Assistant", page_icon="🧠", layout="centered")
+
+st.markdown(
+    """
+    <style>
+    .stApp { max-width: 900px; margin: 0 auto; }
+    [data-testid="stChatMessage"] {
+        border-radius: 14px;
+        padding: 0.9rem 1.1rem;
+        margin-bottom: 0.4rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    [data-testid="stSidebar"] { border-right: 1px solid rgba(128,128,128,0.15); }
+    [data-testid="stSidebar"] .stButton button {
+        border-radius: 8px;
+        text-align: left;
+        justify-content: flex-start;
+    }
+    div[data-testid="stDivider"] { margin: 0.6rem 0; }
+    .empty-state {
+        text-align: center;
+        opacity: 0.6;
+        padding: 3rem 1rem;
+    }
+    .empty-state h3 { margin-bottom: 0.3rem; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 try:
     AVAILABLE_MODELS = [m["model"] for m in ollama.list().get("models", [])]
@@ -20,6 +48,12 @@ DEFAULT_MODEL = "qwen2.5:7b" if "qwen2.5:7b" in AVAILABLE_MODELS else (
 
 if "chat" not in st.session_state:
     st.session_state.chat = sessions.new_chat()
+
+toasted = st.session_state.setdefault("toasted_reminders", set())
+for r in reminders.due_reminders():
+    if r["id"] not in toasted:
+        st.toast(f"⏰ {r['text']}", icon="⏰")
+        toasted.add(r["id"])
 
 # ---------- Sidebar ----------
 with st.sidebar:
@@ -83,6 +117,36 @@ with st.sidebar:
         st.caption("No documents uploaded.")
 
     st.divider()
+    st.subheader("Tasks")
+    tasks = todo.get_tasks()
+    if tasks:
+        for t in tasks:
+            tcols = st.columns([1, 4, 1])
+            done = tcols[0].checkbox("", value=t["done"], key=f"task_{t['id']}", label_visibility="collapsed")
+            if done != t["done"]:
+                todo.set_task_done(t["id"], done)
+                st.rerun()
+            tcols[1].markdown(f"~~{t['text']}~~" if t["done"] else t["text"])
+            if tcols[2].button("🗑", key=f"rmtask_{t['id']}"):
+                todo.delete_task(t["id"])
+                st.rerun()
+    else:
+        st.caption("No tasks.")
+
+    st.divider()
+    st.subheader("Reminders")
+    pending = [r for r in reminders.get_reminders() if not r["fired"]]
+    if pending:
+        for r in pending:
+            rcols = st.columns([5, 1])
+            rcols[0].text(f"{r['due_at']} — {r['text']}")
+            if rcols[1].button("🗑", key=f"rmrem_{r['id']}"):
+                reminders.cancel_reminder(r["id"])
+                st.rerun()
+    else:
+        st.caption("No pending reminders.")
+
+    st.divider()
     st.subheader("Voice")
     speak_replies = st.checkbox("🔊 Speak replies", key="speak_replies")
 
@@ -100,6 +164,17 @@ with st.sidebar:
         st.caption("Nothing remembered yet.")
 
 # ---------- Chat ----------
+if not st.session_state.chat["messages"]:
+    st.markdown(
+        """
+        <div class="empty-state">
+        <h3>🧠 Ready when you are</h3>
+        <p>Ask a question, upload a doc to search, or record a voice message.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 for msg in st.session_state.chat["messages"]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -133,12 +208,13 @@ if prompt:
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        tool_box = st.container()
+        tool_box = st.empty()
         tool_log = []
 
         def on_tool_call(name, args, result):
             tool_log.append(f"🔧 `{name}({args})` → {str(result)[:200]}")
-            tool_box.info("\n\n".join(tool_log))
+            with tool_box.expander(f"Used {len(tool_log)} tool{'s' if len(tool_log) != 1 else ''}", expanded=False):
+                st.markdown("\n\n".join(tool_log))
 
         reply = st.write_stream(
             stream_chat(model, st.session_state.chat["messages"], on_tool_call=on_tool_call)

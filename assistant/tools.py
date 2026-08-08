@@ -11,6 +11,8 @@ from ddgs import DDGS
 
 from . import memory
 from . import rag
+from . import reminders
+from . import todo
 
 WORKSPACE = Path(__file__).resolve().parent.parent / "data" / "workspace"
 WORKSPACE.mkdir(parents=True, exist_ok=True)
@@ -58,12 +60,24 @@ def _resolve(path: str) -> Path:
     return p
 
 
+def _truncate_head(text: str, max_chars: int = 8000) -> str:
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + f"\n...[truncated, {len(text) - max_chars} more chars]"
+
+
+def _truncate_tail(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    return f"[...{len(text) - max_chars} earlier chars truncated]\n" + text[-max_chars:]
+
+
 def read_file(path: str) -> str:
     try:
         p = _resolve(path)
         if not p.exists():
             return f"File not found: {path}"
-        return p.read_text(encoding="utf-8")[:8000]
+        return _truncate_head(p.read_text(encoding="utf-8"))
     except Exception as e:
         return f"Error: {e}"
 
@@ -150,8 +164,8 @@ def run_python(code: str) -> str:
             [sys.executable, "-c", code],
             cwd=WORKSPACE, capture_output=True, text=True, timeout=15,
         )
-        out = result.stdout[-4000:]
-        err = result.stderr[-2000:]
+        out = _truncate_tail(result.stdout, 4000)
+        err = _truncate_tail(result.stderr, 2000)
         return (out + ("\n[stderr]\n" + err if err else "")).strip() or "(no output)"
     except subprocess.TimeoutExpired:
         return "Error: execution timed out (15s limit)."
@@ -171,6 +185,34 @@ def forget(key: str) -> str:
     return memory.forget(key)
 
 
+def add_task(text: str) -> str:
+    return todo.add_task(text)
+
+
+def list_tasks() -> str:
+    return todo.list_tasks()
+
+
+def complete_task(task_id: int) -> str:
+    return todo.complete_task(task_id)
+
+
+def clear_tasks() -> str:
+    return todo.clear_tasks()
+
+
+def remind_me(text: str, due_at: str) -> str:
+    return reminders.remind_me(text, due_at)
+
+
+def list_reminders() -> str:
+    return reminders.list_reminders()
+
+
+def cancel_reminder(reminder_id: int) -> str:
+    return reminders.cancel_reminder(reminder_id)
+
+
 REGISTRY = {
     "calculator": calculator,
     "web_search": web_search,
@@ -181,6 +223,13 @@ REGISTRY = {
     "remember": remember,
     "recall": recall,
     "forget": forget,
+    "add_task": add_task,
+    "list_tasks": list_tasks,
+    "complete_task": complete_task,
+    "clear_tasks": clear_tasks,
+    "remind_me": remind_me,
+    "list_reminders": list_reminders,
+    "cancel_reminder": cancel_reminder,
     "weather": weather,
     "wikipedia_summary": wikipedia_summary,
     "run_python": run_python,
@@ -317,7 +366,10 @@ SCHEMAS = [
             "description": "Save a fact/preference about the user permanently under a short key, for recall in future sessions.",
             "parameters": {
                 "type": "object",
-                "properties": {"key": {"type": "string"}, "value": {"type": "string"}},
+                "properties": {
+                    "key": {"type": "string", "description": "short, stable identifier, e.g. 'favorite_language'. Reusing an existing key silently OVERWRITES its value — it does not append or error."},
+                    "value": {"type": "string"},
+                },
                 "required": ["key", "value"],
             },
         },
@@ -343,6 +395,81 @@ SCHEMAS = [
                 "type": "object",
                 "properties": {"key": {"type": "string"}},
                 "required": ["key"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_task",
+            "description": "Add a task to the user's local to-do scratchpad, e.g. for multi-step goals or things to follow up on.",
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tasks",
+            "description": "List all tasks in the user's local to-do scratchpad, with done/not-done status.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "complete_task",
+            "description": "Mark a task done by its numeric id. IDs are not reordered or reused after deletion — if unsure of the current id, call list_tasks first rather than guessing.",
+            "parameters": {
+                "type": "object",
+                "properties": {"task_id": {"type": "integer"}},
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_tasks",
+            "description": "Delete all tasks from the to-do scratchpad.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remind_me",
+            "description": "Set a reminder that surfaces in the UI and to you once due. Only fires while the app is open (no background daemon).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "due_at": {"type": "string", "description": "ISO datetime, e.g. '2026-08-09 14:00'"},
+                },
+                "required": ["text", "due_at"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_reminders",
+            "description": "List all reminders with pending/fired status.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_reminder",
+            "description": "Cancel a reminder by its numeric id. IDs are not reordered or reused after cancellation — if unsure of the current id, call list_reminders first rather than guessing.",
+            "parameters": {
+                "type": "object",
+                "properties": {"reminder_id": {"type": "integer"}},
+                "required": ["reminder_id"],
             },
         },
     },

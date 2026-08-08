@@ -123,4 +123,7 @@ def search_documents(query: str, top_k: int = 4) -> str:
     top = relevant[:top_k]
     if not top:
         return "No sufficiently relevant chunks found."
-    return "\n\n".join(f"[{c['source']}] (score {sim:.2f})\n{c['text']}" for _, sim, _, c in top)
+    return "\n\n".join(
+        f"[{n}] {c['source']} (score {sim:.2f})\n{c['text']}"
+        for n, (_, sim, _, c) in enumerate(top, start=1)
+    )
