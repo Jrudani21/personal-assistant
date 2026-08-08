@@ -19,6 +19,10 @@ from . import tools as _tools
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 FAST_MODEL = "ollama/qwen2.5:7b"
+# Local stand-in for the Claude Pro analysis step. Weaker than Claude, but far
+# stronger than FAST_MODEL, and it keeps the pipeline working when the Pro
+# plan's usage limits are reached.
+FALLBACK_REASONING_MODEL = "ollama/qwen3-coder:30b"
 
 
 _FAILURE_MARKERS = (
@@ -92,6 +96,9 @@ class ClaudeCodeLLM(BaseLLM):
     """
 
     model: str = "claude-code-cli"
+    fallback_model: str = FALLBACK_REASONING_MODEL
+    used_fallback: bool = False
+    last_error: str | None = None
     _timeout_s: int = PrivateAttr(default=180)
     _isolated_settings: str = PrivateAttr(
         default_factory=lambda: json.dumps({"enabledPlugins": {"caveman@caveman": False}})
@@ -107,6 +114,17 @@ class ClaudeCodeLLM(BaseLLM):
                 f"[{m.get('role', 'user')}] {m.get('content', '')}"
                 for m in messages
             )
+        try:
+            return self._call_claude(prompt)
+        except Exception as e:
+            # Pro plan limits, a missing CLI, or a timeout would otherwise fail
+            # the whole pipeline. Degrade to a local model instead — worse
+            # analysis beats no analysis, and the caller is told which ran.
+            self.last_error = str(e)
+            self.used_fallback = True
+            return self._call_local_fallback(prompt)
+
+    def _call_claude(self, prompt: str) -> str:
         claude_cmd = shutil.which("claude.cmd") or shutil.which("claude")
         if claude_cmd is None:
             raise RuntimeError("claude CLI not found on PATH")
@@ -125,7 +143,14 @@ class ClaudeCodeLLM(BaseLLM):
         )
         if result.returncode != 0:
             raise RuntimeError(f"claude -p failed: {result.stderr.decode('utf-8', errors='replace').strip()}")
-        return result.stdout.decode("utf-8", errors="replace").strip()
+        output = result.stdout.decode("utf-8", errors="replace").strip()
+        if not output:
+            raise RuntimeError("claude -p returned empty output")
+        return output
+
+    def _call_local_fallback(self, prompt: str) -> str:
+        fallback = LLM(model=self.fallback_model, base_url=OLLAMA_BASE_URL)
+        return fallback.call(prompt)
 
     def supports_function_calling(self) -> bool:
         return False
@@ -137,9 +162,10 @@ class ClaudeCodeLLM(BaseLLM):
         return 180_000
 
 
-def build_crew(raw_input: str) -> Crew:
+def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
     fast_llm = LLM(model=FAST_MODEL, base_url=OLLAMA_BASE_URL)
-    reasoning_llm = ClaudeCodeLLM(model="claude-code-cli")
+    if reasoning_llm is None:
+        reasoning_llm = ClaudeCodeLLM(model="claude-code-cli")
 
     fetcher = Agent(
         role="Fetcher",
@@ -248,8 +274,18 @@ def run_deep_analysis(raw_input: str) -> str:
     topic, question, or file/document reference, and returns the final
     report text. Takes roughly 45-120s (tool calls plus the analysis step,
     which calls out to Claude Code CLI)."""
+    reasoning_llm = ClaudeCodeLLM(model="claude-code-cli")
     try:
-        result = build_crew(raw_input).kickoff()
-        return str(result)
+        result = str(build_crew(raw_input, reasoning_llm).kickoff())
     except Exception as e:
         return f"Deep analysis error: {e}"
+
+    if reasoning_llm.used_fallback:
+        # Say so plainly — a locally-analyzed report is weaker than a
+        # Claude-analyzed one, and the user should know which they got.
+        return (
+            f"{result}\n\n---\n_Note: the Claude analysis step was unavailable "
+            f"({reasoning_llm.last_error}), so this was analyzed locally with "
+            f"{reasoning_llm.fallback_model} instead — treat it as lower confidence._"
+        )
+    return result

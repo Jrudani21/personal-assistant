@@ -156,7 +156,7 @@ def test_claude_code_llm_raises_on_nonzero_exit(monkeypatch):
 
     llm = crew.ClaudeCodeLLM(model="claude-code-cli")
     with pytest.raises(RuntimeError, match="boom"):
-        llm.call("hi")
+        llm._call_claude("hi")
 
 
 def test_claude_code_llm_raises_if_cli_not_found(monkeypatch):
@@ -164,7 +164,80 @@ def test_claude_code_llm_raises_if_cli_not_found(monkeypatch):
 
     llm = crew.ClaudeCodeLLM(model="claude-code-cli")
     with pytest.raises(RuntimeError, match="not found"):
-        llm.call("hi")
+        llm._call_claude("hi")
+
+
+# ---------- local fallback when Claude is unavailable ----------
+
+def test_call_falls_back_to_local_model_when_claude_fails(monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _FakeCompletedProcess(1, b"", b"usage limit reached"))
+    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+
+    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    monkeypatch.setattr(llm, "_call_local_fallback", lambda prompt: "local analysis")
+
+    assert llm.call("analyze this") == "local analysis"
+    assert llm.used_fallback is True
+    assert "usage limit reached" in llm.last_error
+
+
+def test_call_falls_back_when_cli_missing(monkeypatch):
+    monkeypatch.setattr(crew.shutil, "which", lambda name: None)
+
+    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    monkeypatch.setattr(llm, "_call_local_fallback", lambda prompt: "local analysis")
+
+    assert llm.call("analyze this") == "local analysis"
+    assert llm.used_fallback is True
+
+
+def test_empty_claude_output_triggers_fallback(monkeypatch):
+    # an empty response is the transient-failure signature seen in testing;
+    # passing it through would feed the next stage nothing to work with
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _FakeCompletedProcess(0, b"   ", b""))
+    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+
+    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    monkeypatch.setattr(llm, "_call_local_fallback", lambda prompt: "local analysis")
+
+    assert llm.call("analyze this") == "local analysis"
+    assert llm.used_fallback is True
+
+
+def test_no_fallback_flag_when_claude_succeeds(monkeypatch):
+    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _FakeCompletedProcess(0, b"claude analysis", b""))
+    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+
+    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    assert llm.call("analyze this") == "claude analysis"
+    assert llm.used_fallback is False
+
+
+def test_run_deep_analysis_discloses_when_fallback_was_used(monkeypatch):
+    class _Kicked:
+        def kickoff(self):
+            return "the report body"
+
+    def fake_build(raw_input, reasoning_llm=None):
+        reasoning_llm.used_fallback = True
+        reasoning_llm.last_error = "usage limit reached"
+        return _Kicked()
+
+    monkeypatch.setattr(crew, "build_crew", fake_build)
+    result = crew.run_deep_analysis("anything")
+
+    assert "the report body" in result
+    assert "analyzed locally" in result
+    assert "usage limit reached" in result
+
+
+def test_run_deep_analysis_stays_clean_when_claude_worked(monkeypatch):
+    class _Kicked:
+        def kickoff(self):
+            return "the report body"
+
+    monkeypatch.setattr(crew, "build_crew", lambda raw_input, reasoning_llm=None: _Kicked())
+    assert crew.run_deep_analysis("anything") == "the report body"
 
 
 def test_claude_code_llm_isolated_settings_disable_caveman_plugin():
@@ -222,10 +295,10 @@ def test_build_crew_quant_has_tool_access():
 
 
 def test_run_deep_analysis_catches_exceptions(monkeypatch):
-    def boom(raw_input):
+    def boom(raw_input, reasoning_llm=None):
         raise RuntimeError("kickoff exploded")
 
-    monkeypatch.setattr(crew, "build_crew", lambda raw_input: (_ for _ in ()).throw(RuntimeError("kickoff exploded")))
+    monkeypatch.setattr(crew, "build_crew", boom)
     result = crew.run_deep_analysis("anything")
     assert result.startswith("Deep analysis error:")
     assert "kickoff exploded" in result
