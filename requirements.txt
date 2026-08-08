@@ -1,0 +1,9 @@
+streamlit>=1.38
+ollama>=0.4.0
+ddgs>=9.0
+requests>=2.31
+numpy>=1.26
+pypdf>=5.0
+faster-whisper>=1.0
+pyttsx3>=2.90
+rank_bm25>=0.2
