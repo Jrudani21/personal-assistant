@@ -1,0 +1,10 @@
+# Tests call production functions constantly, so with tests included the graph's
+# edge counts rank test helpers above real abstractions (FakeTaskOutput came out
+# as the #1 "core abstraction"). Excluding them makes the graph describe the
+# system's structure rather than its test coverage.
+tests/
+graphify-out/
+data/
+docs/
+__pycache__/
+.venv/
