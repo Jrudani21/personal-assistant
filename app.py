@@ -67,6 +67,7 @@ with st.sidebar:
     st.divider()
     if st.button("+ New chat", use_container_width=True):
         st.session_state.chat = sessions.new_chat()
+        st.session_state.crew_result = None
         st.rerun()
 
     if st.session_state.chat["messages"]:
@@ -145,6 +146,21 @@ with st.sidebar:
                 st.rerun()
     else:
         st.caption("No pending reminders.")
+
+    st.divider()
+    st.subheader("Deep Analysis")
+    st.caption("4-agent crew (web/wiki/files + real calc) + Claude Pro. ~45-120s.")
+    crew_input = st.text_input(
+        "Topic, question, or file path", key="crew_input",
+        placeholder="e.g. Poisson vs SARIMA, or data/workspace/sales.csv",
+    )
+    if st.button("Run analysis", use_container_width=True, disabled=not crew_input.strip()):
+        with st.spinner("Running crew (fetch -> verify -> analyze -> report)..."):
+            from assistant import crew as crew_module
+            st.session_state.crew_result = crew_module.run_deep_analysis(crew_input)
+    if st.session_state.get("crew_result"):
+        with st.expander("Last analysis result", expanded=True):
+            st.markdown(st.session_state.crew_result)
 
     st.divider()
     st.subheader("Python session")

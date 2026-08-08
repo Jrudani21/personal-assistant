@@ -91,6 +91,22 @@ def write_file(path: str, content: str) -> str:
         return f"Error: {e}"
 
 
+def deep_analysis(raw_input: str) -> str:
+    """Runs a 4-step research pipeline (fetch facts -> verify/compute numbers
+    -> analyze -> report) for questions that need more than a single-pass
+    answer. The fetch step can pull from the web, Wikipedia, uploaded
+    documents, or local workspace files; the verify step runs real Python/
+    calculator checks on any numbers involved. Slower than other tools
+    (~45-120s, the analysis step calls out to Claude Code CLI) -- only use
+    this when the user explicitly wants deeper/multi-step analysis, not for
+    quick questions."""
+    try:
+        from . import crew
+        return crew.run_deep_analysis(raw_input)
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def get_datetime() -> str:
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
 
@@ -227,6 +243,7 @@ REGISTRY = {
     "run_python": run_python,
     "restart_python_session": restart_python_session,
     "search_documents": rag.search_documents,
+    "deep_analysis": deep_analysis,
 }
 
 SCHEMAS = [
@@ -349,6 +366,18 @@ SCHEMAS = [
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "deep_analysis",
+            "description": "Run a 4-step research pipeline (fetch facts -> verify/compute numbers -> analyze -> write report) for questions needing deeper multi-step reasoning than a single reply. Can pull from the web, Wikipedia, uploaded documents, or local workspace files, and runs real calculations rather than guessing numbers. Slow (~45-120s) -- only use when the user explicitly wants deep/thorough analysis.",
+            "parameters": {
+                "type": "object",
+                "properties": {"raw_input": {"type": "string", "description": "the topic, question, or file/document reference to research and analyze"}},
+                "required": ["raw_input"],
             },
         },
     },
