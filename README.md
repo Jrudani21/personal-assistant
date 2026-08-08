@@ -19,7 +19,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - `weather` — current conditions via Open-Meteo, no API key
 - `wikipedia_summary` — short topic summary
 - `read_file` / `write_file` / `list_files` — sandboxed to `data/workspace/`
-- `run_python` — isolated subprocess, 15s timeout, cwd locked to workspace
+- `run_python` / `restart_python_session` — persistent session (variables survive across calls), 15s timeout per call, cwd locked to workspace
 - `search_documents` — hybrid BM25+cosine RAG over uploaded docs, numbered `[1] [2]` citations
 - `remember` / `recall` / `forget` — persistent key-value memory in `data/memory.json`
 - `add_task` / `list_tasks` / `complete_task` / `clear_tasks` — local to-do scratchpad
@@ -32,6 +32,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - Document upload (txt/md/pdf) for RAG-backed Q&A
 - Voice input (transcription) and optional spoken replies
 - Graceful degradation if Ollama is unreachable (clear error instead of a crash)
+- Long-chat compaction once history nears the context window, old turns summarized, kept out of the displayed/exported chat entirely
 
 ## Structure
 
@@ -43,4 +44,6 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - `assistant/reminders.py` — JSON reminder store
 - `assistant/rag.py` — document ingest + hybrid search
 - `assistant/sessions.py` — per-chat persistence, search, Markdown export
+- `assistant/compaction.py` — long-chat summarization cache
+- `assistant/repl.py` / `assistant/repl_worker.py` — persistent Python session for `run_python`
 - `assistant/voice.py` — transcription + TTS
