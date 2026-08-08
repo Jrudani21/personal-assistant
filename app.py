@@ -31,6 +31,15 @@ with st.sidebar:
         st.session_state.chat = sessions.new_chat()
         st.rerun()
 
+    if st.session_state.chat["messages"]:
+        st.download_button(
+            "Export chat (.md)",
+            sessions.export_markdown(st.session_state.chat),
+            file_name=f"{st.session_state.chat['title'][:40] or 'chat'}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
     st.caption("Chats")
     for c in sessions.list_chats():
         cols = st.columns([5, 1])

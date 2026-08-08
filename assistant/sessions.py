@@ -32,6 +32,15 @@ def delete(chat_id: str) -> None:
         p.unlink()
 
 
+def export_markdown(chat: dict) -> str:
+    lines = [f"# {chat.get('title', 'Chat')}", ""]
+    for m in chat["messages"]:
+        role = "**You**" if m["role"] == "user" else "**Assistant**"
+        lines.append(f"{role}: {m['content']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def list_chats() -> list[dict]:
     """Newest first, by file mtime."""
     files = sorted(CHATS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
