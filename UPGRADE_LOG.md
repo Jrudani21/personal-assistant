@@ -89,12 +89,6 @@ affects every project you use Claude Code on, not just this one:
 ## Deferred — bigger effort, not attempted this session (avoiding a rushed
 half-implementation of something you haven't seen the design for)
 
-- **Persistent Python REPL session** (medium-large effort) — `run_python`
-  currently spins a fresh subprocess per call with no state; a long-lived
-  kernel would let multi-step pandas/stats workflows keep variables alive
-  across calls. Real complexity jump from the current sandboxed one-shot
-  subprocess — worth it only if that workflow comes up often. Source:
-  open-webui's code-interpreter.
 - **Append-only JSONL session writes** (low value, low urgency) —
   `sessions.py.save()` rewrites the entire chat JSON file on every turn;
   prime-agent's `session-manager.ts` appends one JSONL line per turn and
@@ -137,6 +131,44 @@ path test through the real `stream_chat` — asked about the most recent of
 40 numbered facts, correctly answered from the verbatim tail. All test
 chats cleaned up after (`sessions.delete`), no leftover data. `py_compile`
 clean, Streamlit restarted clean on :8501.
+
+## Shipped — round 4: persistent Python REPL
+
+Implemented `assistant/repl.py` + `assistant/repl_worker.py`, replacing
+`run_python`'s one-shot `subprocess.run` (no state) with one long-lived
+worker subprocess for the whole app — variables/imports/dataframes now
+survive across separate `run_python` calls until explicitly restarted.
+Scoped as one global session (not per-chat) — simplest useful version for a
+single local user; a "Restart Python session" button + `restart_python_session`
+tool reset it on demand.
+
+Two real design risks here, both tested rather than assumed:
+- **Windows has no `select()` on pipes** — reading the worker's response
+  with a timeout needed a background reader thread pushing lines into a
+  `queue.Queue`, not a blocking read. Verified: state persists across calls,
+  stdout/stderr captured separately from the JSON control channel (user
+  `print()` can't corrupt the protocol since it's redirected to a buffer
+  inside the worker before the response line is written), exceptions
+  surface with a full traceback while leaving prior variables intact,
+  timeout (tested with a 1.5s override on a 5s sleep) auto-restarts and
+  reports correctly, `restart()` cleanly terminates the process
+  (confirmed via `.poll()`).
+- **Orphan-process risk if the parent gets force-killed** (a real concern —
+  I've been using `Stop-Process -Force` to restart Streamlit all session).
+  Tested directly: closed the worker's stdin the way a force-killed parent's
+  OS-level handle cleanup would, without calling `restart()` — worker exited
+  on its own (exit code 0) via EOF on its `for line in sys.stdin` read loop.
+  No orphan. Confirmed via `Get-Process python*` after testing: only the
+  Streamlit server process itself, no leftover workers.
+- Full path tested through the real LLM tool-calling loop: asked it to set
+  a variable in one `run_python` call and use it unmodified in a second —
+  correct (`total = 15` → `total * 2 = 30` in the next call).
+- Found and fixed one bug along the way: the timeout error message
+  hardcoded "15s limit" regardless of the actual timeout passed in —
+  harmless today (only the default is used) but wrong if ever called
+  otherwise; now interpolates the real value.
+
+`python -m py_compile` clean; Streamlit restarted clean on :8501.
 
 ## Resolved this round
 

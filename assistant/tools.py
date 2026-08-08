@@ -2,8 +2,6 @@
 import ast
 import operator
 import datetime
-import subprocess
-import sys
 from pathlib import Path
 
 import requests
@@ -12,6 +10,7 @@ from ddgs import DDGS
 from . import memory
 from . import rag
 from . import reminders
+from . import repl
 from . import todo
 
 WORKSPACE = Path(__file__).resolve().parent.parent / "data" / "workspace"
@@ -156,21 +155,14 @@ def wikipedia_summary(topic: str) -> str:
 
 
 def run_python(code: str) -> str:
-    """Runs Python in a separate subprocess, cwd locked to the workspace,
-    15s timeout. Not a real security sandbox — same trust level as any
-    script you'd run yourself locally."""
-    try:
-        result = subprocess.run(
-            [sys.executable, "-c", code],
-            cwd=WORKSPACE, capture_output=True, text=True, timeout=15,
-        )
-        out = _truncate_tail(result.stdout, 4000)
-        err = _truncate_tail(result.stderr, 2000)
-        return (out + ("\n[stderr]\n" + err if err else "")).strip() or "(no output)"
-    except subprocess.TimeoutExpired:
-        return "Error: execution timed out (15s limit)."
-    except Exception as e:
-        return f"Error: {e}"
+    """Runs Python in a persistent session (variables survive across calls,
+    cwd locked to the workspace, 15s timeout per call). Not a real security
+    sandbox — same trust level as any script you'd run yourself locally."""
+    return _truncate_tail(repl.run_persistent(code), 4000)
+
+
+def restart_python_session() -> str:
+    return repl.restart()
 
 
 def remember(key: str, value: str) -> str:
@@ -233,6 +225,7 @@ REGISTRY = {
     "weather": weather,
     "wikipedia_summary": wikipedia_summary,
     "run_python": run_python,
+    "restart_python_session": restart_python_session,
     "search_documents": rag.search_documents,
 }
 
@@ -331,12 +324,20 @@ SCHEMAS = [
         "type": "function",
         "function": {
             "name": "run_python",
-            "description": "Run a Python snippet (e.g. pandas/data analysis) in an isolated process. Use print() to return output. 15s timeout, cwd is the workspace folder.",
+            "description": "Run a Python snippet (e.g. pandas/data analysis). Variables, imports, and dataframes PERSIST across calls in this session — you can load data once and build on it across multiple calls, no need to redefine everything each time. Use print() to return output. 15s timeout per call, cwd is the workspace folder.",
             "parameters": {
                 "type": "object",
                 "properties": {"code": {"type": "string", "description": "full Python source to execute"}},
                 "required": ["code"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "restart_python_session",
+            "description": "Wipe all variables/imports from the persistent Python session and start fresh. Use if state gets corrupted or the user asks to reset it.",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {

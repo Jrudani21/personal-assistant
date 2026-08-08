@@ -5,7 +5,7 @@ import streamlit as st
 import ollama
 
 from assistant.llm import stream_chat
-from assistant import compaction, memory, sessions, rag, reminders, todo, voice
+from assistant import compaction, memory, sessions, rag, reminders, repl, todo, voice
 
 st.set_page_config(page_title="Personal Assistant", page_icon="🧠", layout="centered")
 
@@ -145,6 +145,12 @@ with st.sidebar:
                 st.rerun()
     else:
         st.caption("No pending reminders.")
+
+    st.divider()
+    st.subheader("Python session")
+    st.caption("🟢 Running" if repl.is_running() else "⚪ Not started")
+    if st.button("Restart Python session", use_container_width=True):
+        st.toast(repl.restart())
 
     st.divider()
     st.subheader("Voice")
