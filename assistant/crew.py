@@ -19,10 +19,22 @@ from . import tools as _tools
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 FAST_MODEL = "ollama/qwen2.5:7b"
-# Local stand-in for the Claude Pro analysis step. Weaker than Claude, but far
-# stronger than FAST_MODEL, and it keeps the pipeline working when the Pro
-# plan's usage limits are reached.
-FALLBACK_REASONING_MODEL = "ollama/qwen3-coder:30b"
+# Local stand-in for the Claude Pro analysis step, used only when Claude is
+# unavailable. Its value is availability, not quality — see the measurements
+# below. Deliberately the same model as FAST_MODEL: qwen3-coder:30b was tried
+# first on the assumption that bigger is better here, and measured worse.
+#
+# Correctly identifying which product had higher revenue per unit, given the
+# figures pre-computed in the prompt (3 runs each, crowded Analyst prompt):
+#   qwen2.5:7b        2/3        4-11s
+#   qwen3-coder:30b   0/3        4-24s   (18 GB, spills off an 8 GB card)
+#   llama3.1:8b       0/3        3-10s
+#
+# qwen3-coder is tuned for code: it was the *only* model to get the isolated
+# arithmetic right 3/3, and still inverted the comparison every time once the
+# same numbers sat among unrelated statistics prose. Bigger did not help;
+# prose synthesis with distractors is the weakness, not arithmetic.
+FALLBACK_REASONING_MODEL = "ollama/qwen2.5:7b"
 
 
 _FAILURE_MARKERS = (
@@ -281,11 +293,16 @@ def run_deep_analysis(raw_input: str) -> str:
         return f"Deep analysis error: {e}"
 
     if reasoning_llm.used_fallback:
-        # Say so plainly — a locally-analyzed report is weaker than a
-        # Claude-analyzed one, and the user should know which they got.
+        # Say so plainly, and be specific about the failure mode rather than
+        # vaguely "lower confidence": measured on this setup, local models
+        # invert numeric comparisons in roughly a third of runs even when the
+        # correct figures are handed to them in the prompt.
         return (
             f"{result}\n\n---\n_Note: the Claude analysis step was unavailable "
             f"({reasoning_llm.last_error}), so this was analyzed locally with "
-            f"{reasoning_llm.fallback_model} instead — treat it as lower confidence._"
+            f"{reasoning_llm.fallback_model}. Local analysis misstates numeric "
+            f"comparisons (which value is higher, by how much) in roughly 1 run "
+            f"in 3 — verify any figures below against the source before relying "
+            f"on them._"
         )
     return result
