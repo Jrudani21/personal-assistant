@@ -167,6 +167,10 @@ def recall(key: str) -> str:
     return memory.recall(key)
 
 
+def forget(key: str) -> str:
+    return memory.forget(key)
+
+
 REGISTRY = {
     "calculator": calculator,
     "web_search": web_search,
@@ -176,6 +180,7 @@ REGISTRY = {
     "get_datetime": get_datetime,
     "remember": remember,
     "recall": recall,
+    "forget": forget,
     "weather": weather,
     "wikipedia_summary": wikipedia_summary,
     "run_python": run_python,
@@ -322,6 +327,18 @@ SCHEMAS = [
         "function": {
             "name": "recall",
             "description": "Retrieve a previously remembered fact by key.",
+            "parameters": {
+                "type": "object",
+                "properties": {"key": {"type": "string"}},
+                "required": ["key"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forget",
+            "description": "Delete a previously remembered fact by key, e.g. when the user says it's no longer true or asks you to forget it.",
             "parameters": {
                 "type": "object",
                 "properties": {"key": {"type": "string"}},

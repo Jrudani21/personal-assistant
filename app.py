@@ -81,7 +81,11 @@ with st.sidebar:
     mem = memory.list_memory()
     if mem:
         for k, v in mem.items():
-            st.text(f"{k}: {v}")
+            mcols = st.columns([5, 1])
+            mcols[0].text(f"{k}: {v}")
+            if mcols[1].button("🗑", key=f"rmmem_{k}"):
+                memory.forget(k)
+                st.rerun()
     else:
         st.caption("Nothing remembered yet.")
 
