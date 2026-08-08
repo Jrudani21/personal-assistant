@@ -9,7 +9,11 @@ from assistant import memory, sessions, rag, voice
 
 st.set_page_config(page_title="Personal Assistant", page_icon="🧠", layout="centered")
 
-AVAILABLE_MODELS = [m["model"] for m in ollama.list().get("models", [])]
+try:
+    AVAILABLE_MODELS = [m["model"] for m in ollama.list().get("models", [])]
+except Exception as e:
+    st.error(f"Can't reach Ollama: {e}\n\nMake sure it's running (`ollama serve`), then reload this page.")
+    st.stop()
 DEFAULT_MODEL = "qwen2.5:7b" if "qwen2.5:7b" in AVAILABLE_MODELS else (
     AVAILABLE_MODELS[0] if AVAILABLE_MODELS else None
 )

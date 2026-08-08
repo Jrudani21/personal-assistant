@@ -31,7 +31,10 @@ def run_chat(model: str, history: list[dict], on_tool_call=None):
     messages = [{"role": "system", "content": _system_prompt()}] + history
 
     for _ in range(MAX_TOOL_ROUNDS):
-        response = ollama.chat(model=model, messages=messages, tools=SCHEMAS)
+        try:
+            response = ollama.chat(model=model, messages=messages, tools=SCHEMAS)
+        except Exception as e:
+            return f"Error talking to Ollama: {e}"
         msg = response["message"]
         tool_calls = msg.get("tool_calls")
 
@@ -60,18 +63,27 @@ def stream_chat(model: str, history: list[dict], on_tool_call=None):
     messages = [{"role": "system", "content": _system_prompt()}] + history
 
     for round_num in range(MAX_TOOL_ROUNDS):
-        stream = ollama.chat(model=model, messages=messages, tools=SCHEMAS, stream=True)
+        try:
+            stream = ollama.chat(model=model, messages=messages, tools=SCHEMAS, stream=True)
+        except Exception as e:
+            yield f"\n\n_Error talking to Ollama: {e}_"
+            return
+
         content = ""
         tool_calls = None
 
-        for chunk in stream:
-            msg = chunk["message"]
-            piece = msg.get("content")
-            if piece:
-                content += piece
-                yield piece
-            if msg.get("tool_calls"):
-                tool_calls = msg["tool_calls"]
+        try:
+            for chunk in stream:
+                msg = chunk["message"]
+                piece = msg.get("content")
+                if piece:
+                    content += piece
+                    yield piece
+                if msg.get("tool_calls"):
+                    tool_calls = msg["tool_calls"]
+        except Exception as e:
+            yield f"\n\n_Error talking to Ollama: {e}_"
+            return
 
         if not tool_calls:
             return
