@@ -99,6 +99,15 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
+    st.subheader("Obsidian vault")
+    vault_notes = [d for d in rag.list_documents() if d.startswith(rag.VAULT_PREFIX)]
+    st.caption(f"{len(vault_notes)} notes indexed" if vault_notes else "Not indexed yet")
+    if st.button("Sync vault", use_container_width=True):
+        with st.spinner("Indexing notes..."):
+            st.toast(rag.sync_vault())
+        st.rerun()
+
+    st.divider()
     st.subheader("Documents (RAG)")
     uploaded = st.file_uploader("Upload txt/md/pdf", type=["txt", "md", "pdf"], accept_multiple_files=True)
     if uploaded:
@@ -106,7 +115,8 @@ with st.sidebar:
             with st.spinner(f"Ingesting {f.name}..."):
                 msg = rag.ingest(f.name, f.getvalue())
             st.toast(msg)
-    docs = rag.list_documents()
+    # vault notes live in the same store but are managed from the vault section
+    docs = [d for d in rag.list_documents() if not d.startswith(rag.VAULT_PREFIX)]
     if docs:
         for d in docs:
             dcols = st.columns([5, 1])

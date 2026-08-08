@@ -1,5 +1,14 @@
-"""Local RAG: chunk + embed uploaded docs via Ollama, hybrid BM25+cosine search."""
+"""Local RAG: chunk + embed uploaded docs via Ollama, hybrid BM25+cosine search.
+
+Two ingest paths share one store and one search index:
+- `ingest()`      — a file uploaded through the UI, stored under its filename
+- `sync_vault()`  — every .md note in the Obsidian vault, stored as "vault:<rel path>"
+
+Everything runs locally against Ollama's embedding model; nothing leaves the machine.
+"""
+import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -14,6 +23,12 @@ CHUNK_SIZE = 800
 CHUNK_OVERLAP = 150
 MIN_SIMILARITY = 0.5
 RRF_K = 60
+
+# Obsidian vault indexed alongside uploaded documents. Override with the
+# OBSIDIAN_VAULT env var to point at a different vault.
+VAULT_DIR = Path(os.environ.get("OBSIDIAN_VAULT", Path.home() / "brain"))
+VAULT_PREFIX = "vault:"
+VAULT_SKIP_DIRS = {".obsidian", ".trash", ".git", "templates"}
 
 _TOKEN_RE = re.compile(r"\w+")
 
@@ -82,6 +97,68 @@ def ingest(filename: str, raw: bytes) -> str:
         store.append({"source": filename, "text": chunk, "embedding": emb})
     _save_store(store)
     return f"Ingested {filename}: {len(chunks)} chunks."
+
+
+def _vault_files() -> list[Path]:
+    if not VAULT_DIR.exists():
+        return []
+    return [
+        p for p in VAULT_DIR.rglob("*.md")
+        if not VAULT_SKIP_DIRS & set(p.relative_to(VAULT_DIR).parts)
+    ]
+
+
+def sync_vault() -> str:
+    """Indexes every .md note in the vault, skipping notes whose content hasn't
+    changed since the last sync. Notes deleted from the vault are dropped from
+    the store."""
+    if not VAULT_DIR.exists():
+        return f"No vault found at {VAULT_DIR}. Set OBSIDIAN_VAULT to point at one."
+
+    store = _load_store()
+    # content hash per already-indexed vault note, to skip unchanged files
+    indexed = {c["source"]: c.get("hash") for c in store if c["source"].startswith(VAULT_PREFIX)}
+
+    seen, added, updated = set(), 0, 0
+    for path in _vault_files():
+        source = VAULT_PREFIX + path.relative_to(VAULT_DIR).as_posix()
+        seen.add(source)
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if not text.strip():
+            continue
+
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if indexed.get(source) == digest:
+            continue  # unchanged since last sync
+
+        was_indexed = source in indexed
+        store = [c for c in store if c["source"] != source]
+        for chunk in _chunk(text):
+            emb = ollama.embeddings(model=EMBED_MODEL, prompt=chunk)["embedding"]
+            store.append({"source": source, "text": chunk, "embedding": emb, "hash": digest})
+        if was_indexed:
+            updated += 1
+        else:
+            added += 1
+
+    stale = set(indexed) - seen
+    if stale:
+        store = [c for c in store if c["source"] not in stale]
+
+    _save_store(store)
+    parts = []
+    if added:
+        parts.append(f"{added} new")
+    if updated:
+        parts.append(f"{updated} changed")
+    if stale:
+        parts.append(f"{len(stale)} removed")
+    if not parts:
+        return f"Vault already up to date ({len(seen)} notes)."
+    return f"Synced vault: {', '.join(parts)} ({len(seen)} notes indexed)."
 
 
 def list_documents() -> list[str]:

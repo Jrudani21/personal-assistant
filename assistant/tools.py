@@ -243,6 +243,7 @@ REGISTRY = {
     "run_python": run_python,
     "restart_python_session": restart_python_session,
     "search_documents": rag.search_documents,
+    "sync_vault": rag.sync_vault,
     "deep_analysis": deep_analysis,
 }
 
@@ -361,12 +362,20 @@ SCHEMAS = [
         "type": "function",
         "function": {
             "name": "search_documents",
-            "description": "Search the user's uploaded documents (PDF/txt/md) for relevant passages. Use this whenever the user asks about content from a file they uploaded.",
+            "description": "Search the user's own knowledge base for relevant passages — both uploaded documents (PDF/txt/md) and every note in their Obsidian vault. Use this whenever the user asks about something they've written down, uploaded, or noted previously, or refers to their notes/vault/second brain.",
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
                 "required": ["query"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sync_vault",
+            "description": "Re-index the user's Obsidian vault so newly written or edited notes become searchable. Only needed if the user says they just wrote/changed a note and it isn't showing up in search results — unchanged notes are skipped automatically.",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
