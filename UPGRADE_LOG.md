@@ -1,5 +1,32 @@
 # Upgrade log — 2026-08-08
 
+## Session 3 — structured memory + observation capture
+
+From the repo study of nanobot/claude-mem (see
+brain/notes/Memory system design study.md), implemented the first two ranked
+upgrades:
+
+- **Structured memory** (`assistant/memory.py`): entries are now
+  `{value, facts[], concepts[], updated_at}` instead of flat `key: value`.
+  `facts` are discrete verifiable claims, `concepts` are tags for retrieval/
+  dedup (claude-mem's memory-item idea). Fully backward compatible — legacy
+  plain strings and value-only entries still read correctly. The `remember`
+  tool schema accepts optional `facts`/`concepts` arrays; the system prompt
+  renders them inline; the 30-entry prompt cap still applies.
+- **Observation capture** (`assistant/observations.py`): every tool call is
+  appended to `data/observations.jsonl` (timestamp + truncated args/result +
+  truncation flags), wired into both `run_chat` and `stream_chat` in
+  `llm.py`. Append-only JSONL (nanobot's pattern): O(1) crash-safe writes,
+  size-capped (~2 MB) with compaction keeping the newest 2000 entries.
+  Logging failures are swallowed so capture never breaks a chat. New
+  `recent_activity` tool lets the model recall what it has actually done.
+- `data/memory.json` enriched: all 10 entries now carry facts + concepts.
+
+Verified: `py_compile` clean; 130 tests passing (was 115); smoke-tested
+memory rendering in the system prompt and observation append/read.
+
+## Session 2 — deep-analysis caching, numeric-consistency guardrail, reminder daemon
+
 ## Session 2 — deep-analysis caching, numeric-consistency guardrail, reminder daemon
 
 Shipped (all tested, 115 tests passing):

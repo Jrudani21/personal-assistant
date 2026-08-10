@@ -5,7 +5,7 @@ import re
 
 import ollama
 
-from . import memory, reminders
+from . import memory, observations, reminders
 from .tools import REGISTRY, SCHEMAS
 
 _OVERFLOW_RE = re.compile(r"prompt too long; exceeded (?:max )?context length", re.IGNORECASE)
@@ -33,10 +33,17 @@ MAX_MEMORY_FACTS = 30  # cap on facts injected into the system prompt (prompt cr
 def _system_prompt() -> str:
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %A")
     prompt = f"{BASE_SYSTEM_PROMPT}\n\nCurrent date/time: {now}. Use this to resolve relative dates (\"tomorrow\", \"in 2 hours\") — do not guess or use your training cutoff."
-    facts = memory.recent(MAX_MEMORY_FACTS)
+    facts = memory.recent_entries(MAX_MEMORY_FACTS)
     if facts:
-        lines = "\n".join(f"- {k}: {v}" for k, v in facts)
-        prompt += f"\n\nKnown facts about the user (already remembered, no need to call recall for these):\n{lines}"
+        lines = []
+        for entry in facts:
+            line = f"- {entry['key']}: {entry['value']}"
+            if entry["facts"]:
+                line += "  [" + "; ".join(entry["facts"]) + "]"
+            if entry["concepts"]:
+                line += "  (" + ", ".join(entry["concepts"]) + ")"
+            lines.append(line)
+        prompt += f"\n\nKnown facts about the user (already remembered, no need to call recall for these):\n{'\n'.join(lines)}"
         total = len(memory.list_memory())
         hidden = total - len(facts)
         if hidden > 0:
@@ -75,6 +82,7 @@ def run_chat(model: str, history: list[dict], on_tool_call=None):
                 args = json.loads(args or "{}")
             fn = REGISTRY.get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
+            observations.append(name, args, result)
             if on_tool_call:
                 on_tool_call(name, args, result)
             messages.append({"role": "tool", "content": str(result), "name": name})
@@ -122,6 +130,7 @@ def stream_chat(model: str, history: list[dict], on_tool_call=None):
                 args = json.loads(args or "{}")
             fn = REGISTRY.get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
+            observations.append(name, args, result)
             if on_tool_call:
                 on_tool_call(name, args, result)
             messages.append({"role": "tool", "content": str(result), "name": name})

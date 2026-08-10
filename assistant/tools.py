@@ -8,6 +8,7 @@ import requests
 from ddgs import DDGS
 
 from . import memory
+from . import observations
 from . import rag
 from . import reminders
 from . import repl
@@ -191,8 +192,9 @@ def restart_python_session() -> str:
     return repl.restart()
 
 
-def remember(key: str, value: str) -> str:
-    return memory.remember(key, value)
+def remember(key: str, value: str, facts: list[str] | None = None,
+             concepts: list[str] | None = None) -> str:
+    return memory.remember(key, value, facts, concepts)
 
 
 def recall(key: str) -> str:
@@ -201,6 +203,25 @@ def recall(key: str) -> str:
 
 def forget(key: str) -> str:
     return memory.forget(key)
+
+
+def recent_activity(limit: int = 10) -> str:
+    """Returns the assistant's own recent tool calls (what it has actually
+    done), newest batch first — useful for recalling earlier actions in the
+    same or previous sessions."""
+    entries = observations.read(limit)
+    if not entries:
+        return "No tool activity recorded yet."
+    lines = []
+    for e in entries:
+        args = e.get("args", "")
+        result = e.get("result", "")
+        if e.get("args_truncated"):
+            args += " [truncated]"
+        if e.get("result_truncated"):
+            result += " [truncated]"
+        lines.append(f"[{e.get('timestamp', '?')}] {e.get('tool')}({args}) → {result}")
+    return "\n".join(lines)
 
 
 def add_task(text: str) -> str:
@@ -256,6 +277,7 @@ REGISTRY = {
     "sync_vault": rag.sync_vault,
     "deep_analysis": deep_analysis,
     "clear_crew_cache": clear_crew_cache,
+    "recent_activity": recent_activity,
 }
 
 SCHEMAS = [
@@ -421,14 +443,28 @@ SCHEMAS = [
         "type": "function",
         "function": {
             "name": "remember",
-            "description": "Save a fact/preference about the user permanently under a short key, for recall in future sessions.",
+            "description": "Save a fact/preference about the user permanently under a short key, for recall in future sessions. Optionally attach discrete facts (specific claims, e.g. 'GPU: RTX 4060 8 GB') and concepts (tags, e.g. 'hardware') to make the memory structured and retrievable.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "key": {"type": "string", "description": "short, stable identifier, e.g. 'favorite_language'. Reusing an existing key silently OVERWRITES its value — it does not append or error."},
                     "value": {"type": "string"},
+                    "facts": {"type": "array", "items": {"type": "string"}, "description": "optional discrete claims, each a single verifiable statement"},
+                    "concepts": {"type": "array", "items": {"type": "string"}, "description": "optional short tags for retrieval/dedup, e.g. 'hardware', 'preferences'"},
                 },
                 "required": ["key", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recent_activity",
+            "description": "List the assistant's own recent tool calls (what it has actually done in this or previous sessions) — useful for recalling earlier actions, files touched, or searches run.",
+            "parameters": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer", "description": "how many recent tool calls to return, default 10"}},
+                "required": [],
             },
         },
     },

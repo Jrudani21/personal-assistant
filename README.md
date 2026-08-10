@@ -21,7 +21,8 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - `read_file` / `write_file` / `list_files` — sandboxed to `data/workspace/`
 - `run_python` / `restart_python_session` — persistent session (variables survive across calls), 15s timeout per call, cwd locked to workspace
 - `search_documents` — hybrid BM25+cosine RAG over uploaded docs, numbered `[1] [2]` citations
-- `remember` / `recall` / `forget` — persistent key-value memory in `data/memory.json`
+- `remember` / `recall` / `forget` — persistent structured memory in `data/memory.json`: entries carry discrete `facts[]` and `concepts[]` tags alongside the value, so memory is retrievable/deduplicable
+- `recent_activity` — recall the assistant's own recent tool calls (observation capture); every tool call is logged append-only to `data/observations.jsonl` so memory can be built from what the assistant actually does
 - `add_task` / `list_tasks` / `complete_task` / `clear_tasks` — local to-do scratchpad
 - `remind_me` / `list_reminders` / `cancel_reminder` — reminders, checked on each app rerun (only fire while the app is open, no background daemon)
 - `deep_analysis` — 4-agent CrewAI pipeline (fetch → verify/compute → analyze → report) for multi-step questions; the analysis step calls Claude Code CLI, with a local-model fallback. Results are cached for 7 days (identical re-runs return instantly; local-fallback results are never cached).
@@ -37,6 +38,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - Long-chat compaction once history nears the context window, old turns summarized, kept out of the displayed/exported chat entirely
 - Smarter auto-titles (filler stripped, first sentence, word-boundary truncation)
 - Deep-analysis caching: identical topics within 7 days return the stored report instantly (local-fallback results deliberately never cached)
+- Structured memory (facts + concepts per entry) and observation capture: every tool call is logged to `data/observations.jsonl`, retrievable via the `recent_activity` tool
 
 ## Reminder daemon (optional)
 
@@ -57,7 +59,8 @@ is marked fired after a delivery attempt so it can never double-fire.
 - `app.py` — Streamlit UI
 - `assistant/llm.py` — Ollama chat + tool-calling loop, system prompt assembly
 - `assistant/tools.py` — tool implementations + schemas (REGISTRY/SCHEMAS)
-- `assistant/memory.py` — JSON key-value store (timestamped; system prompt injects only the 30 most recent facts)
+- `assistant/memory.py` — structured JSON memory (value + facts + concepts + updated_at; system prompt injects only the 30 most recent entries)
+- `assistant/observations.py` — append-only JSONL log of every tool call (observation capture, size-capped)
 - `assistant/todo.py` — JSON to-do store
 - `assistant/reminders.py` — JSON reminder store
 - `assistant/reminder_daemon.py` — background toast daemon (optional)
