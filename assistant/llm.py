@@ -27,15 +27,20 @@ BASE_SYSTEM_PROMPT = (
 )
 
 MAX_TOOL_ROUNDS = 6
+MAX_MEMORY_FACTS = 30  # cap on facts injected into the system prompt (prompt crowding)
 
 
 def _system_prompt() -> str:
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %A")
     prompt = f"{BASE_SYSTEM_PROMPT}\n\nCurrent date/time: {now}. Use this to resolve relative dates (\"tomorrow\", \"in 2 hours\") — do not guess or use your training cutoff."
-    mem = memory.list_memory()
-    if mem:
-        facts = "\n".join(f"- {k}: {v}" for k, v in mem.items())
-        prompt += f"\n\nKnown facts about the user (already remembered, no need to call recall for these):\n{facts}"
+    facts = memory.recent(MAX_MEMORY_FACTS)
+    if facts:
+        lines = "\n".join(f"- {k}: {v}" for k, v in facts)
+        prompt += f"\n\nKnown facts about the user (already remembered, no need to call recall for these):\n{lines}"
+        total = len(memory.list_memory())
+        hidden = total - len(facts)
+        if hidden > 0:
+            prompt += f"\n...and {hidden} more stored fact{'s' if hidden != 1 else ''} — ask the user or call recall if one of these seems relevant."
     due = reminders.due_reminders()
     if due:
         lines = "\n".join(f"- {r['text']} (was due {r['due_at']})" for r in due)

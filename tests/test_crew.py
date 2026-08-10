@@ -7,6 +7,16 @@ from assistant import crew
 from tests.conftest import FakeTaskOutput
 
 
+@pytest.fixture(autouse=True)
+def _no_crew_cache(monkeypatch):
+    """Keep the on-disk deep-analysis cache out of unit tests: always miss on
+    read, and drop whatever a test wrote. Cache behavior has its own test
+    module (test_crew_cache.py)."""
+    monkeypatch.setattr(crew.crew_cache, "get_cached", lambda *a, **k: None)
+    yield
+    crew.crew_cache.clear()
+
+
 # ---------- _extract_workspace_file_content ----------
 
 def test_extract_file_content_finds_existing_file(tmp_workspace_file):

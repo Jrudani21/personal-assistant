@@ -107,6 +107,16 @@ def deep_analysis(raw_input: str) -> str:
         return f"Error: {e}"
 
 
+def clear_crew_cache() -> str:
+    """Forget all cached deep-analysis reports so the next identical request
+    runs the full pipeline again instead of returning the stored result."""
+    try:
+        from . import crew_cache
+        return crew_cache.clear()
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def get_datetime() -> str:
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
 
@@ -245,6 +255,7 @@ REGISTRY = {
     "search_documents": rag.search_documents,
     "sync_vault": rag.sync_vault,
     "deep_analysis": deep_analysis,
+    "clear_crew_cache": clear_crew_cache,
 }
 
 SCHEMAS = [
@@ -388,6 +399,14 @@ SCHEMAS = [
                 "properties": {"raw_input": {"type": "string", "description": "the topic, question, or file/document reference to research and analyze"}},
                 "required": ["raw_input"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_crew_cache",
+            "description": "Delete all cached deep-analysis reports. The next deep_analysis call for any previously analyzed topic will re-run the full pipeline instead of returning the stored result. Use when the user wants a fresh take on something already analyzed, or the underlying data changed.",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {

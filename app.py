@@ -156,10 +156,11 @@ with st.sidebar:
                 st.rerun()
     else:
         st.caption("No pending reminders.")
+    st.caption("⚠️ Only fires while this app is open — run `python assistant/reminder_daemon.py --install` for 24/7 toasts.")
 
     st.divider()
     st.subheader("Deep Analysis")
-    st.caption("4-agent crew (web/wiki/files + real calc) + Claude Pro. ~45-120s.")
+    st.caption("4-agent crew (web/wiki/files + real calc) + Claude Pro. ~45-120s; identical re-runs are cached for 7 days.")
     crew_input = st.text_input(
         "Topic, question, or file path", key="crew_input",
         placeholder="e.g. Poisson vs SARIMA, or data/workspace/sales.csv",
@@ -168,6 +169,9 @@ with st.sidebar:
         with st.spinner("Running crew (fetch -> verify -> analyze -> report)..."):
             from assistant import crew as crew_module
             st.session_state.crew_result = crew_module.run_deep_analysis(crew_input)
+    if st.button("Clear analysis cache", use_container_width=True):
+        from assistant import crew_cache
+        st.toast(crew_cache.clear())
     if st.session_state.get("crew_result"):
         with st.expander("Last analysis result", expanded=True):
             st.markdown(st.session_state.crew_result)

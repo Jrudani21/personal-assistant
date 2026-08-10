@@ -1,5 +1,46 @@
 # Upgrade log — 2026-08-08
 
+## Session 2 — deep-analysis caching, numeric-consistency guardrail, reminder daemon
+
+Shipped (all tested, 115 tests passing):
+
+- **Deep-analysis caching** (`assistant/crew_cache.py`): re-running the same
+  topic now returns the stored report instantly instead of paying the full
+  ~45-120s four-agent cost. Keyed by whitespace/case-insensitive hash of the
+  input, 7-day TTL, capped at 50 entries (oldest evicted). Two deliberate
+  rules: local-fallback results are NEVER cached (they can misstate numeric
+  comparisons — see the brain note), and failures are never cached. New
+  `clear_crew_cache` tool + sidebar button. Closes the project note's
+  "No caching" open question.
+- **Numeric-consistency guardrail** (`assistant/crew.py`): closes the open
+  item from the "Local models invert numeric comparisons under prompt
+  crowding" note. The Quant stage's accepted output is captured in shared
+  state; the Analyst and Reporter guardrails then deterministically parse
+  "X is higher/lower than Y" claims and cross-check each against the
+  verified figures. Contradictions reject the output with a correction
+  message naming the true figures, forcing a CrewAI retry. Entity matching
+  is fuzzy ("Product C" matches a figure stored as "Product C revenue per
+  unit") and ambiguous matches are skipped rather than misjudged.
+- **Background reminder daemon** (`assistant/reminder_daemon.py`): reminders
+  now fire even when the app is closed. `--install` registers a logon
+  scheduled task (hidden, via pythonw); `--once` fires due reminders and
+  exits; toasts fall back to a classic `msg` popup; reminders are marked
+  fired after a delivery attempt so they can never double-fire. The app
+  keeps its own in-app check as before.
+- **Smarter chat titles** (`assistant/sessions.py`): titles now strip
+  conversational fillers ("can you", "hey", ...), keep the first sentence,
+  and truncate at a word boundary instead of raw 40-char slices.
+- **Memory hygiene** (`assistant/memory.py`, `assistant/llm.py`): memory
+  values are now timestamped, and the system prompt injects only the 30 most
+  recent facts (with a note that more exist) instead of everything —
+  bounding prompt growth that would crowd a small local model. Legacy
+  plain-string entries are still read.
+
+Verified: `py_compile` clean on all 28 files; 115 tests pass; `--once`
+smoke-tested (no reminders on this machine).
+
+## Session 1 — UI polish, tools, compaction, persistent REPL
+
 Session scope: UI polish, tool-registry additions from public-repo research, global
 Claude Code subagent audit. Everything below either shipped, is waiting on your
 review, or was blocked and skipped rather than guessed at.
