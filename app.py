@@ -216,7 +216,8 @@ with st.sidebar:
     last = backup.latest_backup_time()
     n = len(backup.list_backups())
     size_mb = backup.size_bytes() / (1024 * 1024)
-    st.caption((f"Last backup: {last} · {n} total ({size_mb:.1f} MB)") if last else "No backups yet.")
+    st.caption((f"Last: {last} · {n} total · {size_mb:.1f} MB") if last else "No backups yet.")
+    st.caption(f"Location: {backup.BACKUP_ROOT}")
     if st.button("💾 Back up data now", use_container_width=True):
         with st.spinner("Snapshotting data..."):
             st.toast(backup.create_backup())

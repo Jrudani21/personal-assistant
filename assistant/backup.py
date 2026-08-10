@@ -11,6 +11,10 @@ history independent of GitHub:
       2026-08-08_093015/
       ...
 
+Backup location is configurable via the BACKUP_DIR environment variable —
+point it at any cloud-synced folder (e.g. a mounted CloudDrive) to mirror
+snapshots there. Defaults to ./backups next to data/.
+
 Design:
 - Each backup is a plain folder copy of data/ — transparent, inspectable,
   restorable by hand if ever needed.
@@ -22,11 +26,15 @@ Design:
   for wiring into app startup or the daemon loop.
 """
 import datetime
+import os
 import shutil
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-BACKUP_ROOT = Path(__file__).resolve().parent.parent / "backups"
+BACKUP_ROOT = Path(os.environ.get(
+    "BACKUP_DIR",
+    str(Path(__file__).resolve().parent.parent / "backups"),
+))
 MAX_BACKUPS = 10
 
 _TS_FORMAT = "%Y-%m-%d_%H%M%S_%f"

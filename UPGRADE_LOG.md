@@ -15,7 +15,9 @@ knows is now snapshotted locally, independent of GitHub.
   local history with zero effort.
 - **UI + tool**: "💾 Back up data now" sidebar button (shows last backup
   time / count / size) and a `backup_data` tool the model can call.
-- `backups/` is gitignored (local-only, like the rest of data/).
+- `backups/` is gitignored (local-only, like the rest of data/). Backup
+  location configurable via the `BACKUP_DIR` env var (e.g. a cloud-synced
+  folder) — defaults to `./backups`.
 
 Verified: `py_compile` clean; 152 tests passing (was 145); real backup
 created and listed; Streamlit boots on :8599 (HTTP 200).

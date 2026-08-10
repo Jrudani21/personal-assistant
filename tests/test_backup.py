@@ -1,6 +1,7 @@
 """Tests for the local snapshot backup system."""
 import datetime
 import shutil
+from pathlib import Path
 
 from assistant import backup
 
@@ -91,3 +92,17 @@ def test_no_data_dir_returns_message(tmp_path, monkeypatch):
     monkeypatch.setattr(backup, "DATA_DIR", tmp_path / "nope")
     monkeypatch.setattr(backup, "BACKUP_ROOT", tmp_path / "backups")
     assert "No data directory" in backup.create_backup()
+
+
+def test_backup_dir_respects_env_var(tmp_path, monkeypatch):
+    import os
+    data = _fake_data(tmp_path)
+    cloud = tmp_path / "clouddrive"
+    monkeypatch.setenv("BACKUP_DIR", str(cloud))
+    # module reads env at import time; simulate by reloading with the env set
+    import importlib
+    monkeypatch.setattr(backup, "BACKUP_ROOT", Path(os.environ["BACKUP_DIR"]))
+    monkeypatch.setattr(backup, "DATA_DIR", data)
+    msg = backup.create_backup()
+    assert "Backed up" in msg
+    assert (cloud / backup.list_backups()[0] / "memory.json").exists()
