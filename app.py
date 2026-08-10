@@ -198,6 +198,11 @@ with st.sidebar:
                 st.rerun()
     else:
         st.caption("Nothing remembered yet.")
+    if st.button("🧠 Learn from activity", use_container_width=True):
+        from assistant import distill
+        with st.spinner("Extracting durable facts from recent tool use..."):
+            st.toast(distill.distill(model=model))
+        st.rerun()
 
 # ---------- Chat ----------
 if not st.session_state.chat["messages"]:

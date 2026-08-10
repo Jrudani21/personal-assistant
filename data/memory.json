@@ -1,0 +1,62 @@
+{
+  "name": {
+    "value": "Janak",
+    "facts": ["User's first name is Janak"],
+    "concepts": ["identity"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "favorite_language": {
+    "value": "R",
+    "facts": ["Favorite programming language is R", "Also uses Python for data analysis"],
+    "concepts": ["language", "preferences"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "hardware": {
+    "value": "RTX 4060 (8 GB VRAM) · i7-12700K · 32 GB RAM",
+    "facts": ["GPU: RTX 4060 with 8 GB VRAM", "CPU: i7-12700K (12 cores, 20 threads)", "RAM: 32 GB"],
+    "concepts": ["hardware", "machine"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "os": {
+    "value": "Windows",
+    "facts": ["Runs Windows"],
+    "concepts": ["os", "platform"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "statistics_focus": {
+    "value": "applied statistics: Poisson regression, SARIMA, ANOVA, hypothesis testing",
+    "facts": ["Focus area is applied statistics", "Works with Poisson regression, SARIMA, ANOVA, and hypothesis testing", "Interested in time-series forecasting for count data"],
+    "concepts": ["statistics", "domain"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "projects": {
+    "value": "personal-assistant (local AI), llm-finetune (qwen statistics model), medicare-fraud-detector",
+    "facts": ["Maintains personal-assistant: a fully local AI assistant", "Maintains llm-finetune: fine-tuning a qwen2.5 variant for statistics", "Built medicare-fraud-detector"],
+    "concepts": ["projects"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "second_brain": {
+    "value": "Obsidian vault at C:\\Users\\Janak's PC\\brain (git-backed, private on GitHub)",
+    "facts": ["Uses an Obsidian vault as a second brain", "Vault path: C:\\Users\\Janak's PC\\brain", "Vault is git-backed and private on GitHub"],
+    "concepts": ["knowledge-management", "obsidian"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "github_username": {
+    "value": "Jrudani21",
+    "facts": ["GitHub username is Jrudani21"],
+    "concepts": ["github", "identity"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "tooling_preference": {
+    "value": "fully local/free tools over paid APIs; Claude Code CLI against Pro subscription for hard analysis steps",
+    "facts": ["Prefers fully local/free tools over paid APIs", "Uses Claude Code CLI against an existing Pro subscription for hard analysis steps"],
+    "concepts": ["tooling", "preferences"],
+    "updated_at": "2026-08-08T12:00:00"
+  },
+  "assistant_goal": {
+    "value": "fully local AI assistant answering from own documents, running real analysis, $0 cost",
+    "facts": ["Wants the assistant to answer from their own documents", "Wants the assistant to run real analysis on their data", "Goal is zero operating cost"],
+    "concepts": ["goals", "assistant"],
+    "updated_at": "2026-08-08T12:00:00"
+  }
+}

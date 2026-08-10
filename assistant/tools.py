@@ -224,6 +224,17 @@ def recent_activity(limit: int = 10) -> str:
     return "\n".join(lines)
 
 
+def distill_memory() -> str:
+    """Learn from the assistant's own recent activity: extract durable facts
+    about the user from the tool-call log and add NEW keys to memory. Existing
+    memory is never overwritten. Runs a local-model call (~5-15s)."""
+    try:
+        from . import distill
+        return distill.distill()
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def add_task(text: str) -> str:
     return todo.add_task(text)
 
@@ -278,6 +289,7 @@ REGISTRY = {
     "deep_analysis": deep_analysis,
     "clear_crew_cache": clear_crew_cache,
     "recent_activity": recent_activity,
+    "distill_memory": distill_memory,
 }
 
 SCHEMAS = [
@@ -454,6 +466,14 @@ SCHEMAS = [
                 },
                 "required": ["key", "value"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "distill_memory",
+            "description": "Learn from the assistant's own recent activity: read the tool-call log and extract durable facts about the user into memory (new keys only, existing memory is never overwritten). Use occasionally to build memory from what the assistant has actually done. Takes ~5-15s (one local-model call).",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {

@@ -23,6 +23,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - `search_documents` — hybrid BM25+cosine RAG over uploaded docs, numbered `[1] [2]` citations
 - `remember` / `recall` / `forget` — persistent structured memory in `data/memory.json`: entries carry discrete `facts[]` and `concepts[]` tags alongside the value, so memory is retrievable/deduplicable
 - `recent_activity` — recall the assistant's own recent tool calls (observation capture); every tool call is logged append-only to `data/observations.jsonl` so memory can be built from what the assistant actually does
+- `distill_memory` — the assistant learns from its own activity: reads the observation log, extracts durable facts about you with a local-model call, and adds NEW keys to memory (existing memory is never overwritten). Also available as the "🧠 Learn from activity" sidebar button.
 - `add_task` / `list_tasks` / `complete_task` / `clear_tasks` — local to-do scratchpad
 - `remind_me` / `list_reminders` / `cancel_reminder` — reminders, checked on each app rerun (only fire while the app is open, no background daemon)
 - `deep_analysis` — 4-agent CrewAI pipeline (fetch → verify/compute → analyze → report) for multi-step questions; the analysis step calls Claude Code CLI, with a local-model fallback. Results are cached for 7 days (identical re-runs return instantly; local-fallback results are never cached).
@@ -39,6 +40,9 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - Smarter auto-titles (filler stripped, first sentence, word-boundary truncation)
 - Deep-analysis caching: identical topics within 7 days return the stored report instantly (local-fallback results deliberately never cached)
 - Structured memory (facts + concepts per entry) and observation capture: every tool call is logged to `data/observations.jsonl`, retrievable via the `recent_activity` tool
+- Memory distillation: `distill_memory` tool + sidebar button learn durable facts from the assistant's own activity (new keys only, never overwrites)
+- Append-only JSONL chats: messages are O(1) appended to `<id>.jsonl` instead of rewriting the whole chat file per turn; a tiny `<id>.meta.json` sidecar holds title/compaction cache. Legacy `.json` chats migrate on first save
+- Git-backed memory: `data/memory.json` is versioned in the repo (audit trail / revert)
 
 ## Reminder daemon (optional)
 
@@ -61,11 +65,12 @@ is marked fired after a delivery attempt so it can never double-fire.
 - `assistant/tools.py` — tool implementations + schemas (REGISTRY/SCHEMAS)
 - `assistant/memory.py` — structured JSON memory (value + facts + concepts + updated_at; system prompt injects only the 30 most recent entries)
 - `assistant/observations.py` — append-only JSONL log of every tool call (observation capture, size-capped)
+- `assistant/distill.py` — memory distillation from observations ("Dream-lite")
 - `assistant/todo.py` — JSON to-do store
 - `assistant/reminders.py` — JSON reminder store
 - `assistant/reminder_daemon.py` — background toast daemon (optional)
 - `assistant/rag.py` — document ingest + hybrid search
-- `assistant/sessions.py` — per-chat persistence, search, Markdown export
+- `assistant/sessions.py` — per-chat persistence (append-only JSONL + meta sidecar, legacy migration), search, Markdown export
 - `assistant/compaction.py` — long-chat summarization cache
 - `assistant/repl.py` / `assistant/repl_worker.py` — persistent Python session for `run_python`
 - `assistant/crew.py` — CrewAI deep-analysis pipeline + numeric-consistency guardrail

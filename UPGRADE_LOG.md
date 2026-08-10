@@ -1,5 +1,33 @@
 # Upgrade log — 2026-08-08
 
+## Session 4 — append-only JSONL chats, memory distillation, git-backed memory
+
+Implemented the next ranked upgrades from the nanobot/claude-mem study:
+
+- **Append-only JSONL chats** (`assistant/sessions.py`): chats are now
+  `<id>.jsonl` (one JSON line per message, O(1) crash-safe appends — no more
+  per-turn full-file rewrite) + `<id>.meta.json` (tiny sidecar for title /
+  compaction cache / message_count, rewritten only on rare meta changes).
+  Legacy `<id>.json` chats still load and migrate on first save. `load`,
+  `list_chats`, `search_chats`, `delete`, `export_markdown` all handle both
+  formats. Verified: incremental appends, compaction persistence across
+  saves, legacy migration, healing when a caller holds a truncated view.
+- **Memory distillation** (`assistant/distill.py`): the "Dream-lite"
+  self-training feature. `distill()` reads the recent observation log,
+  asks the local model for strict-JSON durable facts
+  (key/value/facts/concepts), and adds only NEW keys to memory — existing
+  memory is never overwritten. Guardrails: defensive JSON parsing (markdown
+  fences, prose, garbage all rejected), max 5 new keys/run, sane key regex,
+  graceful degradation on Ollama failure. New `distill_memory` tool + "🧠
+  Learn from activity" sidebar button. Smoke-tested end-to-end against the
+  real qwen2.5:7b model: extracted 3 structured facts from seeded activity.
+- **Git-backed memory**: `.gitignore` now tracks `data/memory.json` (only
+  that file — chats/embeddings/observations stay out of git) so memory
+  changes are versioned and revertible in the private repo.
+
+Verified: `py_compile` clean; 145 tests passing (was 130); Streamlit boots
+on :8599 (HTTP 200).
+
 ## Session 3 — structured memory + observation capture
 
 From the repo study of nanobot/claude-mem (see
