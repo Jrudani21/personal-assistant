@@ -30,6 +30,8 @@ import os
 import shutil
 from pathlib import Path
 
+from . import config as _config
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 BACKUP_ROOT = Path(os.environ.get(
     "BACKUP_DIR",
@@ -41,6 +43,23 @@ _TS_FORMAT = "%Y-%m-%d_%H%M%S_%f"
 _DAY_FORMAT = "%Y-%m-%d"
 
 
+def _backup_root() -> Path:
+    """Configured backup dir (config.json > env BACKUP_DIR > default)."""
+    cfg = _config.get("backup_dir")
+    if cfg:
+        return Path(cfg)
+    return BACKUP_ROOT
+
+
+def _retention() -> int:
+    return int(_config.get("backup_retention", MAX_BACKUPS))
+
+
+def backup_location() -> str:
+    """Effective backup directory as a display string (for the UI)."""
+    return str(_backup_root())
+
+
 def _now() -> datetime.datetime:
     return datetime.datetime.now()
 
@@ -48,16 +67,17 @@ def _now() -> datetime.datetime:
 def create_backup(keep: int | None = None) -> str:
     """Snapshot data/ into a timestamped folder. Returns a summary message."""
     if keep is None:
-        keep = MAX_BACKUPS
+        keep = _retention()
     if not DATA_DIR.exists():
         return "No data directory to back up."
 
-    BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+    root = _backup_root()
+    root.mkdir(parents=True, exist_ok=True)
     ts = _now().strftime(_TS_FORMAT)
-    dest = BACKUP_ROOT / ts
+    dest = root / ts
 
     # copy to a temp dir first, then atomically rename into place
-    tmp = BACKUP_ROOT / f".tmp_{ts}"
+    tmp = root / f".tmp_{ts}"
     if tmp.exists():
         shutil.rmtree(tmp)
     shutil.copytree(DATA_DIR, tmp)
@@ -74,8 +94,11 @@ def create_backup(keep: int | None = None) -> str:
 
 def _prune(keep: int) -> int:
     """Delete oldest backups beyond `keep`. Never deletes the newest."""
+    root = _backup_root()
+    if not root.exists():
+        return 0
     dirs = sorted(
-        (d for d in BACKUP_ROOT.iterdir() if d.is_dir() and not d.name.startswith(".tmp")),
+        (d for d in root.iterdir() if d.is_dir() and not d.name.startswith(".tmp")),
         key=lambda d: d.name,
     )
     if len(dirs) <= keep:
@@ -89,9 +112,10 @@ def _prune(keep: int) -> int:
 
 def list_backups() -> list[str]:
     """Backup folder names, newest first."""
-    if not BACKUP_ROOT.exists():
+    root = _backup_root()
+    if not root.exists():
         return []
-    dirs = [d.name for d in BACKUP_ROOT.iterdir()
+    dirs = [d.name for d in root.iterdir()
             if d.is_dir() and not d.name.startswith(".tmp")]
     return sorted(dirs, reverse=True)
 
@@ -119,7 +143,7 @@ def backup_if_due() -> str | None:
 def restore_backup(name: str) -> str:
     """Replace data/ with the contents of a backup. Destructive to current
     data — callers should confirm first."""
-    src = BACKUP_ROOT / name
+    src = _backup_root() / name
     if not src.is_dir():
         return f"No backup named '{name}'. Available: {', '.join(list_backups()) or '(none)'}"
 
@@ -132,7 +156,10 @@ def restore_backup(name: str) -> str:
 def size_bytes() -> int:
     """Total size of all backups, for the UI."""
     total = 0
-    for d in BACKUP_ROOT.glob("*"):
+    root = _backup_root()
+    if not root.exists():
+        return 0
+    for d in root.glob("*"):
         if d.is_dir() and not d.name.startswith(".tmp"):
             for f in d.rglob("*"):
                 if f.is_file():

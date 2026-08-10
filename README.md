@@ -31,6 +31,21 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - `clear_crew_cache` — forget cached deep-analysis reports so the next identical request re-runs the full pipeline
 - `get_datetime` — current date/time (also injected into every system prompt so the model can resolve "tomorrow"/"in 2 hours" without guessing)
 
+### Researched-tool additions (from the Tooling MOC / memory-design study)
+
+- `mcp_list_tools` / `mcp_call_tool` — Model Context Protocol client (nanobot / private-gpt research):
+  call tools from external MCP stdio servers configured in Settings → Setup → MCP servers
+  (JSON list of `{name, command, args}`). Zero-dependency stdio JSON-RPC implementation.
+- `query_sql` — read-only SQL (SELECT/PRAGMA/EXPLAIN/WITH) against a local SQLite DB
+  (private-gpt text-to-SQL research); writes refused, results capped at 50 rows
+- `fetch_webpage` — fetch a URL and return its readable text (ragflow / awesome-llm-apps
+  deep-doc research); stdlib HTML parsing, script/style stripped
+- `transcribe_file` — transcribe an audio file (wav/mp3/m4a/ogg) from the workspace
+  (meetily research gap — voice beyond the UI recorder)
+- `list_skills` / `run_skill` — anything-llm / private-gpt skills pattern: reusable
+  procedures in `data/skills/<name>/` as `SKILL.md` (instructions) + optional `run.py`
+  (executed with the current interpreter, sandboxed to the skill folder)
+
 ## Features
 
 - Multiple chats, persisted as one JSON file each, searchable and exportable to Markdown
@@ -60,9 +75,30 @@ python assistant/reminder_daemon.py --uninstall # remove the scheduled task
 Toasts are best-effort (falls back to a classic `msg` popup), and a reminder
 is marked fired after a delivery attempt so it can never double-fire.
 
+## Settings page
+
+`pages/1_⚙️_Settings.py` (run `streamlit run app.py` and open the sidebar) configures
+all of the above without touching source:
+
+- **🧰 Tools** — enable/disable any tool (model won't see disabled ones), per-tool
+  parameters (web search max results, Python timeout, read-file size cap)
+- **📜 Rules & Behavior** — system prompt, max tool rounds, memory-facts cap, RAG
+  chunking/similarity, deep-analysis crew models, whisper model, speak-replies default
+- **⚙️ Setup** — default model, Ollama base URL, workspace/vault/backup/SQLite/skills
+  paths, backup retention, MCP servers (JSON), reminder-daemon install/uninstall,
+  Python-session restart
+- **💾 Data** — view/delete memory, restore backups, clear crew cache, view/reset
+  data/config.json
+
+Settings persist to `data/config.json` (gitignored); most apply immediately, path and
+model changes apply to the next call.
+
 ## Structure
 
 - `app.py` — Streamlit UI
+- `assistant/config.py` — central JSON config (data/config.json) read by every module; the Settings page writes here
+- `assistant/mcp.py` — minimal stdlib MCP stdio client (JSON-RPC 2.0)
+- `assistant/skills.py` — reusable procedure skills (data/skills)
 - `assistant/llm.py` — Ollama chat + tool-calling loop, system prompt assembly
 - `assistant/tools.py` — tool implementations + schemas (REGISTRY/SCHEMAS)
 - `assistant/memory.py` — structured JSON memory (value + facts + concepts + updated_at; system prompt injects only the 30 most recent entries)

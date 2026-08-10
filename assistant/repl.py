@@ -13,6 +13,8 @@ import sys
 import threading
 from pathlib import Path
 
+from . import config as _config
+
 WORKSPACE = Path(__file__).resolve().parent.parent / "data" / "workspace"
 WORKSPACE.mkdir(parents=True, exist_ok=True)
 WORKER_SCRIPT = Path(__file__).resolve().parent / "repl_worker.py"
@@ -20,6 +22,13 @@ WORKER_SCRIPT = Path(__file__).resolve().parent / "repl_worker.py"
 _proc = None
 _out_queue = None
 _lock = threading.Lock()
+
+
+def _workspace() -> Path:
+    cfg = _config.get("workspace_dir")
+    p = Path(cfg).resolve() if cfg else WORKSPACE
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def _reader_thread(proc, q):
@@ -34,7 +43,7 @@ def _ensure_started():
         return
     _proc = subprocess.Popen(
         [sys.executable, "-u", str(WORKER_SCRIPT)],
-        cwd=WORKSPACE,
+        cwd=_workspace(),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         text=True, bufsize=1,
     )
@@ -42,7 +51,9 @@ def _ensure_started():
     threading.Thread(target=_reader_thread, args=(_proc, _out_queue), daemon=True).start()
 
 
-def run_persistent(code: str, timeout: float = 15.0) -> str:
+def run_persistent(code: str, timeout: float | None = None) -> str:
+    if timeout is None:
+        timeout = float(_config.get("run_python_timeout_s", 15.0))
     with _lock:
         _ensure_started()
         try:

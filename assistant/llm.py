@@ -5,8 +5,9 @@ import re
 
 import ollama
 
+from . import config as _config
 from . import memory, observations, reminders
-from .tools import REGISTRY, SCHEMAS
+from . import tools as _tools
 
 _OVERFLOW_RE = re.compile(r"prompt too long; exceeded (?:max )?context length", re.IGNORECASE)
 
@@ -31,9 +32,10 @@ MAX_MEMORY_FACTS = 30  # cap on facts injected into the system prompt (prompt cr
 
 
 def _system_prompt() -> str:
+    base = _config.get("system_prompt", BASE_SYSTEM_PROMPT)
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %A")
-    prompt = f"{BASE_SYSTEM_PROMPT}\n\nCurrent date/time: {now}. Use this to resolve relative dates (\"tomorrow\", \"in 2 hours\") — do not guess or use your training cutoff."
-    facts = memory.recent_entries(MAX_MEMORY_FACTS)
+    prompt = f"{base}\n\nCurrent date/time: {now}. Use this to resolve relative dates (\"tomorrow\", \"in 2 hours\") — do not guess or use your training cutoff."
+    facts = memory.recent_entries(int(_config.get("max_memory_facts", MAX_MEMORY_FACTS)))
     if facts:
         lines = []
         for entry in facts:
@@ -62,10 +64,11 @@ def run_chat(model: str, history: list[dict], on_tool_call=None):
     Returns the final assistant reply text. Streams nothing; used for a
     simple request/response Streamlit turn."""
     messages = [{"role": "system", "content": _system_prompt()}] + history
+    max_rounds = int(_config.get("max_tool_rounds", MAX_TOOL_ROUNDS))
 
-    for _ in range(MAX_TOOL_ROUNDS):
+    for _ in range(max_rounds):
         try:
-            response = ollama.chat(model=model, messages=messages, tools=SCHEMAS)
+            response = ollama.chat(model=model, messages=messages, tools=_tools.get_schemas())
         except Exception as e:
             return _describe_error(e)
         msg = response["message"]
@@ -80,7 +83,7 @@ def run_chat(model: str, history: list[dict], on_tool_call=None):
             args = call["function"]["arguments"]
             if isinstance(args, str):
                 args = json.loads(args or "{}")
-            fn = REGISTRY.get(name)
+            fn = _tools.get_registry().get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
             observations.append(name, args, result)
             if on_tool_call:
@@ -95,10 +98,11 @@ def stream_chat(model: str, history: list[dict], on_tool_call=None):
     UI can render them live. Tool-call rounds execute synchronously
     in between (they have no visible content to stream)."""
     messages = [{"role": "system", "content": _system_prompt()}] + history
+    max_rounds = int(_config.get("max_tool_rounds", MAX_TOOL_ROUNDS))
 
-    for round_num in range(MAX_TOOL_ROUNDS):
+    for round_num in range(max_rounds):
         try:
-            stream = ollama.chat(model=model, messages=messages, tools=SCHEMAS, stream=True)
+            stream = ollama.chat(model=model, messages=messages, tools=_tools.get_schemas(), stream=True)
         except Exception as e:
             yield f"\n\n_{_describe_error(e)}_"
             return
@@ -128,7 +132,7 @@ def stream_chat(model: str, history: list[dict], on_tool_call=None):
             args = call["function"]["arguments"]
             if isinstance(args, str):
                 args = json.loads(args or "{}")
-            fn = REGISTRY.get(name)
+            fn = _tools.get_registry().get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
             observations.append(name, args, result)
             if on_tool_call:

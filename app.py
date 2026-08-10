@@ -6,6 +6,7 @@ import ollama
 
 from assistant.llm import stream_chat
 from assistant import backup, compaction, memory, sessions, rag, reminders, repl, todo, voice
+from assistant import config as _config
 
 st.set_page_config(page_title="Personal Assistant", page_icon="🧠", layout="centered")
 
@@ -42,8 +43,15 @@ try:
 except Exception as e:
     st.error(f"Can't reach Ollama: {e}\n\nMake sure it's running (`ollama serve`), then reload this page.")
     st.stop()
-DEFAULT_MODEL = "qwen2.5:7b" if "qwen2.5:7b" in AVAILABLE_MODELS else (
-    AVAILABLE_MODELS[0] if AVAILABLE_MODELS else None
+# Preferred model from settings (data/config.json); falls back to qwen2.5:7b,
+# then to whatever Ollama actually has.
+_configured_model = _config.get("default_model")
+DEFAULT_MODEL = (
+    _configured_model if _configured_model in AVAILABLE_MODELS else (
+        "qwen2.5:7b" if "qwen2.5:7b" in AVAILABLE_MODELS else (
+            AVAILABLE_MODELS[0] if AVAILABLE_MODELS else None
+        )
+    )
 )
 
 # Auto-backup once per day: keeps a rolling local snapshot of all data,
@@ -191,7 +199,7 @@ with st.sidebar:
 
     st.divider()
     st.subheader("Voice")
-    speak_replies = st.checkbox("🔊 Speak replies", key="speak_replies")
+    speak_replies = st.checkbox("🔊 Speak replies", value=bool(_config.get("speak_replies", False)), key="speak_replies")
 
     st.divider()
     st.subheader("Memory")
@@ -217,7 +225,7 @@ with st.sidebar:
     n = len(backup.list_backups())
     size_mb = backup.size_bytes() / (1024 * 1024)
     st.caption((f"Last: {last} · {n} total · {size_mb:.1f} MB") if last else "No backups yet.")
-    st.caption(f"Location: {backup.BACKUP_ROOT}")
+    st.caption(f"Location: {backup.backup_location()}")
     if st.button("💾 Back up data now", use_container_width=True):
         with st.spinner("Snapshotting data..."):
             st.toast(backup.create_backup())
