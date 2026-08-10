@@ -2,15 +2,14 @@
 Standalone CrewAI smoke test for the hybrid pipeline in assistant/crew.py.
 Same pipeline used by the `deep_analysis` chat tool and the sidebar's
 "Deep Analysis" section in app.py -- run this directly to sanity-check the
-setup (Ollama reachable, Claude Code CLI reachable) without going through
+setup (Ollama reachable, DeepSeek API key set) without going through
 the UI.
 
 Setup:
-    pip install crewai
+    pip install crewai openai
     ollama serve                     # must already be running
     ollama pull qwen2.5:7b            # or whichever model you have pulled
-    claude --version                 # Claude Code CLI must be installed
-                                      # and already logged in (claude login)
+    set DEEPSEEK_API_KEY=sk-...      # DeepSeek API key (for the analysis step)
 
 Run:
     python crewai_demo.py

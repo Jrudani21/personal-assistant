@@ -113,113 +113,159 @@ def test_guardrail_expected_snippet_check_is_case_insensitive():
     assert ok is True
 
 
-# ---------- ClaudeCodeLLM ----------
+# ---------- DeepSeekLLM ----------
 
-class _FakeCompletedProcess:
-    def __init__(self, returncode=0, stdout=b"", stderr=b""):
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
+class _FakeChatResponse:
+    def __init__(self, content="the response", error=None):
+        self.choices = [type("Choice", (), {"message": type("Msg", (), {"content": content})})()]
 
 
-def test_claude_code_llm_string_prompt_piped_via_stdin(monkeypatch):
+def _fake_client(content="the response"):
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            return _FakeChatResponse(content=content)
+
+    class _FakeClient:
+        def __init__(self):
+            self.chat = type("Chat", (), {"completions": _FakeCompletions()})()
+
+    return _FakeClient()
+
+
+def test_deepseek_llm_calls_api_with_prompt(monkeypatch):
+    import sys
+    sys.path.insert(0, r"E:\Claude\projects\personal-assistant")
+
     captured = {}
 
-    def fake_run(args, **kwargs):
-        captured["args"] = args
-        captured["input"] = kwargs.get("input")
-        return _FakeCompletedProcess(0, b"the response", b"")
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured["api_key"] = kwargs.get("api_key")
+            captured["base_url"] = kwargs.get("base_url")
+            self.chat = type("Chat", (), {"completions": _FakeCompletions()})()
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            captured["model"] = kwargs.get("model")
+            captured["messages"] = kwargs.get("messages")
+            return _FakeChatResponse(content="the response")
 
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", _FakeOpenAI)
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "test-key")
+
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
     result = llm.call("hello world")
 
     assert result == "the response"
-    assert captured["input"] == b"hello world"
-    assert "--settings" in captured["args"]
-    assert "--system-prompt" in captured["args"]
+    assert captured["api_key"] == "test-key"
+    assert captured["base_url"] == "https://api.deepseek.com"
+    assert captured["model"] == "deepseek-chat"
+    assert captured["messages"][1]["content"] == "hello world"
 
 
-def test_claude_code_llm_flattens_message_list(monkeypatch):
+def test_deepseek_llm_flattens_message_list(monkeypatch):
     captured = {}
 
-    def fake_run(args, **kwargs):
-        captured["input"] = kwargs.get("input")
-        return _FakeCompletedProcess(0, b"ok", b"")
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs.get("messages")
+            return _FakeChatResponse(content="ok")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = type("Chat", (), {"completions": _FakeCompletions()})()
 
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", _FakeOpenAI)
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "test-key")
+
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
     llm.call([{"role": "system", "content": "sys prompt"}, {"role": "user", "content": "hi there"}])
 
-    decoded = captured["input"].decode("utf-8")
-    assert "[system] sys prompt" in decoded
-    assert "[user] hi there" in decoded
+    joined = "\n\n".join(f"[{m.get('role', 'user')}] {m.get('content', '')}" for m in captured["messages"][1:])
+    assert "[user] hi there" in joined
 
 
-def test_claude_code_llm_raises_on_nonzero_exit(monkeypatch):
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _FakeCompletedProcess(1, b"", b"boom"))
-    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+def test_deepseek_llm_raises_when_api_key_missing(monkeypatch):
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "")
 
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
-    with pytest.raises(RuntimeError, match="boom"):
-        llm._call_claude("hi")
-
-
-def test_claude_code_llm_raises_if_cli_not_found(monkeypatch):
-    monkeypatch.setattr(crew.shutil, "which", lambda name: None)
-
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
-    with pytest.raises(RuntimeError, match="not found"):
-        llm._call_claude("hi")
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
+    with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
+        llm._call_deepseek("hi")
 
 
-# ---------- local fallback when Claude is unavailable ----------
+def test_deepseek_llm_raises_on_empty_response(monkeypatch):
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            return _FakeChatResponse(content="   ")
 
-def test_call_falls_back_to_local_model_when_claude_fails(monkeypatch):
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _FakeCompletedProcess(1, b"", b"usage limit reached"))
-    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = type("Chat", (), {"completions": _FakeCompletions()})()
 
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", _FakeOpenAI)
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "test-key")
+
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
+    with pytest.raises(RuntimeError, match="empty output"):
+        llm._call_deepseek("hi")
+
+
+# ---------- local fallback when DeepSeek is unavailable ----------
+
+def test_call_falls_back_to_local_model_when_deepseek_fails(monkeypatch):
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "")
+
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
     monkeypatch.setattr(llm, "_call_local_fallback", lambda prompt: "local analysis")
 
     assert llm.call("analyze this") == "local analysis"
     assert llm.used_fallback is True
-    assert "usage limit reached" in llm.last_error
+    assert "DEEPSEEK_API_KEY" in llm.last_error
 
 
-def test_call_falls_back_when_cli_missing(monkeypatch):
-    monkeypatch.setattr(crew.shutil, "which", lambda name: None)
+def test_call_falls_back_when_api_request_fails(monkeypatch):
+    import openai
 
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+    class _FailingCompletions:
+        def create(self, **kwargs):
+            raise Exception("connection refused")
+
+    class _FakeOpenAI:
+        def __init__(self, **kwargs):
+            self.chat = type("Chat", (), {"completions": _FailingCompletions()})()
+
+    monkeypatch.setattr(openai, "OpenAI", _FakeOpenAI)
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "test-key")
+
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
+    monkeypatch.setattr(llm, "_call_local_fallback", lambda prompt: "local analysis")
+
+    assert llm.call("analyze this") == "local analysis"
+    assert llm.used_fallback is True
+    assert "connection refused" in llm.last_error
+
+
+def test_empty_deepseek_output_triggers_fallback(monkeypatch):
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "test-key")
+
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
+    monkeypatch.setattr(llm, "_call_deepseek", lambda prompt: (_ for _ in ()).throw(RuntimeError("empty output")))
     monkeypatch.setattr(llm, "_call_local_fallback", lambda prompt: "local analysis")
 
     assert llm.call("analyze this") == "local analysis"
     assert llm.used_fallback is True
 
 
-def test_empty_claude_output_triggers_fallback(monkeypatch):
-    # an empty response is the transient-failure signature seen in testing;
-    # passing it through would feed the next stage nothing to work with
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _FakeCompletedProcess(0, b"   ", b""))
-    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
+def test_no_fallback_flag_when_deepseek_succeeds(monkeypatch):
+    monkeypatch.setattr(crew, "DEEPSEEK_API_KEY", "test-key")
 
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
-    monkeypatch.setattr(llm, "_call_local_fallback", lambda prompt: "local analysis")
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
+    monkeypatch.setattr(llm, "_call_deepseek", lambda prompt: "deepseek analysis")
 
-    assert llm.call("analyze this") == "local analysis"
-    assert llm.used_fallback is True
-
-
-def test_no_fallback_flag_when_claude_succeeds(monkeypatch):
-    monkeypatch.setattr(subprocess, "run", lambda *a, **kw: _FakeCompletedProcess(0, b"claude analysis", b""))
-    monkeypatch.setattr(crew.shutil, "which", lambda name: "claude.cmd")
-
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
-    assert llm.call("analyze this") == "claude analysis"
+    assert llm.call("analyze this") == "deepseek analysis"
     assert llm.used_fallback is False
 
 
@@ -230,7 +276,7 @@ def test_run_deep_analysis_discloses_when_fallback_was_used(monkeypatch):
 
     def fake_build(raw_input, reasoning_llm=None):
         reasoning_llm.used_fallback = True
-        reasoning_llm.last_error = "usage limit reached"
+        reasoning_llm.last_error = "API key missing"
         return _Kicked()
 
     monkeypatch.setattr(crew, "build_crew", fake_build)
@@ -238,10 +284,10 @@ def test_run_deep_analysis_discloses_when_fallback_was_used(monkeypatch):
 
     assert "the report body" in result
     assert "analyzed locally" in result
-    assert "usage limit reached" in result
+    assert "API key missing" in result
 
 
-def test_run_deep_analysis_stays_clean_when_claude_worked(monkeypatch):
+def test_run_deep_analysis_stays_clean_when_deepseek_worked(monkeypatch):
     class _Kicked:
         def kickoff(self):
             return "the report body"
@@ -250,14 +296,8 @@ def test_run_deep_analysis_stays_clean_when_claude_worked(monkeypatch):
     assert crew.run_deep_analysis("anything") == "the report body"
 
 
-def test_claude_code_llm_isolated_settings_disable_caveman_plugin():
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
-    settings = json.loads(llm._isolated_settings)
-    assert settings["enabledPlugins"]["caveman@caveman"] is False
-
-
-def test_claude_code_llm_does_not_claim_function_calling_support():
-    llm = crew.ClaudeCodeLLM(model="claude-code-cli")
+def test_deepseek_llm_does_not_claim_function_calling_support():
+    llm = crew.DeepSeekLLM(model="deepseek-chat")
     assert llm.supports_function_calling() is False
 
 

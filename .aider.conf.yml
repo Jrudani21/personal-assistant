@@ -1,0 +1,21 @@
+# Personal-assistant project config
+# DeepSeek-powered assistant repo — uses pytest for verification.
+
+# ─── Testing ──────────────────────────────────────────────────────────────
+# Run the full test suite after changes (84 tests, ~8s)
+test-cmd: "C:\\Users\\Janak's PC\\AppData\\Local\\Programs\\Python\\Python312\\python.exe -m pytest tests -q"
+auto-test: true
+
+# ─── Linting (optional — skip for now, no linter configured) ──────────────
+auto-lint: false
+
+# ─── Context ──────────────────────────────────────────────────────────────
+# deepseek_context.md is loaded globally; add repo-specific notes here if needed.
+
+# ─── Git ──────────────────────────────────────────────────────────────────
+# Default (no AI attribution) applies from global config
+auto-commits: true
+
+# ─── UX ───────────────────────────────────────────────────────────────────
+dark-mode: true
+show-diffs: true
