@@ -5,7 +5,7 @@ import streamlit as st
 import ollama
 
 from assistant.llm import stream_chat
-from assistant import compaction, memory, sessions, rag, reminders, repl, todo, voice
+from assistant import backup, compaction, memory, sessions, rag, reminders, repl, todo, voice
 
 st.set_page_config(page_title="Personal Assistant", page_icon="🧠", layout="centered")
 
@@ -45,6 +45,13 @@ except Exception as e:
 DEFAULT_MODEL = "qwen2.5:7b" if "qwen2.5:7b" in AVAILABLE_MODELS else (
     AVAILABLE_MODELS[0] if AVAILABLE_MODELS else None
 )
+
+# Auto-backup once per day: keeps a rolling local snapshot of all data,
+# independent of git/GitHub. No-op if today's backup already exists.
+try:
+    backup.backup_if_due()
+except Exception:
+    pass  # never let a backup failure block the app
 
 if "chat" not in st.session_state:
     st.session_state.chat = sessions.new_chat()
@@ -202,6 +209,17 @@ with st.sidebar:
         from assistant import distill
         with st.spinner("Extracting durable facts from recent tool use..."):
             st.toast(distill.distill(model=model))
+        st.rerun()
+
+    st.divider()
+    st.subheader("Local backups")
+    last = backup.latest_backup_time()
+    n = len(backup.list_backups())
+    size_mb = backup.size_bytes() / (1024 * 1024)
+    st.caption((f"Last backup: {last} · {n} total ({size_mb:.1f} MB)") if last else "No backups yet.")
+    if st.button("💾 Back up data now", use_container_width=True):
+        with st.spinner("Snapshotting data..."):
+            st.toast(backup.create_backup())
         st.rerun()
 
 # ---------- Chat ----------

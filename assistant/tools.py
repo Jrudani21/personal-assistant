@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 from ddgs import DDGS
 
+from . import backup
 from . import memory
 from . import observations
 from . import rag
@@ -235,6 +236,17 @@ def distill_memory() -> str:
         return f"Error: {e}"
 
 
+def backup_data() -> str:
+    """Snapshot the assistant's entire data folder (memory, chats,
+    observations, embeddings, tasks, reminders, workspace) into a local,
+    timestamped backup. Keeps the newest 10 backups and prunes older ones.
+    Use before major changes or just to keep a local history."""
+    try:
+        return backup.create_backup()
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def add_task(text: str) -> str:
     return todo.add_task(text)
 
@@ -290,6 +302,7 @@ REGISTRY = {
     "clear_crew_cache": clear_crew_cache,
     "recent_activity": recent_activity,
     "distill_memory": distill_memory,
+    "backup_data": backup_data,
 }
 
 SCHEMAS = [
@@ -466,6 +479,14 @@ SCHEMAS = [
                 },
                 "required": ["key", "value"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "backup_data",
+            "description": "Snapshot the assistant's entire local data (memory, chats, observations, embeddings, tasks, reminders, workspace files) into a timestamped backup folder. Keeps the newest 10 backups. Use before major changes or whenever the user asks to save/back up their data locally.",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {

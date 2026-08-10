@@ -24,6 +24,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - `remember` / `recall` / `forget` — persistent structured memory in `data/memory.json`: entries carry discrete `facts[]` and `concepts[]` tags alongside the value, so memory is retrievable/deduplicable
 - `recent_activity` — recall the assistant's own recent tool calls (observation capture); every tool call is logged append-only to `data/observations.jsonl` so memory can be built from what the assistant actually does
 - `distill_memory` — the assistant learns from its own activity: reads the observation log, extracts durable facts about you with a local-model call, and adds NEW keys to memory (existing memory is never overwritten). Also available as the "🧠 Learn from activity" sidebar button.
+- `backup_data` — snapshot the entire local data folder (memory, chats, observations, embeddings, tasks, reminders, workspace) into a timestamped backup; keeps the newest 10
 - `add_task` / `list_tasks` / `complete_task` / `clear_tasks` — local to-do scratchpad
 - `remind_me` / `list_reminders` / `cancel_reminder` — reminders, checked on each app rerun (only fire while the app is open, no background daemon)
 - `deep_analysis` — 4-agent CrewAI pipeline (fetch → verify/compute → analyze → report) for multi-step questions; the analysis step calls Claude Code CLI, with a local-model fallback. Results are cached for 7 days (identical re-runs return instantly; local-fallback results are never cached).
@@ -43,6 +44,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - Memory distillation: `distill_memory` tool + sidebar button learn durable facts from the assistant's own activity (new keys only, never overwrites)
 - Append-only JSONL chats: messages are O(1) appended to `<id>.jsonl` instead of rewriting the whole chat file per turn; a tiny `<id>.meta.json` sidecar holds title/compaction cache. Legacy `.json` chats migrate on first save
 - Git-backed memory: `data/memory.json` is versioned in the repo (audit trail / revert)
+- Local snapshot backups: the whole `data/` folder is snapshotted into `backups/` (timestamped, keeps newest 10, auto once per day on app start, or on demand via sidebar button / `backup_data` tool) — a local history independent of GitHub
 
 ## Reminder daemon (optional)
 
@@ -66,6 +68,7 @@ is marked fired after a delivery attempt so it can never double-fire.
 - `assistant/memory.py` — structured JSON memory (value + facts + concepts + updated_at; system prompt injects only the 30 most recent entries)
 - `assistant/observations.py` — append-only JSONL log of every tool call (observation capture, size-capped)
 - `assistant/distill.py` — memory distillation from observations ("Dream-lite")
+- `assistant/backup.py` — local snapshot backups of data/ (timestamped, retention, auto-once-per-day)
 - `assistant/todo.py` — JSON to-do store
 - `assistant/reminders.py` — JSON reminder store
 - `assistant/reminder_daemon.py` — background toast daemon (optional)

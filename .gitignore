@@ -1,5 +1,6 @@
 data/*
 !data/memory.json
+backups/
 __pycache__/
 *.pyc
 .venv/

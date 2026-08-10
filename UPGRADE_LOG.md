@@ -1,5 +1,25 @@
 # Upgrade log — 2026-08-08
 
+## Session 5 — local snapshot backups
+
+Per user request ("also keep saving locally"): everything the assistant
+knows is now snapshotted locally, independent of GitHub.
+
+- **Local backups** (`assistant/backup.py`): the whole `data/` folder
+  (memory, chats, observations, embeddings, tasks, reminders, workspace) is
+  copied into timestamped `backups/<ts>/` folders. Retention keeps the
+  newest 10; writes go to a temp dir then atomic rename so a crash can't
+  leave a half-written snapshot. Restore support included.
+- **Auto-backup on app start**: `backup_if_due()` creates one backup per
+  day (no-op if today's exists), wired into app startup — a rolling daily
+  local history with zero effort.
+- **UI + tool**: "💾 Back up data now" sidebar button (shows last backup
+  time / count / size) and a `backup_data` tool the model can call.
+- `backups/` is gitignored (local-only, like the rest of data/).
+
+Verified: `py_compile` clean; 152 tests passing (was 145); real backup
+created and listed; Streamlit boots on :8599 (HTTP 200).
+
 ## Session 4 — append-only JSONL chats, memory distillation, git-backed memory
 
 Implemented the next ranked upgrades from the nanobot/claude-mem study:
