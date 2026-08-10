@@ -17,6 +17,7 @@ thread into a queue (same pattern as assistant/repl.py).
 """
 import json
 import queue
+import shutil
 import subprocess
 import threading
 
@@ -31,6 +32,20 @@ _servers: dict[str, dict] = {}  # name -> {proc, q, lock, next_id, tools}
 def _servers_config() -> list[dict]:
     servers = _config.get("mcp_servers", [])
     return servers if isinstance(servers, list) else []
+
+
+def _resolve_command(command: str) -> str:
+    """Resolve a command to a launchable path. On Windows, npm shims like
+    'npx' live as npx.cmd (a batch shim), which subprocess.Popen can't find
+    by bare name — so try the .cmd/.bat/.exe variants in order."""
+    found = shutil.which(command)
+    if found:
+        return found
+    for ext in (".cmd", ".bat", ".exe"):
+        found = shutil.which(command + ext)
+        if found:
+            return found
+    return command  # let Popen raise a descriptive error
 
 
 def _reader(proc, q):
@@ -49,7 +64,7 @@ def _start(name: str, cfg: dict) -> str:
 
     try:
         proc = subprocess.Popen(
-            [command] + args,
+            [_resolve_command(command)] + args,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             text=True, bufsize=1, encoding="utf-8", errors="replace",
         )

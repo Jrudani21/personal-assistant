@@ -107,20 +107,22 @@ def test_taskhint_accepts_whitespace_only_text():
 
 # ---------- pick_model ----------
 
-def test_pick_model_routes_arithmetic_to_qwen3_coder():
-    # ARITHMETIC is the only row in ROUTING that points to the 30B model.
-    # This is the one measured result, so the test pins it explicitly.
-    assert ROUTING[ARITHMETIC] == "qwen3-coder:30b"
-    assert pick_model(TaskHint(role="Quant", text="compute 12 * 7")) == "qwen3-coder:30b"
+# The router maps each task shape to a model that's actually installed.
+# Current lineup: deepseek-r1:7b (default/reasoning), deepseek-r1:1.5b
+# (cheap tool-io), qwen3:8b (tool calling). The old qwen2.5*/qwen3-coder
+# models were removed from Ollama, so tests pin the intent, not names.
+
+def test_pick_model_routes_arithmetic_to_deepseek_r1():
+    assert pick_model(TaskHint(role="Quant", text="compute 12 * 7")) == "deepseek-r1:7b"
 
 
-def test_pick_model_routes_prose_numeric_to_qwen2_5_7b():
+def test_pick_model_routes_prose_numeric_to_deepseek_r1():
     # The smoke-test result: the 7B beats the 30B on this shape.
     text = (
         "Product A sells for $50/unit and B for $25/unit. "
         "A is higher than B."
     )
-    assert pick_model(TaskHint(role="Analyst", text=text)) == "qwen2.5:7b"
+    assert pick_model(TaskHint(role="Analyst", text=text)) == "deepseek-r1:7b"
 
 
 def test_classify_prose_numeric_with_figures_stated_first():
@@ -135,21 +137,27 @@ def test_classify_prose_numeric_with_figures_stated_first():
     assert classify_shape(text) == PROSE_NUMERIC
 
 
-def test_pick_model_routes_code_to_coder_7b():
-    assert pick_model(TaskHint(role="Fetcher", text="write a function that parses CSV")) == "qwen2.5-coder:7b"
+def test_pick_model_routes_code_to_deepseek_r1():
+    assert pick_model(TaskHint(role="Fetcher", text="write a function that parses CSV")) == "deepseek-r1:7b"
 
 
-def test_pick_model_routes_plain_prose_to_qwen2_5_7b():
-    assert pick_model(TaskHint(role="Reporter", text="Summarize the findings.")) == "qwen2.5:7b"
+def test_pick_model_routes_plain_prose_to_deepseek_r1():
+    assert pick_model(TaskHint(role="Reporter", text="Summarize the findings.")) == "deepseek-r1:7b"
 
 
-def test_pick_model_routes_empty_text_to_default():
-    # Defensive: an empty/unknown shape never raises; it falls through.
-    assert pick_model(TaskHint(role="Fetcher", text="")) == FAST_MODEL
+def test_pick_model_routes_empty_text_to_tool_io():
+    # Defensive: an empty shape never raises; it routes to the cheap TOOL_IO
+    # model (deepseek-r1:1.5b), not the full reasoning default.
+    assert pick_model(TaskHint(role="Fetcher", text="")) == ROUTING[TOOL_IO]
+
+
+def test_pick_model_routes_unknown_shape_to_default():
+    # A shape the classifier doesn't recognize falls through to FAST_MODEL.
+    assert pick_model(TaskHint(role="Fetcher", text="zzz no match here")) == FAST_MODEL
 
 
 def test_pick_model_uses_explicit_default_override():
-    custom = "qwen2.5:14b"
+    custom = "qwen3:8b"
     result = pick_model(TaskHint(role="Fetcher", text=""), default=custom)
     assert result == custom
 
@@ -166,11 +174,11 @@ def test_pick_model_does_not_call_ollama():
 # ---------- ollama_model ----------
 
 def test_ollama_model_adds_prefix_once():
-    assert ollama_model("qwen2.5:7b") == "ollama/qwen2.5:7b"
+    assert ollama_model("deepseek-r1:7b") == "ollama/deepseek-r1:7b"
 
 
 def test_ollama_model_idempotent():
-    assert ollama_model("ollama/qwen2.5:7b") == "ollama/qwen2.5:7b"
+    assert ollama_model("ollama/deepseek-r1:7b") == "ollama/deepseek-r1:7b"
 
 
 # ---------- routing table integrity ----------
@@ -185,8 +193,17 @@ def test_routing_table_covers_all_known_shapes():
     assert set(ROUTING) >= expected
 
 
-def test_routing_table_does_not_reference_30b_for_prose_numeric():
-    # The whole point of the router: the 30B is NOT for prose-with-numbers.
-    # If this ever starts passing, someone changed the routing table against
-    # the smoke test in notes/Local models invert numeric comparisons ...
-    assert ROUTING[PROSE_NUMERIC] != "qwen3-coder:30b"
+def test_routing_table_references_installed_models_only():
+    # Every model in the routing table must be one that's actually installed.
+    # If this fails, someone pointed the router at a removed model.
+    installed = {"deepseek-r1:7b", "deepseek-r1:1.5b", "deepseek-r1:14b", "qwen3:8b"}
+    for model in set(ROUTING.values()) | {FAST_MODEL}:
+        assert model in installed, f"router references missing model: {model}"
+
+
+def test_routing_table_does_not_reference_removed_qwen_models():
+    # The old qwen2.5* / qwen3-coder models were removed from Ollama.
+    # The router must not silently point at a model that no longer exists.
+    removed = {"qwen2.5:7b", "qwen2.5-coder:7b", "qwen3-coder:30b", "qwen3-coder:14b"}
+    for model in set(ROUTING.values()) | {FAST_MODEL}:
+        assert model not in removed, f"router references removed model: {model}"
