@@ -110,8 +110,8 @@ def test_taskhint_accepts_whitespace_only_text():
 def test_pick_model_routes_arithmetic_to_qwen3_coder():
     # ARITHMETIC is the only row in ROUTING that points to the 30B model.
     # This is the one measured result, so the test pins it explicitly.
-    assert ROUTING[ARITHMETIC] == "qwen3-coder:30b"
-    assert pick_model(TaskHint(role="Quant", text="compute 12 * 7")) == "qwen3-coder:30b"
+    assert ROUTING[ARITHMETIC] == "deepseek-r1:7b"
+    assert pick_model(TaskHint(role="Quant", text="compute 12 * 7")) == "deepseek-r1:7b"
 
 
 def test_pick_model_routes_prose_numeric_to_qwen2_5_7b():
@@ -120,7 +120,7 @@ def test_pick_model_routes_prose_numeric_to_qwen2_5_7b():
         "Product A sells for $50/unit and B for $25/unit. "
         "A is higher than B."
     )
-    assert pick_model(TaskHint(role="Analyst", text=text)) == "qwen2.5:7b"
+    assert pick_model(TaskHint(role="Analyst", text=text)) == "deepseek-r1:7b"
 
 
 def test_classify_prose_numeric_with_figures_stated_first():
@@ -136,20 +136,22 @@ def test_classify_prose_numeric_with_figures_stated_first():
 
 
 def test_pick_model_routes_code_to_coder_7b():
-    assert pick_model(TaskHint(role="Fetcher", text="write a function that parses CSV")) == "qwen2.5-coder:7b"
+    assert pick_model(TaskHint(role="Fetcher", text="write a function that parses CSV")) == "deepseek-r1:7b"
 
 
 def test_pick_model_routes_plain_prose_to_qwen2_5_7b():
-    assert pick_model(TaskHint(role="Reporter", text="Summarize the findings.")) == "qwen2.5:7b"
+    assert pick_model(TaskHint(role="Reporter", text="Summarize the findings.")) == "deepseek-r1:7b"
 
 
-def test_pick_model_routes_empty_text_to_default():
+def test_pick_model_routes_empty_text_to_tool_io_model():
     # Defensive: an empty/unknown shape never raises; it falls through.
-    assert pick_model(TaskHint(role="Fetcher", text="")) == FAST_MODEL
+    # Empty text classifies as TOOL_IO, which routes to the cheapest model.
+    assert classify_shape("") == TOOL_IO
+    assert pick_model(TaskHint(role="Fetcher", text="")) == ROUTING[TOOL_IO]
 
 
 def test_pick_model_uses_explicit_default_override():
-    custom = "qwen2.5:14b"
+    custom = "deepseek-r1:14b"
     result = pick_model(TaskHint(role="Fetcher", text=""), default=custom)
     assert result == custom
 
@@ -166,11 +168,11 @@ def test_pick_model_does_not_call_ollama():
 # ---------- ollama_model ----------
 
 def test_ollama_model_adds_prefix_once():
-    assert ollama_model("qwen2.5:7b") == "ollama/qwen2.5:7b"
+    assert ollama_model("deepseek-r1:7b") == "ollama/deepseek-r1:7b"
 
 
 def test_ollama_model_idempotent():
-    assert ollama_model("ollama/qwen2.5:7b") == "ollama/qwen2.5:7b"
+    assert ollama_model("ollama/deepseek-r1:7b") == "ollama/deepseek-r1:7b"
 
 
 # ---------- routing table integrity ----------
@@ -185,8 +187,9 @@ def test_routing_table_covers_all_known_shapes():
     assert set(ROUTING) >= expected
 
 
-def test_routing_table_does_not_reference_30b_for_prose_numeric():
-    # The whole point of the router: the 30B is NOT for prose-with-numbers.
-    # If this ever starts passing, someone changed the routing table against
-    # the smoke test in notes/Local models invert numeric comparisons ...
-    assert ROUTING[PROSE_NUMERIC] != "qwen3-coder:30b"
+def test_routing_table_does_not_reference_deleted_models():
+    # The 2026-08-10 cleanup removed qwen2.5:7b, qwen2.5-coder:7b, and
+    # qwen3-coder:30b. No shape may point at a model that no longer exists.
+    assert "qwen2.5:7b" not in ROUTING.values()
+    assert "qwen2.5-coder:7b" not in ROUTING.values()
+    assert "qwen3-coder:30b" not in ROUTING.values()

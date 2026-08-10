@@ -8,7 +8,7 @@ the UI.
 Setup:
     pip install crewai openai
     ollama serve                     # must already be running
-    ollama pull qwen2.5:7b            # or whichever model you have pulled
+    ollama pull deepseek-r1:7b       # or whichever local model you have pulled
     set DEEPSEEK_API_KEY=sk-...      # DeepSeek API key (for the analysis step)
 
 Run:

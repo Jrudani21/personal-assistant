@@ -1,14 +1,15 @@
 """Hybrid CrewAI pipeline: cheap steps on local Ollama, the reasoning step on
-Claude Code CLI headless mode (billed against an existing Claude Pro/Max
-subscription, not a paid API key). $0 marginal cost either way.
+DeepSeek API (OpenAI-compatible, pay-per-token), with a local Ollama model
+as fallback when the API is unavailable. DeepSeek replaced the old Claude
+Code CLI step after Claude Pro was cancelled (2026-08-09) and the local
+qwen2.5/qwen3-coder models were removed in the model cleanup (2026-08-10).
 
 Shared by the `deep_analysis` chat tool (assistant/tools.py) and the
 standalone `crewai_demo.py` script at the project root.
 """
 import json
+import os
 import re
-import shutil
-import subprocess
 
 from pydantic import PrivateAttr
 
@@ -20,7 +21,9 @@ from . import crew_tools
 from . import tools as _tools
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-FAST_MODEL = "ollama/qwen2.5:7b"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+FAST_MODEL = "ollama/deepseek-r1:7b"
 # Local stand-in for the Claude Pro analysis step, used only when Claude is
 # unavailable. Its value is availability, not quality — see the measurements
 # below. Deliberately the same model as FAST_MODEL: qwen3-coder:30b was tried
@@ -36,7 +39,7 @@ FAST_MODEL = "ollama/qwen2.5:7b"
 # arithmetic right 3/3, and still inverted the comparison every time once the
 # same numbers sat among unrelated statistics prose. Bigger did not help;
 # prose synthesis with distractors is the weakness, not arithmetic.
-FALLBACK_REASONING_MODEL = "ollama/qwen2.5:7b"
+FALLBACK_REASONING_MODEL = "ollama/deepseek-r1:7b"
 
 
 _FAILURE_MARKERS = (
@@ -246,26 +249,18 @@ def _extract_workspace_file_content(raw_input: str) -> str | None:
     return None
 
 
-class ClaudeCodeLLM(BaseLLM):
-    """Routes calls through the Claude Code CLI's headless mode instead of
-    an API key. Quirks worked around here:
-    - Multi-line prompts passed as an argv string get mangled by the
-      Windows .cmd wrapper, so the prompt is piped via stdin instead.
-    - Headless mode still runs as the full Claude Code agent and inherits
-      this machine's global hooks/settings (e.g. the caveman-mode output
-      hook), which corrupts plain-prose output. --settings disables the
-      caveman plugin for just this call; --system-prompt drops the
-      Claude Code persona in favor of a plain analysis-assistant prompt.
+class DeepSeekLLM(BaseLLM):
+    """Calls the DeepSeek API (OpenAI-compatible) for the analysis step.
+    Replaced ClaudeCodeLLM after Claude Pro was cancelled — the pipeline is
+    now pay-per-token via DEEPSEEK_API_KEY, with a local Ollama fallback
+    when the API is unavailable (missing key, network error, empty output).
     """
 
-    model: str = "claude-code-cli"
+    model: str = "deepseek-chat"
     fallback_model: str = FALLBACK_REASONING_MODEL
     used_fallback: bool = False
     last_error: str | None = None
     _timeout_s: int = PrivateAttr(default=180)
-    _isolated_settings: str = PrivateAttr(
-        default_factory=lambda: json.dumps({"enabledPlugins": {"caveman@caveman": False}})
-    )
 
     def call(self, messages, tools=None, callbacks=None,
               available_functions=None, from_task=None, from_agent=None,
@@ -278,37 +273,37 @@ class ClaudeCodeLLM(BaseLLM):
                 for m in messages
             )
         try:
-            return self._call_claude(prompt)
+            return self._call_deepseek(prompt)
         except Exception as e:
-            # Pro plan limits, a missing CLI, or a timeout would otherwise fail
-            # the whole pipeline. Degrade to a local model instead — worse
-            # analysis beats no analysis, and the caller is told which ran.
+            # A missing key, network error, or empty response would otherwise
+            # fail the whole pipeline. Degrade to a local model instead —
+            # worse analysis beats no analysis, and the caller is told which ran.
             self.last_error = str(e)
             self.used_fallback = True
             return self._call_local_fallback(prompt)
 
-    def _call_claude(self, prompt: str) -> str:
-        claude_cmd = shutil.which("claude.cmd") or shutil.which("claude")
-        if claude_cmd is None:
-            raise RuntimeError("claude CLI not found on PATH")
-        result = subprocess.run(
-            [
-                claude_cmd, "-p",
-                "--settings", self._isolated_settings,
-                "--system-prompt",
-                "You are a helpful analysis assistant. Answer the user's "
-                "request directly and completely in plain prose. Do not "
-                "act as a coding agent and do not use tools.",
-            ],
-            input=prompt.encode("utf-8"),
-            capture_output=True,
+    def _call_deepseek(self, prompt: str) -> str:
+        if not DEEPSEEK_API_KEY:
+            raise RuntimeError("DEEPSEEK_API_KEY is not set")
+        import openai
+        client = openai.OpenAI(
+            api_key=DEEPSEEK_API_KEY,
+            base_url=DEEPSEEK_BASE_URL,
             timeout=self._timeout_s,
         )
-        if result.returncode != 0:
-            raise RuntimeError(f"claude -p failed: {result.stderr.decode('utf-8', errors='replace').strip()}")
-        output = result.stdout.decode("utf-8", errors="replace").strip()
+        response = client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": (
+                    "You are a helpful analysis assistant. Answer the user's "
+                    "request directly and completely in plain prose."
+                )},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        output = (response.choices[0].message.content or "").strip()
         if not output:
-            raise RuntimeError("claude -p returned empty output")
+            raise RuntimeError("DeepSeek API returned empty output")
         return output
 
     def _call_local_fallback(self, prompt: str) -> str:
@@ -328,7 +323,7 @@ class ClaudeCodeLLM(BaseLLM):
 def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
     fast_llm = LLM(model=FAST_MODEL, base_url=OLLAMA_BASE_URL)
     if reasoning_llm is None:
-        reasoning_llm = ClaudeCodeLLM(model="claude-code-cli")
+        reasoning_llm = DeepSeekLLM(model="deepseek-chat")
 
     fetcher = Agent(
         role="Fetcher",
@@ -442,7 +437,7 @@ def run_deep_analysis(raw_input: str) -> str:
     """Runs the fetch -> verify/compute -> analyze -> report crew on a
     topic, question, or file/document reference, and returns the final
     report text. Takes roughly 45-120s (tool calls plus the analysis step,
-    which calls out to Claude Code CLI); identical re-runs within the cache
+    which calls the DeepSeek API); identical re-runs within the cache
     TTL return the stored report instantly instead."""
     cached = crew_cache.get_cached(raw_input)
     if cached is not None:
@@ -451,7 +446,7 @@ def run_deep_analysis(raw_input: str) -> str:
             "Use the clear-cache tool or sidebar button to force a fresh run.)_"
         )
 
-    reasoning_llm = ClaudeCodeLLM(model="claude-code-cli")
+    reasoning_llm = DeepSeekLLM(model="deepseek-chat")
     try:
         result = str(build_crew(raw_input, reasoning_llm).kickoff())
     except Exception as e:
@@ -464,7 +459,7 @@ def run_deep_analysis(raw_input: str) -> str:
         # correct figures are handed to them in the prompt. Also deliberately
         # NOT cached — see crew_cache.store.
         return (
-            f"{result}\n\n---\n_Note: the Claude analysis step was unavailable "
+            f"{result}\n\n---\n_Note: the DeepSeek analysis step was unavailable "
             f"({reasoning_llm.last_error}), so this was analyzed locally with "
             f"{reasoning_llm.fallback_model}. Local analysis misstates numeric "
             f"comparisons (which value is higher, by how much) in roughly 1 run "

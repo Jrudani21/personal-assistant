@@ -42,7 +42,7 @@ try:
 except Exception as e:
     st.error(f"Can't reach Ollama: {e}\n\nMake sure it's running (`ollama serve`), then reload this page.")
     st.stop()
-DEFAULT_MODEL = "qwen2.5:7b" if "qwen2.5:7b" in AVAILABLE_MODELS else (
+DEFAULT_MODEL = "deepseek-r1:7b" if "deepseek-r1:7b" in AVAILABLE_MODELS else (
     AVAILABLE_MODELS[0] if AVAILABLE_MODELS else None
 )
 
@@ -167,7 +167,7 @@ with st.sidebar:
 
     st.divider()
     st.subheader("Deep Analysis")
-    st.caption("4-agent crew (web/wiki/files + real calc) + Claude Pro. ~45-120s; identical re-runs are cached for 7 days.")
+    st.caption("4-agent crew (web/wiki/files + real calc) + DeepSeek API. ~45-120s; identical re-runs are cached for 7 days.")
     crew_input = st.text_input(
         "Topic, question, or file path", key="crew_input",
         placeholder="e.g. Poisson vs SARIMA, or data/workspace/sales.csv",
@@ -260,7 +260,7 @@ if typed:
 
 if prompt:
     if not DEFAULT_MODEL:
-        st.error("No Ollama models found. Run `ollama pull qwen2.5:7b` first.")
+        st.error("No Ollama models found. Run `ollama pull deepseek-r1:7b` first.")
         st.stop()
 
     st.session_state.chat["messages"].append({"role": "user", "content": prompt})

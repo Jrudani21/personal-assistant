@@ -10,7 +10,7 @@ streamlit run app.py
 ```
 
 Needs Ollama running (`ollama serve`) with at least one model pulled
-(e.g. `ollama pull qwen2.5:7b`).
+(e.g. `ollama pull deepseek-r1:7b`).
 
 ## Tools
 

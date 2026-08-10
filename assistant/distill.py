@@ -20,7 +20,7 @@ import ollama
 
 from . import memory, observations
 
-DEFAULT_MODEL_PRIORITY = ("qwen2.5:7b", "qwen2.5:14b", "deepseek-r1:14b", "llama3.1:8b")
+DEFAULT_MODEL_PRIORITY = ("deepseek-r1:7b", "deepseek-r1:14b", "deepseek-r1:1.5b")
 MAX_NEW_KEYS = 5
 KEY_RE = re.compile(r"^[a-z0-9_]{1,48}$")
 
