@@ -304,6 +304,11 @@ with tab_setup:
             value=config.get("vault_dir", ""), key="vault_dir",
             placeholder="default: env OBSIDIAN_VAULT or ~/brain",
         )
+        kd = st.text_input(
+            "Knowledge base dir (nightly-learn)",
+            value=config.get("knowledge_dir", ""), key="knowledge_dir",
+            placeholder="default: deepseek-cave/nightly-learn/knowledge",
+        )
         bd = st.text_input(
             "Backup dir (local snapshots)",
             value=config.get("backup_dir", ""), key="bk_dir",
@@ -324,6 +329,7 @@ with tab_setup:
         if st.button("💾 Save paths", use_container_width=True):
             _save("workspace_dir", ws.strip())
             _save("vault_dir", vd.strip())
+            _save("knowledge_dir", kd.strip())
             _save("backup_dir", bd.strip())
             _save("sqlite_db", sq.strip())
             _save("skills_dir", sk.strip())

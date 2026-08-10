@@ -35,6 +35,14 @@ VAULT_DIR = Path(os.environ.get("OBSIDIAN_VAULT", Path.home() / "brain"))
 VAULT_PREFIX = "vault:"
 VAULT_SKIP_DIRS = {".obsidian", ".trash", ".git", "templates"}
 
+# Nightly-learn knowledge base (deepseek-cave). The same facts get re-scraped
+# every cycle under new filenames, so sync_knowledge dedups by content hash.
+KNOWLEDGE_DIR = Path(os.environ.get(
+    "KNOWLEDGE_DIR",
+    r"C:\Users\Janak's PC\deepseek-cave\nightly-learn\knowledge",
+))
+KNOWLEDGE_PREFIX = "knowledge:"
+
 _TOKEN_RE = re.compile(r"\w+")
 
 
@@ -64,6 +72,23 @@ def _vault_dir() -> Path:
     if cfg:
         return Path(cfg)
     return VAULT_DIR
+
+
+def _knowledge_dir() -> Path:
+    cfg = _config.get("knowledge_dir")
+    if cfg:
+        return Path(cfg)
+    return KNOWLEDGE_DIR
+
+
+def _knowledge_digest(text: str) -> str:
+    """Hash knowledge content, ignoring the per-scrape 'Learned:' timestamp
+    so the same fact re-scraped under a new filename dedups to one entry."""
+    norm_lines = [
+        ln for ln in text.splitlines()
+        if not ln.strip().lstrip("- ").startswith("Learned:")
+    ]
+    return hashlib.sha256("\n".join(norm_lines).encode("utf-8")).hexdigest()
 
 
 # ---- store ---------------------------------------------------------------
@@ -198,6 +223,67 @@ def sync_vault() -> str:
     if not parts:
         return f"Vault already up to date ({len(seen)} notes)."
     return f"Synced vault: {', '.join(parts)} ({len(seen)} notes indexed)."
+
+
+def sync_knowledge() -> str:
+    """Indexes every .md file in the nightly-learn knowledge base, deduping by
+    content hash so the same fact re-scraped under a new filename is only
+    indexed once. Files deleted from the base are dropped from the store."""
+    kdir = _knowledge_dir()
+    if not kdir.exists():
+        return f"No knowledge base found at {kdir}. Set KNOWLEDGE_DIR (or the knowledge_dir setting) to point at one."
+
+    store = _load_store()
+    # content hash per already-indexed knowledge file
+    indexed = {c["source"]: c.get("hash") for c in store if c["source"].startswith(KNOWLEDGE_PREFIX)}
+    # content hash -> first-seen source THIS run, so re-scraped duplicates
+    # collapse to a single entry even on the very first sync.
+    seen_content: dict[str, str] = {}
+
+    added, updated, skipped = 0, 0, 0
+    for path in sorted(kdir.glob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if not text.strip():
+            continue
+        digest = _knowledge_digest(text)
+
+        # Dedup: skip any file whose content was already seen this run ?
+        # the nightly-learn crew re-scrapes the same facts under new names.
+        dup_source = seen_content.get(digest)
+        if dup_source is not None:
+            skipped += 1
+            continue
+        seen_content[digest] = KNOWLEDGE_PREFIX + path.name
+
+        source = KNOWLEDGE_PREFIX + path.name
+        if indexed.get(source) == digest:
+            continue  # unchanged since last sync
+
+        was_indexed = source in indexed
+        store = [c for c in store if c["source"] != source]
+        for chunk in _chunk(text):
+            emb = ollama.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
+            store.append({"source": source, "text": chunk, "embedding": emb, "hash": digest})
+        if was_indexed:
+            updated += 1
+        else:
+            added += 1
+
+    _save_store(store)
+    unique = len(seen_content)
+    parts = []
+    if added:
+        parts.append(f"{added} new")
+    if updated:
+        parts.append(f"{updated} changed")
+    if skipped:
+        parts.append(f"{skipped} duplicate{'' if skipped == 1 else 's'} skipped")
+    if not parts:
+        return f"Knowledge base already up to date ({unique} unique files)."
+    return f"Synced knowledge: {', '.join(parts)} ({unique} unique files)."
 
 
 def list_documents() -> list[str]:

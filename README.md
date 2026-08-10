@@ -21,6 +21,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - `read_file` / `write_file` / `list_files` — sandboxed to `data/workspace/`
 - `run_python` / `restart_python_session` — persistent session (variables survive across calls), 15s timeout per call, cwd locked to workspace
 - `search_documents` — hybrid BM25+cosine RAG over uploaded docs, numbered `[1] [2]` citations
+- `sync_knowledge` — index the nightly-learn knowledge base (deepseek-cave/nightly-learn/knowledge); dedupes re-scraped facts by content (ignores the per-scrape `Learned:` timestamp)
 - `remember` / `recall` / `forget` — persistent structured memory in `data/memory.json`: entries carry discrete `facts[]` and `concepts[]` tags alongside the value, so memory is retrievable/deduplicable
 - `recent_activity` — recall the assistant's own recent tool calls (observation capture); every tool call is logged append-only to `data/observations.jsonl` so memory can be built from what the assistant actually does
 - `distill_memory` — the assistant learns from its own activity: reads the observation log, extracts durable facts about you with a local-model call, and adds NEW keys to memory (existing memory is never overwritten). Also available as the "🧠 Learn from activity" sidebar button.

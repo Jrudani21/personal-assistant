@@ -464,6 +464,7 @@ REGISTRY = {
     "restart_python_session": restart_python_session,
     "search_documents": rag.search_documents,
     "sync_vault": rag.sync_vault,
+    "sync_knowledge": rag.sync_knowledge,
     "deep_analysis": deep_analysis,
     "clear_crew_cache": clear_crew_cache,
     "recent_activity": recent_activity,
@@ -606,6 +607,14 @@ SCHEMAS = [
         "function": {
             "name": "sync_vault",
             "description": "Re-index the user's Obsidian vault so newly written or edited notes become searchable. Only needed if the user says they just wrote/changed a note and it isn't showing up in search results — unchanged notes are skipped automatically.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sync_knowledge",
+            "description": "Re-index the nightly-learn knowledge base (deepseek-cave) so newly scraped knowledge becomes searchable. Deduplicates re-scraped facts automatically. Only needed after the nightly-learn crew has run and the user wants the new knowledge available.",
             "parameters": {"type": "object", "properties": {}},
         },
     },

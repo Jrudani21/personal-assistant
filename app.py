@@ -123,6 +123,15 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    st.subheader("Knowledge base")
+    kb_notes = [d for d in rag.list_documents() if d.startswith("knowledge:")]
+    st.caption(f"{len(kb_notes)} unique files indexed (nightly-learn)" if kb_notes else "Not indexed yet")
+    if st.button("Sync knowledge base", use_container_width=True):
+        with st.spinner("Indexing knowledge..."):
+            st.toast(rag.sync_knowledge())
+        st.rerun()
+
+    st.divider()
     st.subheader("Documents (RAG)")
     uploaded = st.file_uploader("Upload txt/md/pdf", type=["txt", "md", "pdf"], accept_multiple_files=True)
     if uploaded:
