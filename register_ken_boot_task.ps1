@@ -70,9 +70,18 @@ if ($copiedKey) {
 }
 
 # --- Prompt for password (never echo, never logged) --------------------------
-Write-Host "Enter the Windows password for $env:USERDOMAIN\$env:USERNAME"
-Write-Host "This is required for the task to run at boot without logon."
-$securePassword = Read-Host -AsSecureString -Prompt "Password"
+# Two different secrets are easy to confuse here:
+#   * this prompt = your WINDOWS ACCOUNT password. Windows stores it in its own
+#     credential vault so it can start the task at boot as you rather than as
+#     SYSTEM. KEN never sees it.
+#   * the KEN ACCESS TOKEN = what you type in the browser on your phone. It is
+#     in data/.ken_tokens.json and is printed at the end of this script.
+Write-Host ""
+Write-Host "Enter the WINDOWS ACCOUNT password for $env:USERDOMAIN\$env:USERNAME"
+Write-Host "(the one you use to sign in to this PC - NOT the KEN access token)"
+Write-Host "Windows needs it to start KEN at boot without you logging in."
+Write-Host "It is stored by Windows, not by KEN, and is never shown or logged."
+$securePassword = Read-Host -AsSecureString -Prompt "Windows password"
 if ($securePassword.Length -eq 0) {
     Write-Error "Password cannot be empty."
     exit 1
@@ -165,3 +174,21 @@ Write-Host "password becomes stale and the task will silently stop starting."
 Write-Host "Re-run this script after any password change."
 Write-Host "`nIt will now start automatically at boot and at logon."
 Write-Host "Stop/disable:  Stop-ScheduledTask -TaskName $TaskName   /   Disable-ScheduledTask -TaskName $TaskName"
+
+# --- Show the KEN access link ------------------------------------------------
+# Different secret from the Windows password above: this is what you type in
+# the browser. Printed here so setup ends with the thing you actually need.
+Write-Host "`n--- Your KEN access link (open this on your phone) ---" -ForegroundColor Cyan
+try {
+    $py = Join-Path (Split-Path $Pythonw) "python.exe"
+    if (-not (Test-Path $py)) { $py = "py" }
+    Push-Location $RepoRoot
+    & $py "ken_share.py" url
+    Pop-Location
+} catch {
+    Write-Host "Could not read the token. Run this yourself:" -ForegroundColor Yellow
+    Write-Host "  py -3.12 ken_share.py url"
+}
+Write-Host "`nOpen that link once per device; it is exchanged for a cookie and"
+Write-Host "drops out of the address bar. Share a tester link instead with:"
+Write-Host "  py -3.12 ken_share.py invite <name> --hours 24"
