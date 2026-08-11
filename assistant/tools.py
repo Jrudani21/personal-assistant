@@ -116,7 +116,7 @@ def deep_analysis(raw_input: str) -> str:
     answer. The fetch step can pull from the web, Wikipedia, uploaded
     documents, or local workspace files; the verify step runs real Python/
     calculator checks on any numbers involved. Slower than other tools
-    (~45-120s, the analysis step calls out to Claude Code CLI) -- only use
+    (~45-120s, the analysis step calls the DeepSeek API with a local fallback) -- only use
     this when the user explicitly wants deeper/multi-step analysis, not for
     quick questions."""
     try:
@@ -878,6 +878,13 @@ SCHEMAS = [
         },
     },
 ]
+
+# Admin tool — lets the assistant administer the AI fleet (status, crew sweeps,
+# docker, logs, start Open WebUI). Kept separate so tools.py stays clean.
+from . import admin as _admin_tool
+
+REGISTRY = {**REGISTRY, **_admin_tool.get_registry_extra()}
+SCHEMAS = [*SCHEMAS, _admin_tool.get_schemas_extra()]
 
 
 def get_registry() -> dict:

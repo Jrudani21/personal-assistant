@@ -50,6 +50,8 @@ DEFAULTS = {
     ),
     "max_tool_rounds": 6,
     "max_memory_facts": 30,         # facts injected into the system prompt
+    "context_gist": "",             # brain+memory context pack injected into the system prompt (set via the Brain & Memory page)
+    "max_gist_chars": 4000,         # cap on the injected context pack (prompt crowding)
     "rag_embed_model": "nomic-embed-text",
     "rag_chunk_size": 800,
     "rag_chunk_overlap": 150,
@@ -58,7 +60,7 @@ DEFAULTS = {
     "rag_search_top_k": 4,
     "crew_fast_model": "ollama/qwen2.5:7b",
     "crew_fallback_model": "ollama/qwen2.5:7b",
-    "crew_timeout_s": 180,          # Claude CLI analysis step timeout
+    "crew_timeout_s": 180,          # DeepSeek analysis step timeout
     # ------------------------------------------------------------ voice
     "whisper_model": "base",        # faster-whisper size: tiny/base/small/medium/large-v3
     "speak_replies": False,         # default for the "🔊 Speak replies" toggle
