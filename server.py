@@ -36,6 +36,7 @@ import json
 import os
 import queue
 import re
+import secrets
 import threading
 import time
 import uuid
@@ -43,8 +44,9 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 import requests
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -119,6 +121,197 @@ DESTRUCTIVE_TOOLS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Access token
+#
+# Why this exists even though the server only listens on 127.0.0.1 and is
+# reached from a phone via `tailscale serve` (which already restricts access
+# to devices in the tailnet): POST /api/tools/toggle can switch `run_python`
+# and `write_file` ON, so *anything* that can reach this API can get arbitrary
+# code execution on this machine. Tailnet membership shouldn't be the only
+# gate — a second device, a shared node, or a stray browser tab shouldn't be
+# enough.
+#
+# The token is read from KEN_TOKEN, else generated once and persisted to
+# data/.ken_token (data/* is gitignored). Set KEN_TOKEN="" to disable auth
+# entirely — only sane if nothing but this machine can ever reach the port.
+# ---------------------------------------------------------------------------
+TOKEN_FILE = DATA_DIR / ".ken_token"          # legacy single-token file
+TOKENS_FILE = DATA_DIR / ".ken_tokens.json"   # owner + guest tokens
+COOKIE_NAME = "ken_token"
+AUTH_LOG = DATA_DIR / "access.log"
+
+_token_lock = threading.Lock()
+
+
+def _read_tokens() -> dict:
+    try:
+        return json.loads(TOKENS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_tokens(data: dict) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = TOKENS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    tmp.replace(TOKENS_FILE)
+
+
+def _init_tokens() -> dict:
+    """Owner token: KEN_TOKEN env > tokens file > legacy .ken_token > new."""
+    with _token_lock:
+        data = _read_tokens()
+        env = os.environ.get("KEN_TOKEN")
+        if env is not None:
+            data["owner"] = env            # "" disables auth entirely
+        elif not data.get("owner"):
+            legacy = ""
+            try:
+                legacy = TOKEN_FILE.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+            data["owner"] = legacy or secrets.token_urlsafe(32)
+        data.setdefault("guests", [])
+        try:
+            _write_tokens(data)
+        except Exception:
+            pass                            # in-memory only
+        return data
+
+
+_TOKENS = _init_tokens()
+ACCESS_TOKEN = _TOKENS["owner"]
+AUTH_ENABLED = bool(ACCESS_TOKEN)
+
+# Exempt: the health probe app.py polls on startup, and the API docs.
+# /api/health leaks only provider name and up/down.
+_AUTH_EXEMPT = {"/api/health", "/docs", "/openapi.json", "/redoc", "/docs/oauth2-redirect"}
+
+
+def _now_ts() -> float:
+    return time.time()
+
+
+def _active_guests() -> list[dict]:
+    """Non-expired guest tokens, pruning dead ones as a side effect."""
+    with _token_lock:
+        data = _read_tokens()
+        guests = data.get("guests", [])
+        alive = [g for g in guests if not g.get("expires_at") or g["expires_at"] > _now_ts()]
+        if len(alive) != len(guests):
+            data["guests"] = alive
+            try:
+                _write_tokens(data)
+            except Exception:
+                pass
+        return alive
+
+
+def _principal_for(supplied: str | None) -> dict | None:
+    """Resolve a token to {"role": "owner"|"guest", "name": str} or None.
+
+    Every comparison uses compare_digest so the check stays constant-time —
+    no early exit that would leak how many leading characters a guess got
+    right. This matters more now that the server can be published to the
+    public internet via `tailscale funnel`.
+    """
+    if not supplied:
+        return None
+    if ACCESS_TOKEN and secrets.compare_digest(supplied, ACCESS_TOKEN):
+        return {"role": "owner", "name": "owner"}
+    for g in _active_guests():
+        if secrets.compare_digest(supplied, g.get("token", "")):
+            return {"role": "guest", "name": g.get("name", "guest")}
+    return None
+
+
+def create_guest_token(name: str, hours: int = 24) -> dict:
+    """Mint a revocable, expiring guest token.
+
+    Guests currently get the same API surface as the owner (explicit choice
+    on 2026-08-11 — testers need the whole app). The separation still buys
+    revocability, expiry, and per-tester attribution in the access log, none
+    of which you get from handing out the owner token.
+    """
+    with _token_lock:
+        data = _read_tokens()
+        data.setdefault("guests", [])
+        entry = {
+            "id": uuid.uuid4().hex[:8],
+            "name": name or "guest",
+            "token": secrets.token_urlsafe(32),
+            "created_at": _now_ts(),
+            "expires_at": _now_ts() + hours * 3600 if hours else None,
+        }
+        data["guests"].append(entry)
+        _write_tokens(data)
+        return entry
+
+
+def revoke_guest_token(guest_id: str) -> bool:
+    with _token_lock:
+        data = _read_tokens()
+        before = len(data.get("guests", []))
+        data["guests"] = [g for g in data.get("guests", []) if g.get("id") != guest_id]
+        if len(data["guests"]) == before:
+            return False
+        _write_tokens(data)
+        return True
+
+
+# --- failed-auth throttle -------------------------------------------------
+# A funnel URL is public and gets scanned within hours. The tokens are 256-bit
+# so brute force isn't the real threat; this is about not burning CPU on bot
+# traffic and making credential-stuffing noisy rather than free.
+_FAIL_WINDOW_S = 300
+_FAIL_LIMIT = 20
+_fails: dict[str, list[float]] = {}
+_fail_lock = threading.Lock()
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _throttled(ip: str) -> bool:
+    cutoff = _now_ts() - _FAIL_WINDOW_S
+    with _fail_lock:
+        hits = [t for t in _fails.get(ip, []) if t > cutoff]
+        _fails[ip] = hits
+        return len(hits) >= _FAIL_LIMIT
+
+
+def _record_fail(ip: str) -> None:
+    with _fail_lock:
+        _fails.setdefault(ip, []).append(_now_ts())
+
+
+def _audit(ip: str, who: str, method: str, path: str) -> None:
+    """Append-only access log so you can see who reached what."""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
+        with AUTH_LOG.open("a", encoding="utf-8") as f:
+            f.write(f"{stamp}\t{ip}\t{who}\t{method}\t{path}\n")
+    except Exception:
+        pass
+
+
+def _token_from(request: Request) -> str | None:
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return (
+        request.headers.get("x-ken-token")
+        or request.cookies.get(COOKIE_NAME)
+        or request.query_params.get("token")
+    )
+
+
 def _default_enabled(name: str) -> bool:
     return name not in DESTRUCTIVE_TOOLS
 
@@ -177,11 +370,93 @@ def _ollama_up() -> bool:
 #   localhost port (http://localhost:* per the spec).
 # ---------------------------------------------------------------------------
 app = FastAPI(title="KEN", version="1.0.0")
+
+
+@app.middleware("http")
+async def _auth_gate(request: Request, call_next):
+    """Reject anything without the token before it reaches a route.
+
+    `/` is handled specially: a valid `?token=` there sets an HttpOnly cookie
+    and redirects, so the token appears in a URL exactly once (when you first
+    open the bookmark on a new device) and never again — it is not kept in
+    localStorage, so page JavaScript can't read it.
+    """
+    path = request.url.path
+    if not AUTH_ENABLED or path in _AUTH_EXEMPT or request.method == "OPTIONS":
+        return await call_next(request)
+
+    ip = _client_ip(request)
+    supplied = _token_from(request)
+    principal = _principal_for(supplied)
+
+    # Validate BEFORE consulting the throttle, so a valid token is never
+    # locked out. The throttle is keyed on client IP, and behind
+    # `tailscale funnel` every request can arrive from the proxy with the
+    # same apparent address — checking it first would let one scanner lock
+    # the owner out of their own machine. Bad credentials still get 429.
+    if principal is None:
+        if _throttled(ip):
+            return JSONResponse({"detail": "Too many failed attempts. Try later."},
+                                status_code=429)
+        _record_fail(ip)
+        _audit(ip, "DENIED", request.method, path)
+        if path == "/":
+            return JSONResponse(
+                {"detail": "KEN requires an access token. Open this page once as "
+                           "https://<host>/?token=<your token>; a cookie is set "
+                           "and the token drops out of the URL."},
+                status_code=401,
+            )
+        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+    request.state.principal = principal
+    if path == "/":
+        _audit(ip, principal["name"], request.method, path)
+
+    # Promote a valid ?token= on the page load into a cookie, then strip it
+    # from the URL so it isn't left in browser history / shoulder-surfable.
+    if path == "/" and request.query_params.get("token"):
+        resp = RedirectResponse("/", status_code=303)
+        _set_token_cookie(resp, request, supplied)
+        return resp
+
+    resp = await call_next(request)
+    if path == "/" and COOKIE_NAME not in request.cookies:
+        _set_token_cookie(resp, request, supplied)
+    return resp
+
+
+def _set_token_cookie(resp, request: Request, token: str) -> None:
+    """Persist the token the caller actually presented.
+
+    Must echo `token`, never ACCESS_TOKEN: writing the owner token here would
+    hand every guest an owner cookie on their first page load, silently
+    escalating them and making revocation useless.
+    """
+    # Secure only when the request actually arrived over TLS. `tailscale
+    # serve`/`funnel` terminate HTTPS and forward plain HTTP to 127.0.0.1, so
+    # trust their X-Forwarded-Proto; a Secure cookie set on a plain-http
+    # desktop session would never be sent back.
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    resp.set_cookie(
+        COOKIE_NAME, token,
+        httponly=True,           # JS can't read it -> XSS can't exfiltrate it
+        samesite="strict",       # not sent on cross-site requests
+        secure=(proto == "https"),
+        max_age=60 * 60 * 24 * 365,
+        path="/",
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["null"],
-    allow_origin_regex=r"^http://localhost(:\d+)?$",
-    allow_credentials=False,
+    # No "null" origin and no wildcard: with credentials in play, a permissive
+    # CORS policy would let any page you visit drive this API through your
+    # browser. Same-origin (the server serves ken.html itself) needs no CORS
+    # at all; localhost is allowed for local development only.
+    allow_origins=[],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -262,6 +537,11 @@ class AdminRequest(BaseModel):
     name: str | None = None
     source: str = "crew-log"
     lines: int = 40
+
+
+class GuestCreate(BaseModel):
+    name: str = "tester"
+    hours: int = 24            # 0 = never expires (discouraged on a funnel)
 
 
 # ---------------------------------------------------------------------------
@@ -1007,6 +1287,65 @@ async def export_chat(chat_id: str):
         content=md, media_type="text/markdown",
         headers={"Content-Disposition": f'attachment; filename="{title}.md"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# /api/access  — guest token management (OWNER ONLY)
+#
+# Guests are deliberately barred from minting or revoking tokens: otherwise a
+# shared tester link could mint itself a fresh non-expiring one and outlive
+# the revocation it was supposed to be subject to.
+# ---------------------------------------------------------------------------
+def _require_owner(request: Request) -> None:
+    principal = getattr(request.state, "principal", None)
+    if not AUTH_ENABLED:
+        return
+    if not principal or principal.get("role") != "owner":
+        raise HTTPException(403, "Owner access required.")
+
+
+@app.get("/api/access")
+async def list_access(request: Request) -> dict:
+    _require_owner(request)
+    return {
+        "auth_enabled": AUTH_ENABLED,
+        "guests": [
+            {"id": g["id"], "name": g["name"],
+             "created_at": g.get("created_at"), "expires_at": g.get("expires_at"),
+             "expires_in_hours": (
+                 round((g["expires_at"] - _now_ts()) / 3600, 1)
+                 if g.get("expires_at") else None
+             )}
+            for g in _active_guests()
+        ],
+    }
+
+
+@app.post("/api/access")
+async def mint_access(request: Request, body: GuestCreate) -> dict:
+    _require_owner(request)
+    entry = create_guest_token(body.name, body.hours)
+    return {
+        "ok": True, "id": entry["id"], "name": entry["name"],
+        "token": entry["token"],          # shown once, at creation
+        "expires_at": entry["expires_at"],
+        "hint": "Share <base-url>/?token=<token>. It expires automatically; "
+                "revoke sooner with DELETE /api/access/{id}.",
+    }
+
+
+@app.delete("/api/access/{guest_id}")
+async def revoke_access(request: Request, guest_id: str) -> dict:
+    _require_owner(request)
+    if not revoke_guest_token(guest_id):
+        raise HTTPException(404, "No such guest token.")
+    return {"ok": True, "revoked": guest_id}
+
+
+@app.get("/api/whoami")
+async def whoami(request: Request) -> dict:
+    principal = getattr(request.state, "principal", None) or {"role": "owner", "name": "owner"}
+    return {"role": principal["role"], "name": principal["name"], "auth_enabled": AUTH_ENABLED}
 
 
 # ---------------------------------------------------------------------------
