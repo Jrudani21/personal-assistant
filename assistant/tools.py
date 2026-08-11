@@ -1,13 +1,17 @@
 """Tool implementations + schemas for the assistant's tool-calling loop."""
 import ast
+import json
 import operator
 import datetime
+import sqlite3
+from html.parser import HTMLParser
 from pathlib import Path
 
 import requests
 from ddgs import DDGS
 
 from . import backup
+from . import config as _config
 from . import memory
 from . import observations
 from . import rag
@@ -17,6 +21,14 @@ from . import todo
 
 WORKSPACE = Path(__file__).resolve().parent.parent / "data" / "workspace"
 WORKSPACE.mkdir(parents=True, exist_ok=True)
+
+
+def _workspace() -> Path:
+    """Configured workspace dir (config.json > default). Created on demand."""
+    cfg = _config.get("workspace_dir")
+    p = Path(cfg).resolve() if cfg else WORKSPACE
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 _OPS = {
     ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
@@ -43,7 +55,9 @@ def calculator(expression: str) -> str:
         return f"Error: {e}"
 
 
-def web_search(query: str, max_results: int = 5) -> str:
+def web_search(query: str, max_results: int | None = None) -> str:
+    if max_results is None:
+        max_results = int(_config.get("web_search_max_results", 5))
     try:
         results = DDGS().text(query, max_results=max_results)
         if not results:
@@ -55,13 +69,16 @@ def web_search(query: str, max_results: int = 5) -> str:
 
 
 def _resolve(path: str) -> Path:
-    p = (WORKSPACE / path).resolve()
-    if WORKSPACE not in p.parents and p != WORKSPACE:
+    ws = _workspace()
+    p = (ws / path).resolve()
+    if ws not in p.parents and p != ws:
         raise ValueError("Path escapes workspace.")
     return p
 
 
-def _truncate_head(text: str, max_chars: int = 8000) -> str:
+def _truncate_head(text: str, max_chars: int | None = None) -> str:
+    if max_chars is None:
+        max_chars = int(_config.get("read_file_max_chars", 8000))
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + f"\n...[truncated, {len(text) - max_chars} more chars]"
@@ -119,13 +136,162 @@ def clear_crew_cache() -> str:
         return f"Error: {e}"
 
 
+# ---- researched tools: MCP, SQL, web fetch, audio, skills ---------------
+
+
+def mcp_list_tools(server: str = "") -> str:
+    """List tools exposed by configured MCP servers. With no server argument,
+    lists tools from every configured server (nanobot/private-gpt research:
+    plug external tools into the agent via MCP)."""
+    try:
+        from . import mcp as mcp_mod
+        return mcp_mod.list_tools(server)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def mcp_call_tool(server: str, tool_name: str, arguments: str = "{}") -> str:
+    """Call a tool on an MCP server with JSON arguments."""
+    try:
+        from . import mcp as mcp_mod
+        try:
+            args = json.loads(arguments or "{}")
+        except Exception as e:
+            return f"Error: arguments must be valid JSON: {e}"
+        if not isinstance(args, dict):
+            return "Error: arguments must be a JSON object."
+        return mcp_mod.call_tool(server, tool_name, args)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def _sqlite_db() -> Path:
+    cfg = _config.get("sqlite_db")
+    if cfg:
+        return Path(cfg)
+    return Path(__file__).resolve().parent.parent / "data" / "assistant.db"
+
+
+def query_sql(query: str) -> str:
+    """Run a read-only SQL query against the assistant's local SQLite database
+    (private-gpt research: text-to-SQL). SELECT/PRAGMA/EXPLAIN/WITH only;
+    writes are refused. Results capped at 50 rows."""
+    q = (query or "").strip()
+    lowered = q.lower()
+    if not q:
+        return "Error: empty query."
+    if not (lowered.startswith("select") or lowered.startswith("pragma")
+            or lowered.startswith("explain") or lowered.startswith("with")):
+        return "Error: only SELECT / PRAGMA / EXPLAIN / WITH queries are allowed."
+    if ";" in q.rstrip().rstrip(";") or q.count(";") > 1:
+        return "Error: multiple statements are not allowed."
+
+    db = _sqlite_db()
+    db.parent.mkdir(parents=True, exist_ok=True)
+    if lowered.startswith(("select", "with")) and " limit " not in lowered and not lowered.rstrip().endswith("limit"):
+        q = f"SELECT * FROM ({q}) AS _q LIMIT 50"
+    try:
+        conn = sqlite3.connect(str(db))
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(q)
+        cols = [d[0] for d in cur.description] if cur.description else []
+        rows = cur.fetchmany(50)
+        conn.close()
+        if not cols:
+            return "(query returned no columns)"
+        lines = [" | ".join(cols)]
+        for r in rows:
+            lines.append(" | ".join(str(v) for v in r))
+        body = "\n".join(lines)
+        if len(body) > 6000:
+            body = body[:6000] + "\n...[truncated]"
+        capped = " (capped at 50)" if len(rows) >= 50 else ""
+        return body + f"\n({len(rows)} row{'s' if len(rows) != 1 else ''}{capped})"
+    except Exception as e:
+        return f"SQL error: {e}"
+
+
+class _TextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self.skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style", "noscript"):
+            self.skip += 1
+        elif tag in ("p", "div", "br", "li", "h1", "h2", "h3", "tr"):
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style", "noscript") and self.skip > 0:
+            self.skip -= 1
+
+    def handle_data(self, data):
+        if self.skip == 0:
+            self.parts.append(data)
+
+
+def fetch_webpage(url: str) -> str:
+    """Fetch a URL and return its readable text (ragflow/awesome-llm-apps
+    research: deep doc understanding — read web content directly)."""
+    try:
+        r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0 (PersonalAssistant local)"})
+        if r.status_code != 200:
+            return f"Fetch error: HTTP {r.status_code}"
+        parser = _TextExtractor()
+        parser.feed(r.text)
+        text = "\n".join(" ".join(ln.split()) for ln in "".join(parser.parts).splitlines())
+        text = "\n".join(ln for ln in text.splitlines() if ln.strip())
+        max_chars = int(_config.get("fetch_webpage_max_chars", 8000))
+        if len(text) > max_chars:
+            text = text[:max_chars] + f"\n...[truncated, {len(text) - max_chars} more chars]"
+        return text.strip() or "(no readable text found on that page)"
+    except Exception as e:
+        return f"Fetch error: {e}"
+
+
+def transcribe_file(path: str) -> str:
+    """Transcribe an audio file (wav/mp3/m4a/ogg) from the workspace — voice
+    input beyond the UI recorder (meetily research gap)."""
+    try:
+        from . import voice
+        p = _resolve(path)
+        if not p.exists():
+            return f"File not found: {path}"
+        text = voice.transcribe_file(p)
+        return text.strip() or "(no speech detected)"
+    except Exception as e:
+        return f"Transcription error: {e}"
+
+
+def list_skills() -> str:
+    """List available skills (anything-llm/private-gpt pattern: reusable
+    procedures the assistant can discover and run)."""
+    try:
+        from . import skills
+        return skills.list_skills()
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def run_skill(name: str, args: str = "") -> str:
+    """Run a skill: executes its run.py if present, otherwise returns its
+    SKILL.md instructions so the model can follow them with normal tools."""
+    try:
+        from . import skills
+        return skills.run_skill(name, args)
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def get_datetime() -> str:
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S %A")
 
 
 def list_files(subpath: str = "") -> str:
     try:
-        p = _resolve(subpath) if subpath else WORKSPACE
+        p = _resolve(subpath) if subpath else _workspace()
         if not p.exists():
             return f"Not found: {subpath}"
         entries = sorted(p.iterdir())
@@ -298,11 +464,19 @@ REGISTRY = {
     "restart_python_session": restart_python_session,
     "search_documents": rag.search_documents,
     "sync_vault": rag.sync_vault,
+    "sync_knowledge": rag.sync_knowledge,
     "deep_analysis": deep_analysis,
     "clear_crew_cache": clear_crew_cache,
     "recent_activity": recent_activity,
     "distill_memory": distill_memory,
     "backup_data": backup_data,
+    "mcp_list_tools": mcp_list_tools,
+    "mcp_call_tool": mcp_call_tool,
+    "query_sql": query_sql,
+    "fetch_webpage": fetch_webpage,
+    "transcribe_file": transcribe_file,
+    "list_skills": list_skills,
+    "run_skill": run_skill,
 }
 
 SCHEMAS = [
@@ -433,6 +607,14 @@ SCHEMAS = [
         "function": {
             "name": "sync_vault",
             "description": "Re-index the user's Obsidian vault so newly written or edited notes become searchable. Only needed if the user says they just wrote/changed a note and it isn't showing up in search results — unchanged notes are skipped automatically.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sync_knowledge",
+            "description": "Re-index the nightly-learn knowledge base (deepseek-cave) so newly scraped knowledge becomes searchable. Deduplicates re-scraped facts automatically. Only needed after the nightly-learn crew has run and the user wants the new knowledge available.",
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -608,4 +790,101 @@ SCHEMAS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "mcp_list_tools",
+            "description": "List tools exposed by configured MCP servers (external tool servers, e.g. filesystem, database, browser). With no server argument, lists tools from every configured server. Call this first to discover what's available before calling mcp_call_tool.",
+            "parameters": {
+                "type": "object",
+                "properties": {"server": {"type": "string", "description": "optional server name to filter by"}},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mcp_call_tool",
+            "description": "Call a tool on a configured MCP server. Use mcp_list_tools first to discover server and tool names. Arguments must be a JSON object.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "server": {"type": "string", "description": "MCP server name"},
+                    "tool_name": {"type": "string", "description": "tool name on that server"},
+                    "arguments": {"type": "string", "description": "JSON object string, e.g. '{\"path\": \"C:/x\"}'"},
+                },
+                "required": ["server", "tool_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_sql",
+            "description": "Run a read-only SQL query (SELECT/PRAGMA/EXPLAIN/WITH) against the assistant's local SQLite database (data/assistant.db). Use for structured data the user has stored there. Writes are refused; results capped at 50 rows.",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "read-only SQL, e.g. 'SELECT * FROM notes LIMIT 10'"}},
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_webpage",
+            "description": "Fetch a URL and return its readable text (stripped of markup). Use when web_search snippets aren't enough and you need the actual page content.",
+            "parameters": {
+                "type": "object",
+                "properties": {"url": {"type": "string"}},
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "transcribe_file",
+            "description": "Transcribe an audio file (wav/mp3/m4a/ogg) from the workspace into text. Use when the user drops a recording/voice note in the workspace and wants it transcribed.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string", "description": "relative path inside workspace"}},
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_skills",
+            "description": "List available skills (reusable procedures the user has set up in data/skills). Call this to discover what skills exist before running one.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_skill",
+            "description": "Run a skill by name. If the skill has a run.py script it executes and returns its output; otherwise it returns the skill's instructions for you to follow with your normal tools. Optionally pass a single string argument.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "args": {"type": "string", "description": "optional single string argument"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
 ]
+
+
+def get_registry() -> dict:
+    """Tool callables, filtered by the enabled_tools config ([] = all)."""
+    return {name: fn for name, fn in REGISTRY.items() if _config.tool_enabled(name)}
+
+
+def get_schemas() -> list[dict]:
+    """Tool schemas for Ollama, filtered by the enabled_tools config."""
+    return [s for s in SCHEMAS if _config.tool_enabled(s["function"]["name"])]

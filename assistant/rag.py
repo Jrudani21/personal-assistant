@@ -5,6 +5,9 @@ Two ingest paths share one store and one search index:
 - `sync_vault()`  — every .md note in the Obsidian vault, stored as "vault:<rel path>"
 
 Everything runs locally against Ollama's embedding model; nothing leaves the machine.
+
+Tunables (chunking, similarity, model) are read from assistant/config.py so the
+Settings page can adjust them without touching source.
 """
 import hashlib
 import json
@@ -16,6 +19,8 @@ import numpy as np
 import ollama
 from pypdf import PdfReader
 from rank_bm25 import BM25Okapi
+
+from . import config as _config
 
 STORE_FILE = Path(__file__).resolve().parent.parent / "data" / "embeddings.json"
 EMBED_MODEL = "nomic-embed-text"
@@ -30,9 +35,63 @@ VAULT_DIR = Path(os.environ.get("OBSIDIAN_VAULT", Path.home() / "brain"))
 VAULT_PREFIX = "vault:"
 VAULT_SKIP_DIRS = {".obsidian", ".trash", ".git", "templates"}
 
+# Nightly-learn knowledge base (deepseek-cave). The same facts get re-scraped
+# every cycle under new filenames, so sync_knowledge dedups by content hash.
+KNOWLEDGE_DIR = Path(os.environ.get(
+    "KNOWLEDGE_DIR",
+    r"C:\Users\Janak's PC\deepseek-cave\nightly-learn\knowledge",
+))
+KNOWLEDGE_PREFIX = "knowledge:"
+
 _TOKEN_RE = re.compile(r"\w+")
 
 
+# ---- config-backed knobs -------------------------------------------------
+def _embed_model() -> str:
+    return str(_config.get("rag_embed_model", EMBED_MODEL))
+
+
+def _chunk_size() -> int:
+    return int(_config.get("rag_chunk_size", CHUNK_SIZE))
+
+
+def _chunk_overlap() -> int:
+    return int(_config.get("rag_chunk_overlap", CHUNK_OVERLAP))
+
+
+def _min_similarity() -> float:
+    return float(_config.get("rag_min_similarity", MIN_SIMILARITY))
+
+
+def _rrf_k() -> int:
+    return int(_config.get("rag_rrf_k", RRF_K))
+
+
+def _vault_dir() -> Path:
+    cfg = _config.get("vault_dir")
+    if cfg:
+        return Path(cfg)
+    return VAULT_DIR
+
+
+def _knowledge_dir() -> Path:
+    cfg = _config.get("knowledge_dir")
+    if cfg:
+        return Path(cfg)
+    return KNOWLEDGE_DIR
+
+
+def _knowledge_digest(text: str) -> str:
+    """Hash knowledge content, ignoring the per-scrape 'Learned:' timestamp
+    so the same fact re-scraped under a new filename dedups to one entry."""
+    norm_lines = [
+        ln for ln in text.splitlines()
+        if not ln.strip().lstrip("- ").startswith("Learned:")
+    ]
+    return hashlib.sha256("\n".join(norm_lines).encode("utf-8")).hexdigest()
+
+
+# ---- store ---------------------------------------------------------------
 def _tokenize(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
 
@@ -61,6 +120,8 @@ def _split_sentences(text: str) -> list[str]:
 
 
 def _chunk(text: str) -> list[str]:
+    chunk_size = _chunk_size()
+    chunk_overlap = _chunk_overlap()
     sentences = _split_sentences(text)
     if not sentences:
         return []
@@ -68,12 +129,12 @@ def _chunk(text: str) -> list[str]:
     current: list[str] = []
     current_len = 0
     for sent in sentences:
-        if current_len + len(sent) > CHUNK_SIZE and current:
+        if current_len + len(sent) > chunk_size and current:
             chunks.append(" ".join(current))
             overlap: list[str] = []
             overlap_len = 0
             for s in reversed(current):
-                if overlap_len + len(s) > CHUNK_OVERLAP:
+                if overlap_len + len(s) > chunk_overlap:
                     break
                 overlap.insert(0, s)
                 overlap_len += len(s)
@@ -86,6 +147,7 @@ def _chunk(text: str) -> list[str]:
     return chunks
 
 
+# ---- ingest / vault ------------------------------------------------------
 def ingest(filename: str, raw: bytes) -> str:
     text = _extract_text(filename, raw)
     if not text.strip():
@@ -93,18 +155,19 @@ def ingest(filename: str, raw: bytes) -> str:
     chunks = _chunk(text)
     store = [c for c in _load_store() if c["source"] != filename]  # replace prior version
     for chunk in chunks:
-        emb = ollama.embeddings(model=EMBED_MODEL, prompt=chunk)["embedding"]
+        emb = ollama.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
         store.append({"source": filename, "text": chunk, "embedding": emb})
     _save_store(store)
     return f"Ingested {filename}: {len(chunks)} chunks."
 
 
 def _vault_files() -> list[Path]:
-    if not VAULT_DIR.exists():
+    vdir = _vault_dir()
+    if not vdir.exists():
         return []
     return [
-        p for p in VAULT_DIR.rglob("*.md")
-        if not VAULT_SKIP_DIRS & set(p.relative_to(VAULT_DIR).parts)
+        p for p in vdir.rglob("*.md")
+        if not VAULT_SKIP_DIRS & set(p.relative_to(vdir).parts)
     ]
 
 
@@ -112,8 +175,9 @@ def sync_vault() -> str:
     """Indexes every .md note in the vault, skipping notes whose content hasn't
     changed since the last sync. Notes deleted from the vault are dropped from
     the store."""
-    if not VAULT_DIR.exists():
-        return f"No vault found at {VAULT_DIR}. Set OBSIDIAN_VAULT to point at one."
+    vdir = _vault_dir()
+    if not vdir.exists():
+        return f"No vault found at {vdir}. Set OBSIDIAN_VAULT (or the vault_dir setting) to point at one."
 
     store = _load_store()
     # content hash per already-indexed vault note, to skip unchanged files
@@ -121,7 +185,7 @@ def sync_vault() -> str:
 
     seen, added, updated = set(), 0, 0
     for path in _vault_files():
-        source = VAULT_PREFIX + path.relative_to(VAULT_DIR).as_posix()
+        source = VAULT_PREFIX + path.relative_to(vdir).as_posix()
         seen.add(source)
         try:
             text = path.read_text(encoding="utf-8")
@@ -137,7 +201,7 @@ def sync_vault() -> str:
         was_indexed = source in indexed
         store = [c for c in store if c["source"] != source]
         for chunk in _chunk(text):
-            emb = ollama.embeddings(model=EMBED_MODEL, prompt=chunk)["embedding"]
+            emb = ollama.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
             store.append({"source": source, "text": chunk, "embedding": emb, "hash": digest})
         if was_indexed:
             updated += 1
@@ -161,6 +225,67 @@ def sync_vault() -> str:
     return f"Synced vault: {', '.join(parts)} ({len(seen)} notes indexed)."
 
 
+def sync_knowledge() -> str:
+    """Indexes every .md file in the nightly-learn knowledge base, deduping by
+    content hash so the same fact re-scraped under a new filename is only
+    indexed once. Files deleted from the base are dropped from the store."""
+    kdir = _knowledge_dir()
+    if not kdir.exists():
+        return f"No knowledge base found at {kdir}. Set KNOWLEDGE_DIR (or the knowledge_dir setting) to point at one."
+
+    store = _load_store()
+    # content hash per already-indexed knowledge file
+    indexed = {c["source"]: c.get("hash") for c in store if c["source"].startswith(KNOWLEDGE_PREFIX)}
+    # content hash -> first-seen source THIS run, so re-scraped duplicates
+    # collapse to a single entry even on the very first sync.
+    seen_content: dict[str, str] = {}
+
+    added, updated, skipped = 0, 0, 0
+    for path in sorted(kdir.glob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if not text.strip():
+            continue
+        digest = _knowledge_digest(text)
+
+        # Dedup: skip any file whose content was already seen this run ?
+        # the nightly-learn crew re-scrapes the same facts under new names.
+        dup_source = seen_content.get(digest)
+        if dup_source is not None:
+            skipped += 1
+            continue
+        seen_content[digest] = KNOWLEDGE_PREFIX + path.name
+
+        source = KNOWLEDGE_PREFIX + path.name
+        if indexed.get(source) == digest:
+            continue  # unchanged since last sync
+
+        was_indexed = source in indexed
+        store = [c for c in store if c["source"] != source]
+        for chunk in _chunk(text):
+            emb = ollama.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
+            store.append({"source": source, "text": chunk, "embedding": emb, "hash": digest})
+        if was_indexed:
+            updated += 1
+        else:
+            added += 1
+
+    _save_store(store)
+    unique = len(seen_content)
+    parts = []
+    if added:
+        parts.append(f"{added} new")
+    if updated:
+        parts.append(f"{updated} changed")
+    if skipped:
+        parts.append(f"{skipped} duplicate{'' if skipped == 1 else 's'} skipped")
+    if not parts:
+        return f"Knowledge base already up to date ({unique} unique files)."
+    return f"Synced knowledge: {', '.join(parts)} ({unique} unique files)."
+
+
 def list_documents() -> list[str]:
     return sorted({c["source"] for c in _load_store()})
 
@@ -172,12 +297,14 @@ def remove_document(filename: str) -> str:
     return f"Removed {len(store) - len(kept)} chunks for {filename}."
 
 
-def search_documents(query: str, top_k: int = 4) -> str:
+def search_documents(query: str, top_k: int | None = None) -> str:
+    if top_k is None:
+        top_k = int(_config.get("rag_search_top_k", 4))
     store = _load_store()
     if not store:
         return "No documents uploaded yet."
 
-    q_emb = np.array(ollama.embeddings(model=EMBED_MODEL, prompt=query)["embedding"])
+    q_emb = np.array(ollama.embeddings(model=_embed_model(), prompt=query)["embedding"])
     cosine_scores = []
     for c in store:
         e = np.array(c["embedding"])
@@ -192,11 +319,11 @@ def search_documents(query: str, top_k: int = 4) -> str:
 
     fused = []
     for i, c in enumerate(store):
-        rrf = 1 / (RRF_K + cosine_rank[i] + 1) + 1 / (RRF_K + bm25_rank[i] + 1)
+        rrf = 1 / (_rrf_k() + cosine_rank[i] + 1) + 1 / (_rrf_k() + bm25_rank[i] + 1)
         fused.append((rrf, cosine_scores[i], bm25_scores[i], c))
     fused.sort(key=lambda x: x[0], reverse=True)
 
-    relevant = [f for f in fused if f[1] >= MIN_SIMILARITY or f[2] > 0]
+    relevant = [f for f in fused if f[1] >= _min_similarity() or f[2] > 0]
     top = relevant[:top_k]
     if not top:
         return "No sufficiently relevant chunks found."

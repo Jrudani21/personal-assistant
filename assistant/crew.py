@@ -19,6 +19,7 @@ from crewai.llm import LLM, BaseLLM
 from . import crew_cache
 from . import crew_tools
 from . import tools as _tools
+from . import config as _config
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -307,7 +308,8 @@ class DeepSeekLLM(BaseLLM):
         return output
 
     def _call_local_fallback(self, prompt: str) -> str:
-        fallback = LLM(model=self.fallback_model, base_url=OLLAMA_BASE_URL)
+        fallback_model = _config.get("crew_fallback_model", FALLBACK_REASONING_MODEL)
+        fallback = LLM(model=fallback_model, base_url=OLLAMA_BASE_URL)
         return fallback.call(prompt)
 
     def supports_function_calling(self) -> bool:
@@ -321,7 +323,8 @@ class DeepSeekLLM(BaseLLM):
 
 
 def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
-    fast_llm = LLM(model=FAST_MODEL, base_url=OLLAMA_BASE_URL)
+    fast_model = _config.get("crew_fast_model", FAST_MODEL)
+    fast_llm = LLM(model=fast_model, base_url=OLLAMA_BASE_URL)
     if reasoning_llm is None:
         reasoning_llm = DeepSeekLLM(model="deepseek-chat")
 
