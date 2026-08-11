@@ -582,10 +582,30 @@ function fatal(msg) {
   }
   bar.textContent = (bar.textContent ? bar.textContent + "\n" : "") + msg;
 }
-window.addEventListener("error", (e) =>
-  fatal(`JS error: ${e.message}\n  at ${e.filename || "?"}:${e.lineno || "?"}:${e.colno || "?"}`));
-window.addEventListener("unhandledrejection", (e) =>
-  fatal(`Unhandled promise rejection: ${(e.reason && (e.reason.stack || e.reason.message)) || e.reason}`));
+// Ship diagnostics to the server too: a phone has no console, so an error
+// here is otherwise invisible. Uses XMLHttpRequest rather than fetch, on
+// purpose — if fetch or its surrounding code is what's broken, a fetch-based
+// reporter would fail silently in exactly the case that matters most.
+function report(payload) {
+  try {
+    const base = location.pathname.replace(/\/+$/, "");
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", base + "/api/clientlog", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.send(JSON.stringify(payload));
+  } catch (e) { /* diagnostics must never themselves throw */ }
+}
+window.addEventListener("error", (e) => {
+  const msg = `JS error: ${e.message}\n  at ${e.filename || "?"}:${e.lineno || "?"}:${e.colno || "?"}`;
+  fatal(msg);
+  report({ kind: "error", message: e.message, file: e.filename,
+           line: e.lineno, col: e.colno, ua: navigator.userAgent });
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const reason = (e.reason && (e.reason.stack || e.reason.message)) || String(e.reason);
+  fatal(`Unhandled promise rejection: ${reason}`);
+  report({ kind: "rejection", reason: String(reason), ua: navigator.userAgent });
+});
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -1382,6 +1402,23 @@ $("input").addEventListener("keydown", e => {
 });
 document.addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("input").focus(); }
+});
+
+/* ---------- startup beacon ----------
+   Reports how far the module-level script got. If the browser never sends
+   this, the script died before this line; if it arrives with wired:false,
+   the handlers never attached. Either answer localises the failure without
+   needing a console. */
+report({
+  kind: "boot",
+  ua: navigator.userAgent,
+  href: location.href,
+  base: BASE,
+  wired: !!($("brainBtn") && $("brainBtn").onclick),
+  hasFetch: typeof fetch === "function",
+  hasCookie: navigator.cookieEnabled,
+  viewport: `${window.innerWidth}x${window.innerHeight}`,
+  dpr: window.devicePixelRatio,
 });
 
 /* ---------- init ---------- */

@@ -1507,6 +1507,36 @@ async def funnel_set(request: Request, body: FunnelToggle) -> dict:
     return {"ok": True, "output": out, **state}
 
 
+# ---------------------------------------------------------------------------
+# /api/clientlog — browser-side diagnostics
+#
+# There is no console on a phone, so a JS failure there is invisible from
+# here. The page posts its errors and environment to this endpoint so they
+# land in data/client.log where they can actually be read.
+# ---------------------------------------------------------------------------
+CLIENT_LOG = DATA_DIR / "client.log"
+
+
+@app.post("/api/clientlog")
+async def client_log(request: Request) -> dict:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {"raw": (await request.body()).decode("utf-8", "replace")[:2000]}
+    principal = getattr(request.state, "principal", None) or {"name": "?"}
+    line = (
+        f"{time.strftime('%Y-%m-%dT%H:%M:%S')}\t{principal['name']}\t"
+        f"{_client_ip(request)}\t{json.dumps(body, ensure_ascii=False)[:4000]}\n"
+    )
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with CLIENT_LOG.open("a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 @app.get("/api/whoami")
 async def whoami(request: Request) -> dict:
     principal = getattr(request.state, "principal", None) or {"role": "owner", "name": "owner"}
@@ -1521,7 +1551,17 @@ async def root():
     html = BASE_DIR / "ken.html"
     if html.exists():
         from fastapi.responses import FileResponse
-        return FileResponse(html, media_type="text/html")
+        # no-store, explicitly. FileResponse sets ETag + Last-Modified but no
+        # Cache-Control, which leaves the browser free to apply heuristic
+        # caching -- iOS Safari then serves a stale ken.html for a long time
+        # without revalidating, so fixes never reach the phone and the app
+        # appears permanently broken. The whole UI is this one file, so it
+        # must always be fetched fresh.
+        return FileResponse(
+            html, media_type="text/html",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                     "Pragma": "no-cache"},
+        )
     return {
         "app": "KEN",
         "version": "1.0.0",
