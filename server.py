@@ -32,6 +32,7 @@ Only the local Ollama fallback path stays fully on-machine.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import queue
@@ -1501,10 +1502,61 @@ async def funnel_set(request: Request, body: FunnelToggle) -> dict:
         out = await asyncio.to_thread(
             _tailscale, "funnel", "--bg", f"--set-path={KEN_MOUNT}", str(body.port))
     else:
+        # `funnel --set-path=X off` DELETES the route outright, it does not
+        # merely stop publishing it. Turning sharing off therefore made KEN
+        # unreachable from the phone too (everything under /ken fell through
+        # to the site root and 502'd). Re-serve on the tailnet immediately
+        # afterwards so "stop sharing" means exactly that.
         out = await asyncio.to_thread(
             _tailscale, "funnel", f"--set-path={KEN_MOUNT}", "off")
+        out += "\n" + await asyncio.to_thread(
+            _tailscale, "serve", "--bg", f"--set-path={KEN_MOUNT}", str(body.port))
     state = await asyncio.to_thread(_funnel_state)
     return {"ok": True, "output": out, **state}
+
+
+# ---------------------------------------------------------------------------
+# /api/livereload — push a reload to every open browser
+#
+# Exists because a phone is awkward to refresh, and because iOS Safari once
+# served a stale ken.html for hours: fixes shipped but never arrived, and the
+# app looked permanently broken. Clients now follow the server's build id.
+# ---------------------------------------------------------------------------
+_PROCESS_BUILD = uuid.uuid4().hex[:8]
+
+
+def _build_id() -> str:
+    """Changes when ken.html is edited or when this process restarts.
+
+    Recomputed per call (not cached) so an edit is picked up without a
+    restart; the process part covers server-side changes, which do need one.
+    """
+    try:
+        st = (BASE_DIR / "ken.html").stat()
+        file_part = hashlib.md5(
+            f"{st.st_mtime_ns}:{st.st_size}".encode()
+        ).hexdigest()[:8]
+    except OSError:
+        file_part = "nofile"
+    return f"{file_part}-{_PROCESS_BUILD}"
+
+
+async def _livereload_events() -> AsyncGenerator[dict, None]:
+    last: str | None = None
+    try:
+        while True:
+            current = await asyncio.to_thread(_build_id)
+            if current != last:
+                last = current
+                yield _sse("build", {"build": current})
+            await asyncio.sleep(1.0)
+    except asyncio.CancelledError:
+        return          # client navigated away; not an error
+
+
+@app.get("/api/livereload")
+async def livereload() -> EventSourceResponse:
+    return EventSourceResponse(_livereload_events(), ping=15)
 
 
 # ---------------------------------------------------------------------------

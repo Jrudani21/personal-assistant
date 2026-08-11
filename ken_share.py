@@ -129,7 +129,11 @@ def cmd_funnel(args) -> None:
         # delete every other route this machine serves (/, /webui/, /claude/,
         # /assistant/).
         print(_ts("funnel", f"--set-path={MOUNT}", "off"))
-        print("Funnel stopped - KEN is off the public internet.")
+        # `funnel ... off` DELETES the route rather than just unpublishing it,
+        # which also cut KEN off from the tailnet (phone included). Re-serve.
+        print(_ts("serve", "--bg", f"--set-path={MOUNT}", str(PORT)))
+        print("Funnel stopped - KEN is off the public internet,")
+        print("but still reachable from your own devices on the tailnet.")
         print("(Other Tailscale routes on this machine are untouched.)")
 
 

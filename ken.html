@@ -1404,6 +1404,87 @@ document.addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("input").focus(); }
 });
 
+// Stale-cache defence: reload the page when the server signals a new build.
+(() => {
+  try {
+    const reloadDelayMs = 400;
+    const initialBackoffMs = 2000;
+    const maxBackoffMs = 30000;
+
+    let eventSource = null;
+    let backoffMs = initialBackoffMs;
+    let currentBuildId = null;
+    let reloadPending = false;
+
+    const onVisibilityChange = () => {
+      if (reloadPending && !document.hidden) {
+        reloadPending = false;
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        toast('Updated - reloading...');
+        setTimeout(() => window.location.reload(), reloadDelayMs);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const onBuildEvent = (event) => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch (e) {
+        return;
+      }
+
+      const newBuildId = message && message.build;
+      if (newBuildId == null) {
+        return;
+      }
+
+      if (currentBuildId === null) {
+        currentBuildId = newBuildId;
+        return;
+      }
+
+      if (newBuildId !== currentBuildId) {
+        if (document.hidden) {
+          reloadPending = true;
+        } else {
+          toast('Updated - reloading...');
+          setTimeout(() => window.location.reload(), reloadDelayMs);
+        }
+      }
+    };
+
+    const connect = () => {
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+
+      const es = new EventSource(url("/api/livereload"));
+      eventSource = es;
+
+      es.addEventListener('build', onBuildEvent);
+
+      es.onopen = () => {
+        backoffMs = initialBackoffMs;
+      };
+
+      es.onerror = () => {
+        es.close();
+        if (eventSource === es) {
+          eventSource = null;
+        }
+        setTimeout(connect, backoffMs);
+        backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
+      };
+    };
+
+    connect();
+  } catch (e) {
+    // Live-reload must never break the app; silently ignore failures.
+  }
+})();
+
 /* ---------- startup beacon ----------
    Reports how far the module-level script got. If the browser never sends
    this, the script died before this line; if it arrives with wired:false,
