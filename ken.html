@@ -259,6 +259,28 @@
   .rec-btn:hover { color: var(--ink); }
   .rec-btn.recording { color: var(--pink); animation: ken-blink 1.1s ease-in-out infinite; }
 
+  /* ---------- access / funnel ---------- */
+  .access-box { background: var(--panel3); border: 1px solid var(--border2); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .access-box.public { border-color: var(--pink); background: rgba(245,163,199,.07); }
+  .access-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .access-state { flex: 1; font: 400 12px var(--mono); letter-spacing: .05em; color: var(--accent); min-width: 160px; }
+  .access-box.public .access-state { color: var(--pink); }
+  .access-url { font: 300 11px var(--mono); color: var(--muted); margin-top: 8px; word-break: break-all; }
+  .access-note { font: 300 11.5px/1.6 var(--body); color: var(--muted); margin-top: 8px; }
+  .access-guests { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+  .guest-row { display: flex; align-items: center; gap: 10px; font: 300 11.5px var(--mono); color: var(--muted); }
+  .guest-row .gname { flex: 1; color: var(--ink); }
+  .guest-row .revoke { color: var(--muted2); cursor: pointer; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border2); }
+  .guest-row .revoke:hover { color: var(--err); border-color: var(--pink-tint); }
+
+  /* Persistent reminder in the top bar while KEN is on the public internet. */
+  .public-warn {
+    display: none; align-items: center; gap: 8px; cursor: pointer;
+    font: 400 10px var(--mono); letter-spacing: .08em; color: var(--bg);
+    background: var(--pink); border-radius: 5px; padding: 5px 10px; flex: none;
+  }
+  .public-warn.on { display: flex; }
+
   .toast {
     position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
     background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
@@ -309,6 +331,7 @@
     <span class="wordmark">KEN</span>
     <span class="status-dot" id="healthDot" title="provider status"></span>
     <div class="hud" id="hud"></div>
+    <div class="public-warn" id="publicWarn" title="KEN is reachable from the public internet — tap to manage">● PUBLIC</div>
     <div class="spacer"></div>
     <nav>
       <button class="navbtn" id="newChatBtn">+ New</button>
@@ -386,10 +409,26 @@
 <div class="scrim" id="settingsScrim">
   <div class="panel">
     <header>
-      <div><div class="title">Settings</div><div class="sub" id="settingsSub">tool permissions</div></div>
+      <div><div class="title">Settings</div><div class="sub" id="settingsSub">access &amp; tool permissions</div></div>
       <span class="esc" data-close="settingsScrim">ESC</span>
     </header>
-    <div class="body" id="toolsBody"></div>
+    <div class="body">
+      <div id="accessBox" class="access-box" style="display:none">
+        <div class="access-head">
+          <span id="accessState" class="access-state">checking…</span>
+          <button class="btn" id="funnelBtn" style="display:none">…</button>
+        </div>
+        <div class="access-url" id="accessUrl"></div>
+        <div class="access-note" id="accessNote"></div>
+        <div class="access-guests" id="accessGuests"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <input id="guestName" placeholder="tester name" style="flex:1;min-width:120px;background:var(--panel3);border:1px solid var(--border2);border-radius:8px;color:var(--ink);font:300 13px var(--body);padding:8px 11px;outline:none">
+          <input id="guestHours" type="number" min="0" max="720" value="24" title="hours until it expires (0 = never)" style="width:80px;background:var(--panel3);border:1px solid var(--border2);border-radius:8px;color:var(--ink);font:300 13px var(--body);padding:8px 11px;outline:none">
+          <button class="btn ghost" id="inviteBtn">Invite tester</button>
+        </div>
+      </div>
+      <div id="toolsBody"></div>
+    </div>
   </div>
 </div>
 
@@ -1185,6 +1224,91 @@ async function toggleRecording() {
   } catch (e) { toast("Mic unavailable: " + e.message); }
 }
 
+/* ---------- access / funnel (owner only) ---------- */
+const access = { isOwner: false, public: false };
+
+async function loadAccess() {
+  try {
+    const me = await api("/api/whoami");
+    access.isOwner = me.role === "owner";
+  } catch (e) { access.isOwner = false; }
+  if (!access.isOwner) {           // guests never see the sharing controls
+    $("accessBox").style.display = "none";
+    $("publicWarn").classList.remove("on");
+    return;
+  }
+  $("accessBox").style.display = "block";
+  try {
+    const f = await api("/api/funnel");
+    access.public = !!f.public;
+    $("accessBox").classList.toggle("public", f.public);
+    $("publicWarn").classList.toggle("on", f.public);
+    $("accessState").textContent = f.public
+      ? "PUBLIC — reachable from the internet"
+      : (f.served ? "TAILNET ONLY — your devices" : "LOCAL ONLY — this machine");
+    $("accessUrl").textContent = f.url || "";
+    $("accessNote").textContent = f.public
+      ? "Anyone can reach this URL; only a valid token gets in. Turn it off when you're done testing."
+      : "Publish it to hand a link to someone outside your tailnet.";
+    const btn = $("funnelBtn");
+    btn.style.display = "";
+    btn.textContent = f.public ? "Turn OFF public access" : "Go public (funnel)";
+    btn.classList.toggle("ghost", f.public);
+  } catch (e) {
+    $("accessState").textContent = "Tailscale status unavailable";
+    $("accessNote").textContent = e.message;
+  }
+  loadGuests();
+}
+
+async function loadGuests() {
+  try {
+    const d = await api("/api/access");
+    $("accessGuests").innerHTML = d.guests.length ? d.guests.map(g => `
+      <div class="guest-row">
+        <span class="gname">${esc(g.name)}</span>
+        <span>${g.expires_in_hours == null ? "never expires" : g.expires_in_hours + "h left"}</span>
+        <span class="revoke" data-revoke="${esc(g.id)}">revoke</span>
+      </div>`).join("") : `<div class="guest-row"><span class="gname" style="color:var(--muted2)">No active tester links.</span></div>`;
+    $("accessGuests").querySelectorAll("[data-revoke]").forEach(x => x.onclick = async () => {
+      await api(`/api/access/${x.dataset.revoke}`, { method: "DELETE" });
+      toast("Tester link revoked.");
+      loadGuests();
+    });
+  } catch (e) { /* non-owner */ }
+}
+
+$("funnelBtn").onclick = async () => {
+  const goingPublic = !access.public;
+  if (goingPublic && !confirm(
+      "Publish KEN to the public internet?\n\nAnyone who finds the URL can reach it — " +
+      "only a valid token gets in. Turn it off when testing is done.")) return;
+  $("funnelBtn").disabled = true;
+  $("funnelBtn").textContent = goingPublic ? "Publishing…" : "Turning off…";
+  try {
+    await api("/api/funnel", { method: "POST", body: JSON.stringify({ public: goingPublic }) });
+    toast(goingPublic ? "KEN is now public." : "Public access is OFF.");
+    await loadAccess();
+  } catch (e) { toast("Funnel: " + e.message); await loadAccess(); }
+  finally { $("funnelBtn").disabled = false; }
+};
+
+$("inviteBtn").onclick = async () => {
+  const name = $("guestName").value.trim() || "tester";
+  const hours = parseInt($("guestHours").value, 10);
+  try {
+    const d = await api("/api/access", { method: "POST", body: JSON.stringify({ name, hours: isNaN(hours) ? 24 : hours }) });
+    const base = location.origin + location.pathname.replace(/\/$/, "");
+    const link = `${base}/?token=${d.token}`;
+    $("guestName").value = "";
+    try { await navigator.clipboard.writeText(link); toast(`Link for ${d.name} copied to clipboard.`); }
+    catch (e) { prompt(`Link for ${d.name} — copy it now, it is not shown again:`, link); }
+    loadGuests();
+  } catch (e) { toast("Invite: " + e.message); }
+};
+
+$("publicWarn").onclick = () => { openPanel("settingsScrim"); loadAccess(); };
+
 /* ---------- wiring ---------- */
 wireSubtabs("brainTabs", { vault: "subVault", gist: "subGist", graph: "subGraph" }, (sub) => {
   $("vaultSearchRow").style.display = sub === "vault" ? "flex" : "none";
@@ -1204,7 +1328,7 @@ $("tasksBtn").onclick = () => { loadTasks(); openPanel("tasksScrim"); };
 $("docsBtn").onclick = () => { loadDocs(); openPanel("docsScrim"); };
 $("fleetBtn").onclick = () => { openPanel("fleetScrim"); document.querySelector('[data-admin="status"]').click(); };
 $("memBtn").onclick = () => { loadMemory(); openPanel("memScrim"); };
-$("settingsBtn").onclick = () => openPanel("settingsScrim");
+$("settingsBtn").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
 $("daBtn").onclick = () => openPanel("daScrim");
 $("daRunBtn").onclick = () => runDeepAnalysis($("daQuestion").value);
 $("recBtn").onclick = toggleRecording;
@@ -1222,7 +1346,11 @@ document.addEventListener("keydown", e => {
 async function init() {
   await Promise.all([loadTools(), loadChats(), loadMemory()]);
   await loadHealth();
+  // Surfaces the PUBLIC badge on load, so you always know from the phone
+  // whether KEN is currently exposed to the internet.
+  loadAccess();
   setInterval(loadHealth, 15000);
+  setInterval(loadAccess, 60000);
 }
 init();
 </script>

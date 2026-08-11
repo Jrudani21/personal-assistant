@@ -37,6 +37,7 @@ import os
 import queue
 import re
 import secrets
+import subprocess
 import threading
 import time
 import uuid
@@ -312,6 +313,43 @@ def _token_from(request: Request) -> str | None:
     )
 
 
+# ---------------------------------------------------------------------------
+# What a guest may NOT do.
+#
+# Guests otherwise get the full app (owner's explicit choice). But "only the
+# owner can configure sharing" is unenforceable unless guests also lose code
+# execution and filesystem reads: otherwise a guest just enables run_python
+# and shells out to `tailscale funnel`, or reads data/.ken_tokens.json and
+# promotes themselves to owner. Blocking the config endpoints alone would be
+# security theater.
+#
+# Enforced server-side (not merely hidden in the UI) in both the HTTP layer
+# and the chat tool loop.
+# ---------------------------------------------------------------------------
+GUEST_BLOCKED_PATH_PREFIXES = (
+    "/api/funnel",        # publishing KEN to the internet
+    "/api/access",        # minting / revoking tokens
+    "/api/config",        # every other setting
+    "/api/tools/toggle",  # enabling a blocked tool is the escalation path
+    "/api/admin",         # docker / process control
+)
+
+GUEST_BLOCKED_TOOLS = {
+    # code execution
+    "run_python", "restart_python_session", "run_skill", "mcp_call_tool",
+    # filesystem — read_file would expose data/.ken_tokens.json
+    "read_file", "write_file", "list_files",
+    # host / infra control
+    "admin", "query_sql", "transcribe_file",
+    # destructive data ops
+    "forget", "clear_tasks", "clear_crew_cache",
+}
+
+
+def _guest_blocked(path: str) -> bool:
+    return any(path.startswith(p) for p in GUEST_BLOCKED_PATH_PREFIXES)
+
+
 def _default_enabled(name: str) -> bool:
     return name not in DESTRUCTIVE_TOOLS
 
@@ -408,6 +446,15 @@ async def _auth_gate(request: Request, call_next):
                 status_code=401,
             )
         return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+    # Guests are barred from the configuration/security surface. Checked here
+    # so it holds for every route, not just the ones that remember to ask.
+    if principal["role"] != "owner" and _guest_blocked(path):
+        _audit(ip, f"{principal['name']}/BLOCKED", request.method, path)
+        return JSONResponse(
+            {"detail": "Only the owner can change sharing, access, or system settings."},
+            status_code=403,
+        )
 
     request.state.principal = principal
     if path == "/":
@@ -542,6 +589,11 @@ class AdminRequest(BaseModel):
 class GuestCreate(BaseModel):
     name: str = "tester"
     hours: int = 24            # 0 = never expires (discouraged on a funnel)
+
+
+class FunnelToggle(BaseModel):
+    public: bool
+    port: int = 8756
 
 
 # ---------------------------------------------------------------------------
@@ -696,10 +748,17 @@ async def health() -> dict:
 # /api/tools
 # ---------------------------------------------------------------------------
 @app.get("/api/tools")
-async def list_tools() -> list[dict]:
+async def list_tools(request: Request) -> list[dict]:
+    principal = getattr(request.state, "principal", None) or {"role": "owner"}
+    is_guest = principal["role"] != "owner"
     schemas = _schema_map()
     out = []
     for name in tools.REGISTRY:
+        # Don't advertise tools a guest can't call; _sse_chat strips them from
+        # enabled_tools anyway, so listing them would only produce confusing
+        # "tool unavailable" replies.
+        if is_guest and name in GUEST_BLOCKED_TOOLS:
+            continue
         out.append({
             "name": name,
             "group": _group_of(name),
@@ -828,7 +887,7 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
         llm.SCHEMAS = saved_schemas
 
 
-async def _sse_chat(req: ChatRequest) -> AsyncGenerator[dict, None]:
+async def _sse_chat(req: ChatRequest, role: str = "owner") -> AsyncGenerator[dict, None]:
     if not req.messages:
         yield _sse("error", {"message": "messages must not be empty."})
         return
@@ -851,6 +910,10 @@ async def _sse_chat(req: ChatRequest) -> AsyncGenerator[dict, None]:
 
     history = [m.model_dump() for m in req.messages]
     enabled = set(req.enabled_tools)
+    if role != "owner":
+        # Server-side, not a UI nicety: the client sends enabled_tools, so a
+        # guest could otherwise just ask for run_python in the request body.
+        enabled -= GUEST_BLOCKED_TOOLS
     q: queue.Queue = queue.Queue()
 
     def run() -> None:
@@ -865,8 +928,9 @@ async def _sse_chat(req: ChatRequest) -> AsyncGenerator[dict, None]:
 
 
 @app.post("/api/chat")
-async def chat(req: ChatRequest) -> EventSourceResponse:
-    return EventSourceResponse(_sse_chat(req), ping=15)
+async def chat(request: Request, req: ChatRequest) -> EventSourceResponse:
+    principal = getattr(request.state, "principal", None) or {"role": "owner"}
+    return EventSourceResponse(_sse_chat(req, principal["role"]), ping=15)
 
 
 # ---------------------------------------------------------------------------
@@ -1340,6 +1404,70 @@ async def revoke_access(request: Request, guest_id: str) -> dict:
     if not revoke_guest_token(guest_id):
         raise HTTPException(404, "No such guest token.")
     return {"ok": True, "revoked": guest_id}
+
+
+# ---------------------------------------------------------------------------
+# /api/funnel  — publish / unpublish KEN (OWNER ONLY)
+#
+# The kill switch has to be reachable from the phone, not just the PC's
+# terminal — otherwise "turn the funnel off" means walking to the desk.
+# Owner-only: a guest arriving *through* the funnel must not be able to keep
+# it open, and turning it ON would be a straight privilege escalation.
+# Always scoped to KEN's mount path; `tailscale serve reset` would delete
+# every other route this machine serves.
+# ---------------------------------------------------------------------------
+TAILSCALE_BIN = os.environ.get("TAILSCALE_BIN", r"C:\Program Files\Tailscale\tailscale.exe")
+KEN_MOUNT = "/ken"
+
+
+def _tailscale(*args: str) -> str:
+    try:
+        r = subprocess.run([TAILSCALE_BIN, *args], capture_output=True,
+                           text=True, timeout=30)
+        return (r.stdout or r.stderr or "").strip()
+    except Exception as e:
+        return f"tailscale unavailable: {e}"
+
+
+def _funnel_state() -> dict:
+    try:
+        st = json.loads(_tailscale("serve", "status", "--json") or "{}")
+    except Exception:
+        return {"served": False, "public": False, "url": None, "error": "tailscale unreachable"}
+    served = any(
+        KEN_MOUNT.rstrip("/") in (p.rstrip("/") or "/")
+        for site in (st.get("Web") or {}).values()
+        for p in (site.get("Handlers") or {})
+    )
+    host = None
+    for site in (st.get("Web") or {}):
+        host = site.split(":")[0]
+        break
+    return {
+        "served": served,
+        "public": bool(st.get("AllowFunnel")),
+        "url": f"https://{host}{KEN_MOUNT}/" if host and served else None,
+        "error": None,
+    }
+
+
+@app.get("/api/funnel")
+async def funnel_status(request: Request) -> dict:
+    _require_owner(request)
+    return await asyncio.to_thread(_funnel_state)
+
+
+@app.post("/api/funnel")
+async def funnel_set(request: Request, body: FunnelToggle) -> dict:
+    _require_owner(request)
+    if body.public:
+        out = await asyncio.to_thread(
+            _tailscale, "funnel", "--bg", f"--set-path={KEN_MOUNT}", str(body.port))
+    else:
+        out = await asyncio.to_thread(
+            _tailscale, "funnel", f"--set-path={KEN_MOUNT}", "off")
+    state = await asyncio.to_thread(_funnel_state)
+    return {"ok": True, "output": out, **state}
 
 
 @app.get("/api/whoami")

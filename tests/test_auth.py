@@ -122,6 +122,63 @@ def test_throttle_forgets_old_failures(tokens, monkeypatch):
     assert server._throttled(ip) is False
 
 
+# ---------- guest restrictions ----------
+# Guests get the full app EXCEPT the configuration/security surface. That
+# carve-out only means anything if guests also lose code execution and
+# filesystem reads — otherwise a guest enables run_python and shells out to
+# `tailscale funnel`, or reads data/.ken_tokens.json to become owner.
+
+@pytest.mark.parametrize("path", [
+    "/api/funnel", "/api/access", "/api/config",
+    "/api/tools/toggle", "/api/admin", "/api/admin/status",
+    "/api/access/abc123",
+])
+def test_config_surface_is_blocked_for_guests(path):
+    assert server._guest_blocked(path) is True
+
+
+@pytest.mark.parametrize("path", [
+    "/api/chat", "/api/memory", "/api/vault/notes", "/api/tasks",
+    "/api/chats", "/api/documents", "/api/tools",
+])
+def test_normal_surface_is_open_to_guests(path):
+    assert server._guest_blocked(path) is False
+
+
+def test_tools_toggle_is_blocked_but_tools_list_is_not():
+    # Listing tools is fine; enabling one is the escalation path.
+    assert server._guest_blocked("/api/tools/toggle") is True
+    assert server._guest_blocked("/api/tools") is False
+
+
+@pytest.mark.parametrize("tool", [
+    "run_python", "restart_python_session", "run_skill", "mcp_call_tool",
+    "read_file", "write_file", "list_files", "admin",
+])
+def test_dangerous_tools_are_blocked_for_guests(tool):
+    assert tool in server.GUEST_BLOCKED_TOOLS
+
+
+def test_read_file_is_blocked_because_it_would_expose_the_token_store():
+    # data/.ken_tokens.json holds the owner token; read_file would hand a
+    # guest a straight privilege escalation.
+    assert "read_file" in server.GUEST_BLOCKED_TOOLS
+
+
+@pytest.mark.parametrize("tool", [
+    "calculator", "web_search", "weather", "wikipedia_summary",
+    "search_documents", "remember", "add_task", "deep_analysis",
+])
+def test_safe_tools_stay_available_to_guests(tool):
+    assert tool not in server.GUEST_BLOCKED_TOOLS
+
+
+def test_guest_requesting_blocked_tools_gets_them_stripped():
+    """The client supplies enabled_tools, so filtering must be server-side."""
+    requested = {"calculator", "run_python", "read_file", "web_search", "admin"}
+    assert requested - server.GUEST_BLOCKED_TOOLS == {"calculator", "web_search"}
+
+
 # ---------- auth disabled ----------
 
 def test_auth_disabled_lets_everything_through(tokens, monkeypatch):

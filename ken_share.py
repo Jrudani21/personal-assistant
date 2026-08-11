@@ -28,6 +28,14 @@ import server  # noqa: E402  (imports the token store + helpers)
 TAILSCALE = shutil.which("tailscale") or r"C:\Program Files\Tailscale\tailscale.exe"
 PORT = 8756
 
+# Mount KEN under its own path, never at "/".
+#
+# This machine already serves other things over Tailscale ("/" -> :8510,
+# "/webui/" -> :8080, "/claude/" -> :8501, "/assistant/" -> :8502). Taking "/"
+# would hijack one of them, and `tailscale serve reset` would delete ALL of
+# them — so on/off here is always scoped to this one path.
+MOUNT = "/ken"
+
 
 def _ts(*args: str) -> str:
     try:
@@ -47,7 +55,22 @@ def _dns_name() -> str | None:
 
 def _base_url() -> str:
     host = _dns_name()
-    return f"https://{host}" if host else f"http://127.0.0.1:{PORT}"
+    return f"https://{host}{MOUNT}" if host else f"http://127.0.0.1:{PORT}"
+
+
+def _is_published() -> tuple[bool, bool]:
+    """(served_on_tailnet, exposed_to_internet) for KEN's mount path."""
+    try:
+        st = json.loads(_ts("serve", "status", "--json") or "{}")
+    except Exception:
+        return (False, False)
+    served = any(
+        MOUNT.rstrip("/") in (p.rstrip("/") or "/")
+        for site in (st.get("Web") or {}).values()
+        for p in (site.get("Handlers") or {})
+    )
+    funnel = bool(st.get("AllowFunnel"))
+    return (served, funnel)
 
 
 def _when(ts: float | None) -> str:
@@ -97,23 +120,36 @@ def cmd_revoke(args) -> None:
 def cmd_funnel(args) -> None:
     if args.state == "on":
         print("Publishing KEN to the public internet via Tailscale Funnel...")
-        print(_ts("funnel", "--bg", str(PORT)))
+        print(_ts("funnel", "--bg", f"--set-path={MOUNT}", str(PORT)))
         print(f"\nPublic URL: {_base_url()}/")
         print("Anyone can REACH it; only a valid token gets in. Turn it off when done:")
-        print("  py -3.12 ken_share.py funnel off")
+        print("  py -3.12 ken_share.py funnel off   (or the Settings panel in KEN)")
     else:
-        print(_ts("funnel", "--", "off") or "Funnel stopped.")
-        print(_ts("serve", "reset"))
-        print("Funnel stopped - KEN is unreachable from the internet again.")
+        # Scoped to KEN's path only. NEVER `serve reset` here: that would
+        # delete every other route this machine serves (/, /webui/, /claude/,
+        # /assistant/).
+        print(_ts("funnel", f"--set-path={MOUNT}", "off"))
+        print("Funnel stopped - KEN is off the public internet.")
+        print("(Other Tailscale routes on this machine are untouched.)")
 
 
 def cmd_serve(args) -> None:
     """Tailnet-only (your own devices), never the public internet."""
     if args.state == "on":
-        print(_ts("serve", "--bg", str(PORT)))
+        print(_ts("serve", "--bg", f"--set-path={MOUNT}", str(PORT)))
         print(f"\nTailnet URL: {_base_url()}/   (only your devices)")
     else:
-        print(_ts("serve", "reset") or "Serve stopped.")
+        print(_ts("serve", f"--set-path={MOUNT}", "off"))
+        print("KEN unpublished. Other Tailscale routes are untouched.")
+
+
+def cmd_status(_args) -> None:
+    served, funnel = _is_published()
+    print(f"KEN mount     : {MOUNT}")
+    print(f"On tailnet    : {'yes' if served else 'no'}")
+    print(f"Public funnel : {'YES - reachable from the internet' if funnel else 'no'}")
+    if served:
+        print(f"URL           : {_base_url()}/")
 
 
 def cmd_log(args) -> None:
@@ -149,6 +185,8 @@ def main() -> None:
     sv = sub.add_parser("serve", help="tailnet-only access (your devices)")
     sv.add_argument("state", choices=["on", "off"])
     sv.set_defaults(fn=cmd_serve)
+
+    sub.add_parser("status", help="is KEN published? public?").set_defaults(fn=cmd_status)
 
     lg = sub.add_parser("log", help="recent access log")
     lg.add_argument("-n", type=int, default=30)
