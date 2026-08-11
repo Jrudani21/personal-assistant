@@ -4,8 +4,14 @@
 #   right-click -> "Run with PowerShell as Administrator", or from an elevated
 #   prompt:  powershell -ExecutionPolicy Bypass -File register_ken_task.ps1
 #
-# Uses pythonw.exe so no console window appears, and uvicorn directly rather
-# than app.py (app.py opens a browser on start, which is wrong for a daemon).
+# Uses pythonw.exe (no console window) running ken_service.py.
+#
+# It must be ken_service.py, NOT "pythonw -m uvicorn": pythonw provides no
+# stdout/stderr, uvicorn logs to stdout on startup, and it dies instantly --
+# the task then reports LastTaskResult=1 with no diagnostics. ken_service.py
+# redirects both streams to data/ken_service.log first. (app.py is also wrong
+# here: it opens a browser.)
+#
 # Keep this file ASCII: Windows PowerShell 5.1 misreads UTF-8-without-BOM
 # scripts that contain multi-byte characters.
 
@@ -26,7 +32,7 @@ if (-not (Test-Path $Pythonw))     { Write-Error "pythonw.exe not found at $Pyth
 if (-not (Test-Path $ProjectDir))  { Write-Error "Project dir not found: $ProjectDir"; exit 1 }
 
 $action = New-ScheduledTaskAction -Execute $Pythonw `
-    -Argument "-m uvicorn server:app --host 127.0.0.1 --port $Port" `
+    -Argument "`"$ProjectDir\ken_service.py`"" `
     -WorkingDirectory $ProjectDir
 
 # At logon rather than at startup: KEN reads ~/.deepseek_key and the user's
