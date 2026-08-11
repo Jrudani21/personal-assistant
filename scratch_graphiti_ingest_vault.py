@@ -19,17 +19,31 @@ NEO4J_USER = "neo4j"
 NEO4J_PASSWORD = "graphitipass123"
 
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
-EXTRACTION_MODEL = "deepseek-r1:7b"
+EXTRACTION_MODEL = "deepseek-r1-16k:7b"  # deepseek-r1:7b w/ num_ctx=16384 (default 4096 too small for extraction prompts)
 EMBED_MODEL = "nomic-embed-text"
 
-VAULT_ROOT = Path(r"E:\Claude\brain")
+VAULT_ROOT = Path(r"E:\Local\brain")
 EXCLUDE_DIRS = {"templates"}
+
+# Notes whose stem already exists as an Episodic node in the graph (checked via
+# Neo4j on 2026-08-11). add_episode has no built-in dedup-by-name, so re-running
+# this script unfiltered would create duplicate episodes for these.
+ALREADY_INGESTED = {
+    "Conventions", "Local LLM fine-tuning",
+    "Local models invert numeric comparisons under prompt crowding",
+    "Overdispersion breaks the Poisson variance assumption",
+    "Personal AI Assistant", "Projects MOC", "Statistics MOC",
+    "The RAG store scales linearly and breaks around 2000 notes",
+    "Tooling MOC", "_home", "inbox",
+}
 
 
 def collect_notes():
     notes = []
     for path in sorted(VAULT_ROOT.rglob("*.md")):
         if EXCLUDE_DIRS & set(path.relative_to(VAULT_ROOT).parts):
+            continue
+        if path.stem in ALREADY_INGESTED:
             continue
         notes.append(path)
     return notes

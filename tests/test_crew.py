@@ -134,7 +134,7 @@ def _fake_client(content="the response"):
 
 def test_deepseek_llm_calls_api_with_prompt(monkeypatch):
     import sys
-    sys.path.insert(0, r"E:\Claude\projects\personal-assistant")
+    sys.path.insert(0, r"E:\Local\projects\personal-assistant")
 
     captured = {}
 

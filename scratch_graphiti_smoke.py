@@ -21,7 +21,7 @@ EXTRACTION_MODEL = "deepseek-r1:7b"
 EMBED_MODEL = "nomic-embed-text"
 
 NOTE_TITLE = "Overdispersion breaks the Poisson variance assumption"
-NOTE_PATH = r"E:\Claude\brain\notes\Overdispersion breaks the Poisson variance assumption.md"
+NOTE_PATH = r"E:\Local\brain\notes\Overdispersion breaks the Poisson variance assumption.md"
 
 
 async def main():

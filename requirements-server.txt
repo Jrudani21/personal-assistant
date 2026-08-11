@@ -1,0 +1,7 @@
+# KEN server — additions only (the assistant's own deps come from the
+# project's existing environment / requirements).
+fastapi
+uvicorn[standard]
+sse-starlette
+anyio
+openai

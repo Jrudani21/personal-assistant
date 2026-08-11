@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "graphiti-second-brain": {
+      "command": "py",
+      "args": ["-3.12", "graphiti_mcp_server.py"]
+    }
+  }
+}

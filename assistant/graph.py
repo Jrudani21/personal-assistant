@@ -12,7 +12,7 @@ NEO4J_USER = "neo4j"
 NEO4J_PASSWORD = "graphitipass123"
 
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
-EXTRACTION_MODEL = "deepseek-r1:7b"
+EXTRACTION_MODEL = "deepseek-r1-16k:7b"  # deepseek-r1:7b w/ num_ctx=16384 (default 4096 too small for extraction prompts)
 EMBED_MODEL = "nomic-embed-text"
 
 

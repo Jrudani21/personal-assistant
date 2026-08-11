@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEN — Personal Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0409;
+    --panel:   #12060E;
+    --panel2:  #1b0a18;
+    --panel3:  rgba(242,233,238,.04);
+    --border:  rgba(76,201,240,.16);
+    --border2: rgba(242,233,238,.09);
+    --ink:     #F2E9EE;
+    --muted:   rgba(242,233,238,.5);
+    --muted2:  rgba(242,233,238,.32);
+    --accent:  #4CC9F0;
+    --accent-tint: rgba(76,201,240,.14);
+    --pink:    #f5a3c7;
+    --pink-tint: rgba(255,180,220,.25);
+    --ok:      #4CC9F0;
+    --err:     #f5a3c7;
+    --display: 'Michroma', system-ui, sans-serif;
+    --body: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 400 14px/1.5 var(--body);
+    background: var(--bg); color: var(--ink);
+    overflow: hidden;
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 5px; }
+
+  @keyframes ken-ring1 { from { transform: rotateX(74deg) rotateZ(0deg); } to { transform: rotateX(74deg) rotateZ(360deg); } }
+  @keyframes ken-ring2 { from { transform: rotateY(70deg) rotateZ(0deg); } to { transform: rotateY(70deg) rotateZ(-360deg); } }
+  @keyframes ken-ring3 { from { transform: rotateX(28deg) rotateY(38deg) rotateZ(0deg); } to { transform: rotateX(28deg) rotateY(38deg) rotateZ(360deg); } }
+  @keyframes ken-float { 0%,100% { transform: translateY(-4px) scale(1); } 50% { transform: translateY(4px) scale(1.02); } }
+  @keyframes ken-halo   { 0%,100% { opacity: .45; transform: scale(1); } 50% { opacity: .85; transform: scale(1.08); } }
+  @keyframes ken-blink  { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+  @keyframes ken-bar    { 0%,100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+  @keyframes ken-fade   { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .orb { position: relative; perspective: 400px; transform-style: preserve-3d; flex: none; }
+  .orb .ring1, .orb .ring2, .orb .ring3, .orb .core { position: absolute; border-radius: 50%; }
+  .orb .ring1 { inset: 0; border: 1px solid rgba(76,201,240,.4); animation: ken-ring1 9s linear infinite; }
+  .orb .ring2 { inset: 6%; border: 1px solid rgba(76,201,240,.26); animation: ken-ring2 12s linear infinite; }
+  .orb .ring3 { inset: -6%; border: 1px dashed var(--pink-tint); animation: ken-ring3 16s linear infinite; }
+  .orb .core  { inset: 24%; background: radial-gradient(circle at 34% 28%, #b9f0ff 0%, #4CC9F0 34%, #1a5f7a 66%, #0d2c3a 100%); box-shadow: 0 0 18px rgba(76,201,240,.55); animation: ken-float 5s ease-in-out infinite; }
+  .orb.thinking .core { animation: ken-float 1.4s ease-in-out infinite; box-shadow: 0 0 26px rgba(76,201,240,.85); }
+  .orb.thinking .ring1 { animation-duration: 3s; }
+  .orb.thinking .ring2 { animation-duration: 4s; }
+  .orb.sm { width: 30px; height: 30px; }
+  .orb.lg { width: 220px; height: 220px; }
+  .orb.lg::before { content:""; position:absolute; inset:-16%; border-radius:50%; background: radial-gradient(circle, rgba(76,201,240,.24), transparent 62%); animation: ken-halo 6s ease-in-out infinite; }
+
+  .layout { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+
+  /* ---------- top bar ---------- */
+  header.topbar {
+    display: flex; align-items: center; gap: 16px; padding: 14px 24px;
+    border-bottom: 1px solid var(--border2); background: var(--panel);
+  }
+  .wordmark { font: 400 16px var(--display); letter-spacing: .16em; color: var(--ink); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted2); flex: none; }
+  .status-dot.ok { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .status-dot.bad { background: var(--err); }
+  .hud { display: flex; gap: 18px; font: 300 10.5px var(--mono); letter-spacing: .08em; color: var(--muted2); flex-wrap: wrap; }
+  .hud b { color: var(--accent); font-weight: 400; }
+  .topbar .spacer { flex: 1; }
+  .navbtn {
+    font: 300 11px var(--mono); letter-spacing: .06em; color: var(--muted);
+    border: 1px solid var(--border2); border-radius: 6px; padding: 7px 13px;
+    background: transparent; cursor: pointer; white-space: nowrap;
+  }
+  .navbtn:hover { border-color: var(--border); color: var(--ink); }
+  .navbtn.active { color: var(--accent); border-color: var(--border); background: var(--accent-tint); }
+
+  /* ---------- main ---------- */
+  main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+  .idle-view {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 36px;
+    background: radial-gradient(120% 90% at 50% 55%, #1d0a1a 0%, #12060E 45%, #0a0409 100%);
+  }
+  .idle-view .greeting { font: 300 26px/1.35 var(--body); color: rgba(242,233,238,.85); text-align: center; max-width: 640px; padding: 0 20px; }
+  .idle-view .standby { font: 300 12px var(--mono); letter-spacing: .3em; color: rgba(76,201,240,.8); }
+  .idle-view .hints { display: flex; gap: 10px; }
+  .idle-view .hints span { font: 300 11px var(--mono); letter-spacing: .06em; color: var(--muted); border: 1px solid var(--border2); border-radius: 20px; padding: 8px 16px; }
+
+  .chat-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .msgs { flex: 1; overflow-y: auto; padding: 26px 8vw 10px; display: flex; flex-direction: column; gap: 18px; }
+  .msg { max-width: 68ch; animation: ken-fade .25s ease; }
+  .msg.user { align-self: flex-end; background: var(--accent-tint); border: 1px solid var(--border); border-radius: 14px 14px 4px 14px; padding: 14px 18px; font: 400 15px/1.6 var(--body); color: var(--ink); }
+  .msg.assistant { align-self: flex-start; font: 300 16px/1.7 var(--body); color: rgba(242,233,238,.9); }
+  .msg.assistant .caret::after { content: "▍"; animation: ken-blink 1s steps(2) infinite; color: var(--accent); }
+  .msg.error { align-self: flex-start; background: rgba(245,163,199,.08); border: 1px solid var(--pink-tint); border-radius: 10px; padding: 12px 16px; font: 300 13px var(--body); color: var(--pink); }
+
+  .tool-row { display: flex; gap: 10px; flex-wrap: wrap; align-self: flex-start; max-width: 84ch; }
+  .tool-chip {
+    display: flex; align-items: center; gap: 9px; background: var(--panel3);
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px;
+    font: 400 11px var(--mono); letter-spacing: .04em; color: var(--ink);
+  }
+  .tool-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pink); animation: ken-blink 1.2s ease-in-out infinite; }
+  .tool-chip.done .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: none; }
+  .tool-chip.err .dot { background: var(--err); animation: none; }
+  .tool-chip .meta { color: var(--muted); font-weight: 300; }
+
+  .composer-wrap { padding: 16px 8vw 22px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border2); background: linear-gradient(0deg, var(--bg) 60%, transparent); }
+  .quick-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .quick-actions span { font: 300 12px var(--body); color: var(--muted); border: 1px solid var(--border2); border-radius: 18px; padding: 7px 14px; cursor: pointer; }
+  .quick-actions span:hover { border-color: var(--border); color: var(--ink); }
+  .composer {
+    display: flex; align-items: flex-end; gap: 14px; background: var(--panel3);
+    border: 1px solid var(--border); border-radius: 14px; padding: 13px 18px;
+  }
+  .composer textarea {
+    flex: 1; background: transparent; border: none; outline: none; resize: none;
+    color: var(--ink); font: 300 15px/1.5 var(--body); max-height: 140px;
+  }
+  .composer textarea::placeholder { color: rgba(242,233,238,.35); }
+  .send-hint { font: 300 10px var(--mono); letter-spacing: .1em; color: var(--muted2); white-space: nowrap; }
+
+  /* ---------- overlays ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(10,4,9,.72); display: none; align-items: center; justify-content: center; z-index: 40; }
+  .scrim.open { display: flex; }
+  .panel {
+    width: min(920px, 92vw); max-height: 84vh; display: flex; flex-direction: column;
+    background: linear-gradient(180deg, var(--panel2), var(--panel));
+    border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
+    box-shadow: 0 40px 120px rgba(0,0,0,.7);
+  }
+  .panel header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 26px; border-bottom: 1px solid var(--border2);
+  }
+  .panel header .title { font: 400 18px var(--body); color: var(--ink); }
+  .panel header .sub { font: 300 10px var(--mono); letter-spacing: .1em; color: var(--muted); margin-top: 4px; }
+  .panel .esc { font: 300 11px var(--mono); color: var(--muted); border: 1px solid var(--border2); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+  .panel .esc:hover { color: var(--ink); border-color: var(--border); }
+  .panel .body { flex: 1; overflow-y: auto; padding: 16px 26px 24px; display: flex; flex-direction: column; gap: 10px; }
+
+  .filter-row { display: flex; gap: 8px; padding: 14px 26px 0; }
+  .filter-row span { font: 300 11px var(--mono); color: var(--muted); border: 1px solid var(--border2); border-radius: 14px; padding: 6px 12px; cursor: pointer; }
+  .filter-row span.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+
+  .mem-entry { display: grid; grid-template-columns: 160px 1fr 90px; gap: 16px; align-items: start; background: var(--panel3); border: 1px solid var(--border2); border-left: 2px solid var(--border); border-radius: 8px; padding: 13px 16px; }
+  .mem-entry .key { font: 400 12px var(--mono); color: var(--accent); word-break: break-word; }
+  .mem-entry .val { font: 300 14px/1.6 var(--body); color: rgba(242,233,238,.85); }
+  .mem-entry .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .mem-entry .tags span { font: 300 10px var(--mono); color: var(--muted); border: 1px solid var(--border2); border-radius: 3px; padding: 3px 7px; }
+  .mem-entry .when { font: 300 10.5px var(--mono); color: var(--muted2); text-align: right; }
+
+  .distill-btn { font: 400 11px var(--mono); letter-spacing: .06em; color: var(--bg); background: var(--accent); border: none; border-radius: 6px; padding: 8px 13px; cursor: pointer; }
+  .distill-btn:hover { opacity: .88; }
+
+  .tool-toggle-group { margin-bottom: 4px; }
+  .tool-toggle-group h3 { font: 300 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .tool-toggle-row { display: flex; align-items: center; gap: 12px; padding: 7px 2px; }
+  .tool-toggle-row label.name { flex: 1; font: 300 13px var(--body); color: var(--ink); cursor: help; }
+  .switch { position: relative; width: 34px; height: 19px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; inset: 0; border-radius: 19px; background: var(--border2); cursor: pointer; transition: .15s; }
+  .slider::before { content: ""; position: absolute; width: 13px; height: 13px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: .15s; }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(15px); }
+
+  .chats-list { display: flex; flex-direction: column; gap: 4px; }
+  .chat-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+  .chat-item:hover { background: var(--panel3); }
+  .chat-item.active { background: var(--panel3); border-color: var(--border); }
+  .chat-item .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 300 13px var(--body); }
+  .chat-item .del { color: var(--muted2); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .chat-item .del:hover { color: var(--err); }
+
+  .da-input-row { display: flex; gap: 10px; padding: 16px 26px 0; }
+  .da-input-row textarea { flex: 1; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; color: var(--ink); font: 300 14px var(--body); padding: 10px 12px; resize: vertical; min-height: 42px; }
+  .da-input-row button { font: 400 11px var(--mono); letter-spacing: .06em; color: var(--bg); background: var(--accent); border: none; border-radius: 8px; padding: 0 18px; cursor: pointer; }
+  .da-input-row button:disabled { opacity: .5; cursor: default; }
+
+  .da-stage { display: flex; align-items: center; gap: 9px; font: 300 11px var(--mono); letter-spacing: .05em; color: var(--muted); }
+  .da-stage .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .da-stage.running .dot { background: var(--pink); animation: ken-blink 1.2s ease-in-out infinite; }
+  .da-findings { font: 300 17px/1.7 var(--body); color: rgba(242,233,238,.9); white-space: pre-wrap; margin-top: 6px; }
+  .da-guard { display: flex; gap: 18px; flex-wrap: wrap; font: 300 11px var(--mono); color: var(--muted); margin-top: 10px; }
+  .da-guard b { color: var(--accent); font-weight: 400; }
+
+  @media (max-width: 720px) {
+    header.topbar { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+    .hud { display: none; }
+    .msgs { padding: 18px 5vw 6px; }
+    .composer-wrap { padding: 12px 5vw 16px; }
+    .mem-entry { grid-template-columns: 1fr; }
+    .mem-entry .when { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <header class="topbar">
+    <div class="orb sm" id="topOrb"><div class="ring1"></div><div class="ring2"></div><div class="core"></div></div>
+    <span class="wordmark">KEN</span>
+    <span class="status-dot" id="healthDot" title="provider status"></span>
+    <div class="hud" id="hud"></div>
+    <div class="spacer"></div>
+    <button class="navbtn" id="newChatBtn">+ New</button>
+    <button class="navbtn" id="chatsBtn">Chats</button>
+    <button class="navbtn" id="memBtn">Memory</button>
+    <button class="navbtn" id="daBtn">Deep analysis</button>
+    <button class="navbtn" id="settingsBtn">Settings</button>
+  </header>
+
+  <main>
+    <div class="idle-view" id="idleView">
+      <div class="orb lg" id="idleOrb"><div class="ring1"></div><div class="ring2"></div><div class="core"></div></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:16px">
+        <div class="standby">STANDBY</div>
+        <div class="greeting" id="greeting">Ask KEN anything. Tools, memory, and deep analysis run for real behind this.</div>
+        <div class="hints"><span>Type below</span><span>⌘K to focus</span></div>
+      </div>
+    </div>
+
+    <div class="chat-view" id="chatView" style="display:none">
+      <div class="msgs" id="msgs"></div>
+    </div>
+
+    <div class="composer-wrap">
+      <div class="quick-actions">
+        <span id="qaDeep">Run deep analysis</span>
+        <span id="qaRemember">Remember this</span>
+        <span id="qaClear">Clear view</span>
+      </div>
+      <div class="composer">
+        <textarea id="input" rows="1" placeholder="Ask KEN anything… (Enter to send, Shift+Enter for newline)"></textarea>
+        <span class="send-hint" id="sendHint">⏎ SEND</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Memory overlay -->
+<div class="scrim" id="memScrim">
+  <div class="panel">
+    <header>
+      <div><div class="title">Memory</div><div class="sub" id="memSub">0 ENTRIES · data/memory.json</div></div>
+      <div style="display:flex;gap:10px">
+        <button class="distill-btn" id="distillBtn">🧠 Distill from activity</button>
+        <span class="esc" data-close="memScrim">ESC</span>
+      </div>
+    </header>
+    <div class="filter-row" id="memFilters">
+      <span class="active" data-f="all">all</span>
+      <span data-f="facts">facts</span>
+      <span data-f="concepts">concepts</span>
+    </div>
+    <div class="body" id="memBody"></div>
+  </div>
+</div>
+
+<!-- Chats overlay -->
+<div class="scrim" id="chatsScrim">
+  <div class="panel" style="width:min(560px,92vw)">
+    <header>
+      <div class="title">Chats</div>
+      <span class="esc" data-close="chatsScrim">ESC</span>
+    </header>
+    <div class="body"><div class="chats-list" id="chatsList"></div></div>
+  </div>
+</div>
+
+<!-- Settings / tools overlay -->
+<div class="scrim" id="settingsScrim">
+  <div class="panel">
+    <header>
+      <div><div class="title">Settings</div><div class="sub" id="settingsSub">tool permissions</div></div>
+      <span class="esc" data-close="settingsScrim">ESC</span>
+    </header>
+    <div class="body" id="toolsBody"></div>
+  </div>
+</div>
+
+<!-- Deep analysis overlay -->
+<div class="scrim" id="daScrim">
+  <div class="panel" style="width:min(980px,94vw)">
+    <header>
+      <div><div class="title">Deep analysis</div><div class="sub">4-agent crew pipeline · ~45–120s fresh, instant if cached</div></div>
+      <span class="esc" data-close="daScrim">ESC</span>
+    </header>
+    <div class="da-input-row">
+      <textarea id="daQuestion" placeholder="Question for the crew…"></textarea>
+      <button id="daRunBtn">Run</button>
+    </div>
+    <div class="body" id="daBody"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const state = { chatId: null, history: [], tools: new Map(), memory: [], streaming: false, daRunning: false, memFilter: "all" };
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: opts.body ? { "Content-Type": "application/json" } : {}, ...opts });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(`${res.status} ${detail}`);
+  }
+  return res.json();
+}
+
+function openPanel(id) { $(id).classList.add("open"); }
+function closePanel(id) { $(id).classList.remove("open"); }
+document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closePanel(el.dataset.close));
+document.querySelectorAll(".scrim").forEach(s => s.addEventListener("click", e => { if (e.target === s) s.classList.remove("open"); }));
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".scrim.open").forEach(s => s.classList.remove("open")); });
+
+/* ---------- health / HUD ---------- */
+async function loadHealth() {
+  try {
+    const h = await api("/api/health");
+    $("healthDot").className = "status-dot " + (h.status === "ok" ? "ok" : "bad");
+    const bits = [`${esc(h.provider || "").toUpperCase()} <b>${h.status === "ok" ? "ONLINE" : "DOWN"}</b>`, esc(h.model || "")];
+    bits.push(`FALLBACK ${h.ollama_up ? "<b>READY</b>" : "OFFLINE"}`);
+    bits.push(`MEM ${state.memory.length}`);
+    bits.push(`${state.tools.size} TOOLS`);
+    $("hud").innerHTML = bits.map(b => `<span>${b}</span>`).join("");
+  } catch (e) {
+    $("healthDot").className = "status-dot bad";
+  }
+}
+
+/* ---------- tools ---------- */
+async function loadTools() {
+  const tools = await api("/api/tools");
+  state.tools = new Map(tools.map(t => [t.name, t]));
+  renderTools();
+}
+function renderTools() {
+  const groups = {};
+  for (const t of state.tools.values()) (groups[t.group] ||= []).push(t);
+  $("toolsBody").innerHTML = Object.entries(groups).map(([g, tools]) => `
+    <div class="tool-toggle-group">
+      <h3>${esc(g)}</h3>
+      ${tools.map(t => `
+        <div class="tool-toggle-row">
+          <label class="switch"><input type="checkbox" data-tool="${esc(t.name)}" ${t.enabled ? "checked" : ""}><span class="slider"></span></label>
+          <label class="name" title="${esc(t.description)}">${esc(t.name)}</label>
+        </div>`).join("")}
+    </div>`).join("");
+  $("toolsBody").querySelectorAll("input[data-tool]").forEach(cb => cb.onchange = () => toggleTool(cb.dataset.tool, cb.checked));
+}
+async function toggleTool(name, enabled) {
+  const t = await api("/api/tools/toggle", { method: "POST", body: JSON.stringify({ name, enabled }) });
+  state.tools.set(name, { ...state.tools.get(name), enabled: t.enabled });
+}
+function enabledTools() { return [...state.tools.values()].filter(t => t.enabled).map(t => t.name); }
+
+/* ---------- chats ---------- */
+async function loadChats() {
+  const chats = await api("/api/chats");
+  $("chatsList").innerHTML = chats.map(c => `
+    <div class="chat-item ${c.id === state.chatId ? "active" : ""}" data-id="${esc(c.id)}">
+      <span class="title">${esc(c.title)}</span>
+      <span class="del" data-del="${esc(c.id)}" title="Delete">✕</span>
+    </div>`).join("") || `<div style="color:var(--muted);font-size:12px;padding:10px">No chats yet.</div>`;
+  $("chatsList").querySelectorAll(".chat-item").forEach(item => item.onclick = () => { openChat(item.dataset.id); closePanel("chatsScrim"); });
+  $("chatsList").querySelectorAll(".del").forEach(d => d.onclick = async (e) => {
+    e.stopPropagation();
+    if (!confirm("Delete this chat?")) return;
+    await api(`/api/chats/${d.dataset.del}`, { method: "DELETE" });
+    if (d.dataset.del === state.chatId) newChat();
+    loadChats();
+  });
+}
+function newChat() {
+  state.chatId = null; state.history = [];
+  showIdle();
+  loadChats();
+}
+async function openChat(id) {
+  const chat = await api(`/api/chats/${id}`);
+  state.chatId = chat.id;
+  state.history = chat.messages.map(m => ({ role: m.role, content: m.content }));
+  showChatView();
+  $("msgs").innerHTML = "";
+  for (const m of state.history) appendMsg(m.role, m.content);
+  loadChats();
+}
+
+function showIdle() { $("idleView").style.display = "flex"; $("chatView").style.display = "none"; }
+function showChatView() { $("idleView").style.display = "none"; $("chatView").style.display = "flex"; }
+
+/* ---------- memory ---------- */
+async function loadMemory() {
+  try {
+    state.memory = await api("/api/memory");
+    $("memSub").textContent = `${state.memory.length} ENTRIES · data/memory.json`;
+    renderMemory();
+  } catch (e) { /* keep quiet */ }
+}
+function renderMemory() {
+  let items = state.memory;
+  if (state.memFilter === "facts") items = items.filter(m => (m.facts || []).length);
+  if (state.memFilter === "concepts") items = items.filter(m => (m.concepts || []).length);
+  $("memBody").innerHTML = items.length ? items.map(m => `
+    <div class="mem-entry">
+      <span class="key">${esc(m.key)}</span>
+      <div>
+        <div class="val">${esc(m.value)}</div>
+        <div class="tags">${(m.facts||[]).map(f=>`<span>${esc(f)}</span>`).join("")}${(m.concepts||[]).map(c=>`<span>${esc(c)}</span>`).join("")}</div>
+      </div>
+      <span class="when">${m.updated_at ? esc(m.updated_at.slice(0,10)) : ""}</span>
+    </div>`).join("") : `<div style="color:var(--muted);font-size:12px">No stored memories yet.</div>`;
+}
+$("memFilters").querySelectorAll("span").forEach(el => el.onclick = () => {
+  $("memFilters").querySelectorAll("span").forEach(x => x.classList.remove("active"));
+  el.classList.add("active");
+  state.memFilter = el.dataset.f;
+  renderMemory();
+});
+$("distillBtn").onclick = () => sendMessage("Run distill_memory now and summarize what you learned.", ["distill_memory"]);
+
+/* ---------- chat sending ---------- */
+async function sendMessage(text, forceTools) {
+  if (state.streaming || !text.trim()) return;
+  showChatView();
+  const hint = $("msgs").querySelector(".idle-hint");
+  if (hint) hint.remove();
+  appendMsg("user", text);
+  const messages = [...state.history, { role: "user", content: text }];
+  const enabled = forceTools || enabledTools();
+  state.streaming = true;
+  $("topOrb").classList.add("thinking");
+  try {
+    await streamChat(messages, enabled);
+    state.history.push({ role: "user", content: text });
+  } catch (e) {
+    appendMsg("error", `Request failed: ${e.message}`);
+  } finally {
+    state.streaming = false;
+    $("topOrb").classList.remove("thinking");
+    loadChats();
+  }
+}
+async function streamChat(messages, enabledToolsList) {
+  const res = await fetch("/api/chat", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, enabled_tools: enabledToolsList, chat_id: state.chatId || null }),
+  });
+  if (!res.ok || !res.body) throw new Error(res.statusText);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    // sse-starlette emits \r\n\r\n block separators; normalize to \n\n so
+    // the indexOf/split parsing below (and the CRLF-in-arg-strings tokens)
+    // aren't corrupted by stray \r characters.
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      handleSSEBlock(buffer.slice(0, idx));
+      buffer = buffer.slice(idx + 2);
+    }
+  }
+}
+function handleSSEBlock(block) {
+  let event = "message", data = "";
+  for (const line of block.split("\n")) {
+    if (line.startsWith(":")) continue;
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return;
+  let obj;
+  try { obj = JSON.parse(data); } catch (e) { return; }
+  dispatch(event, obj);
+}
+const handlers = {};
+function dispatch(event, obj) { (handlers[event] || []).forEach(fn => fn(obj)); }
+function on(event, fn) { (handlers[event] ||= []).push(fn); }
+
+on("token", (d) => {
+  const msgs = $("msgs");
+  let last = msgs.lastElementChild;
+  if (!last || !last.classList.contains("assistant") || last.dataset.finalized) {
+    last = appendMsg("assistant", "");
+    last.dataset.finalized = "";
+  }
+  last.textContent += d.delta;
+  last.classList.add("caret");
+  msgs.scrollTop = msgs.scrollHeight;
+});
+on("tool_start", (d) => {
+  const msgs = $("msgs");
+  let row = msgs.lastElementChild;
+  if (!row || !row.classList.contains("tool-row") || row.dataset.locked) {
+    row = document.createElement("div");
+    row.className = "tool-row";
+    msgs.appendChild(row);
+  }
+  const chip = document.createElement("div");
+  chip.className = "tool-chip";
+  chip.dataset.tool = d.name;
+  chip.innerHTML = `<span class="dot"></span><span>${esc(d.name)}</span><span class="meta">${esc(JSON.stringify(d.args || {}))}</span>`;
+  row.appendChild(chip);
+  msgs.scrollTop = msgs.scrollHeight;
+});
+on("tool_end", (d) => {
+  const chips = $("msgs").querySelectorAll(`.tool-chip[data-tool="${CSS.escape(d.name)}"]`);
+  const chip = chips[chips.length - 1];
+  if (!chip) return;
+  chip.classList.add(d.ok ? "done" : "err");
+  chip.querySelector(".dot");
+  chip.querySelector(".meta").textContent = `${d.ok ? "✓" : "✗"} ${d.ms}ms${d.summary ? " · " + d.summary : ""}`;
+  const row = chip.closest(".tool-row");
+  if (row) row.dataset.locked = "";
+});
+on("error", (d) => {
+  const msgs = $("msgs");
+  const last = msgs.lastElementChild;
+  if (last && last.classList.contains("assistant") && last.classList.contains("caret")) {
+    last.classList.remove("caret"); last.dataset.finalized = "1";
+  }
+  appendMsg("error", d.message || "Unknown error");
+});
+on("done", (d) => {
+  const msgs = $("msgs");
+  const last = msgs.lastElementChild;
+  if (last && last.classList.contains("assistant") && last.classList.contains("caret")) {
+    last.classList.remove("caret"); last.dataset.finalized = "1";
+    state.history.push({ role: "assistant", content: last.textContent });
+  }
+  state.chatId = d.chat_id || state.chatId;
+  loadHealth();
+});
+function appendMsg(role, content) {
+  const div = document.createElement("div");
+  div.className = `msg ${role === "user" ? "user" : role === "error" ? "error" : "assistant"}`;
+  div.textContent = content;
+  $("msgs").appendChild(div);
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+  return div;
+}
+
+/* ---------- deep analysis ---------- */
+async function runDeepAnalysis(question) {
+  if (state.daRunning || !question.trim()) return;
+  state.daRunning = true;
+  $("daRunBtn").disabled = true;
+  const body = $("daBody");
+  body.innerHTML = `<div style="font:300 15px var(--body);color:var(--ink)">${esc(question)}</div>`;
+  try {
+    const res = await fetch("/api/deep-analysis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+    if (!res.ok || !res.body) throw new Error(res.statusText);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      // sse-starlette emits \r\n\r\n block separators; normalize to \n\n so
+    // the indexOf/split parsing below (and the CRLF-in-arg-strings tokens)
+    // aren't corrupted by stray \r characters.
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) { handleDABlock(buffer.slice(0, idx)); buffer = buffer.slice(idx + 2); }
+    }
+  } catch (e) {
+    body.insertAdjacentHTML("beforeend", `<div class="msg error">${esc(e.message)}</div>`);
+  } finally {
+    state.daRunning = false;
+    $("daRunBtn").disabled = false;
+  }
+}
+function handleDABlock(block) {
+  let event = "message", data = "";
+  for (const line of block.split("\n")) {
+    if (line.startsWith(":")) continue;
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    else if (line.startsWith("data:")) data += line.slice(5).trim();
+  }
+  if (!data) return;
+  let obj; try { obj = JSON.parse(data); } catch (e) { return; }
+  const body = $("daBody");
+  if (event === "stage") {
+    body.insertAdjacentHTML("beforeend", `<div class="da-stage ${obj.status === "running" ? "running" : ""}"><span class="dot"></span>${esc(obj.stage)} · ${esc(obj.status)}${obj.ms ? ` (${obj.ms}ms)` : ""}${obj.note ? " — " + esc(obj.note) : ""}</div>`);
+  } else if (event === "done") {
+    body.insertAdjacentHTML("beforeend",
+      `<div class="da-findings">${esc(obj.findings)}</div>` +
+      (obj.cached ? `<div class="da-stage"><span class="dot"></span>cached result</div>` : "") +
+      `<div class="da-guard">${Object.entries(obj.guardrail || {}).map(([k,v]) => `<span>${esc(k)}: <b>${esc(String(v))}</b></span>`).join("")}</div>`);
+  } else if (event === "error") {
+    body.insertAdjacentHTML("beforeend", `<div class="msg error">${esc(obj.message)}</div>`);
+  }
+  body.scrollTop = body.scrollHeight;
+}
+
+/* ---------- wiring ---------- */
+$("newChatBtn").onclick = newChat;
+$("chatsBtn").onclick = () => { loadChats(); openPanel("chatsScrim"); };
+$("memBtn").onclick = () => { loadMemory(); openPanel("memScrim"); };
+$("settingsBtn").onclick = () => openPanel("settingsScrim");
+$("daBtn").onclick = () => openPanel("daScrim");
+$("daRunBtn").onclick = () => runDeepAnalysis($("daQuestion").value);
+$("qaDeep").onclick = () => { openPanel("daScrim"); if (state.history.length) $("daQuestion").value = state.history[state.history.length-1].content; };
+$("qaRemember").onclick = () => sendMessage("Remember the key point from what I just said.");
+$("qaClear").onclick = () => { $("msgs").innerHTML = ""; };
+$("input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const v = $("input").value; $("input").value = ""; sendMessage(v); }
+});
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("input").focus(); }
+});
+
+/* ---------- init ---------- */
+async function init() {
+  await Promise.all([loadTools(), loadChats(), loadMemory()]);
+  await loadHealth();
+  setInterval(loadHealth, 15000);
+}
+init();
+</script>
+</body>
+</html>
