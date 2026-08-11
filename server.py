@@ -75,21 +75,7 @@ CONFIG_FILE = DATA_DIR / "config.json"
 # ---------------------------------------------------------------------------
 # Model provider: DeepSeek hosted API (primary) + local Ollama (fallback)
 # ---------------------------------------------------------------------------
-def _deepseek_key() -> str:
-    """DEEPSEEK_API_KEY env var, else ~/.deepseek_key.
-
-    The file fallback matters: without it, launching from a fresh terminal or
-    a desktop shortcut (where the env var isn't set) makes the server refuse
-    to start. assistant/llm.py already reads the same file.
-    """
-    env = os.environ.get("DEEPSEEK_API_KEY", "")
-    if env:
-        return env
-    try:
-        return (Path.home() / ".deepseek_key").read_text(encoding="utf-8").strip()
-    except Exception:
-        return ""
-
+from assistant.deepseek_key import find_key as _deepseek_key  # noqa: E402
 
 DEEPSEEK_API_KEY = _deepseek_key()
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
