@@ -47,7 +47,7 @@ from typing import Any, AsyncGenerator
 import requests
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -75,7 +75,23 @@ CONFIG_FILE = DATA_DIR / "config.json"
 # ---------------------------------------------------------------------------
 # Model provider: DeepSeek hosted API (primary) + local Ollama (fallback)
 # ---------------------------------------------------------------------------
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+def _deepseek_key() -> str:
+    """DEEPSEEK_API_KEY env var, else ~/.deepseek_key.
+
+    The file fallback matters: without it, launching from a fresh terminal or
+    a desktop shortcut (where the env var isn't set) makes the server refuse
+    to start. assistant/llm.py already reads the same file.
+    """
+    env = os.environ.get("DEEPSEEK_API_KEY", "")
+    if env:
+        return env
+    try:
+        return (Path.home() / ".deepseek_key").read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+DEEPSEEK_API_KEY = _deepseek_key()
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 MODEL = os.environ.get("KEN_MODEL", "deepseek-chat")
 PROVIDER = "deepseek"
@@ -460,15 +476,14 @@ async def _auth_gate(request: Request, call_next):
     if path == "/":
         _audit(ip, principal["name"], request.method, path)
 
-    # Promote a valid ?token= on the page load into a cookie, then strip it
-    # from the URL so it isn't left in browser history / shoulder-surfable.
-    if path == "/" and request.query_params.get("token"):
-        resp = RedirectResponse("/", status_code=303)
-        _set_token_cookie(resp, request, supplied)
-        return resp
-
+    # Promote a valid ?token= on the page load into a cookie and serve the page
+    # directly. Deliberately NOT a redirect: KEN is proxied under a path prefix
+    # (Tailscale mounts it at /ken) that the proxy strips before we see it, so
+    # any absolute Location we built would point at the site root and land on a
+    # different app. ken.html strips the token from the address bar itself via
+    # history.replaceState, which needs no knowledge of the prefix.
     resp = await call_next(request)
-    if path == "/" and COOKIE_NAME not in request.cookies:
+    if path == "/" and supplied and COOKIE_NAME not in request.cookies:
         _set_token_cookie(resp, request, supplied)
     return resp
 

@@ -571,8 +571,29 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&
 
 const state = { chatId: null, history: [], tools: new Map(), memory: [], streaming: false, daRunning: false, memFilter: "all" };
 
+// KEN may be served under a path prefix (Tailscale mounts it at /ken so it
+// doesn't collide with the other services on this host). The backend never
+// sees that prefix — the proxy strips it — so absolute "/api/..." URLs would
+// resolve against the site root and hit a different app entirely. Derive the
+// prefix from our own location and put it in front of every request.
+//   "/"      -> ""      -> /api/health
+//   "/ken/"  -> "/ken"  -> /ken/api/health
+//   "/ken"   -> "/ken"  -> /ken/api/health
+const BASE = location.pathname.replace(/\/+$/, "");
+const url = (p) => BASE + p;
+
+// The token arrives once as ?token=… and is exchanged for an HttpOnly cookie.
+// Strip it from the address bar so it doesn't linger in history or get
+// shoulder-surfed. Done client-side because the server can't build a correct
+// absolute redirect without knowing the proxy's path prefix.
+if (location.search.includes("token=")) {
+  const clean = new URL(location.href);
+  clean.searchParams.delete("token");
+  history.replaceState({}, "", clean.pathname + (clean.search || "") + clean.hash);
+}
+
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: opts.body ? { "Content-Type": "application/json" } : {}, ...opts });
+  const res = await fetch(url(path), { headers: opts.body ? { "Content-Type": "application/json" } : {}, ...opts });
   if (!res.ok) {
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch (e) {}
@@ -716,7 +737,7 @@ async function sendMessage(text, forceTools) {
   }
 }
 async function streamChat(messages, enabledToolsList) {
-  const res = await fetch("/api/chat", {
+  const res = await fetch(url("/api/chat"), {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages, enabled_tools: enabledToolsList, chat_id: state.chatId || null }),
   });
@@ -825,7 +846,7 @@ async function runDeepAnalysis(question) {
   const body = $("daBody");
   body.innerHTML = `<div style="font:300 15px var(--body);color:var(--ink)">${esc(question)}</div>`;
   try {
-    const res = await fetch("/api/deep-analysis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+    const res = await fetch(url("/api/deep-analysis"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
     if (!res.ok || !res.body) throw new Error(res.statusText);
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -1166,7 +1187,7 @@ $("docUploadBtn").onclick = async () => {
   try {
     for (const f of files) {
       const fd = new FormData(); fd.append("file", f);
-      const res = await fetch("/api/documents", { method: "POST", body: fd });
+      const res = await fetch(url("/api/documents"), { method: "POST", body: fd });
       if (!res.ok) throw new Error(`${f.name}: ${res.status}`);
       toast((await res.json()).message);
     }
@@ -1210,7 +1231,7 @@ async function toggleRecording() {
       const fd = new FormData(); fd.append("file", blob, "recording.webm");
       toast("Transcribing…");
       try {
-        const res = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
+        const res = await fetch(url("/api/voice/transcribe"), { method: "POST", body: fd });
         const d = await res.json();
         if (!res.ok) throw new Error(d.detail || res.statusText);
         if (d.text) { $("input").value = d.text; $("input").focus(); toast("Transcribed."); }
