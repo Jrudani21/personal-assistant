@@ -250,6 +250,23 @@ Newest first:
 
 `404` for an unknown id.
 
+### `GET /api/chats/search?q=<text>`
+
+Full-text search across saved chats:
+
+```json
+[ { "id": "7afc50d5231a", "title": "Weather in Winnipeg", "snippet": "…matched text…" } ]
+```
+
+> Registered **before** `GET /api/chats/{id}` in `server.py`. FastAPI resolves
+> routes in definition order, so declaring it after would let `{chat_id}`
+> swallow the literal `search` path and the endpoint would never fire.
+
+### `GET /api/chats/{id}/export`
+
+Returns `text/markdown` with a `Content-Disposition: attachment` header
+(filename derived from the chat title). `404` for an unknown id.
+
 ---
 
 ## 6. Memory
@@ -286,9 +303,150 @@ stricter per the build spec).
 
 ---
 
-## 7. Root
+## 7. Brain / Obsidian vault
+
+Backed by `assistant/vault.py`, which is deliberately dependency-free (files
++ git only) — every endpoint here keeps working when Ollama *and* DeepSeek
+are both down. The vault path resolves from config `vault_dir`, then the
+`OBSIDIAN_VAULT` env var, then `~/brain`.
+
+### `GET /api/vault/notes`
+
+```json
+{
+  "vault_dir": "E:\\Local\\brain",
+  "count": 17,
+  "folders": ["daily", "inbox", "meta", "notes", "projects"],
+  "notes": [
+    { "rel": "notes/Statistics MOC.md", "folder": "notes", "name": "Statistics MOC",
+      "mtime": "2026-08-10T22:26:04", "chars": 1840, "lines": 62,
+      "heading": "Statistics MOC", "snippet": "…", "links": ["Overdispersion breaks…"] }
+  ]
+}
+```
+
+### `GET /api/vault/note?rel=<vault-relative path>`
+
+`{ "rel": "meta/Conventions.md", "body": "# Conventions\n\n…" }` — `404` if absent.
+
+### `GET /api/vault/search?q=<text>`
+
+`{ "query": "poisson", "results": [ { "rel": "...", "name": "...", "folder": "...", "heading": "...", "match": "…snippet…" } ] }`
+
+### `GET /api/vault/git`
+
+`{ "ok": true, "branch": "master", "dirty": 1, "last_commit": "af7db30 2026-08-11 …", "error": null, "status_text": "?? daily/2026-08-11.md" }`
+
+### `POST /api/vault/gist`
+
+Body (all optional): `{ "memory_limit": 12, "snippet_chars": 280, "include_git": true, "inject": false }`
+
+Response: `{ "gist": "# Context pack — …", "chars": 7311, "injected": false }`
+
+With `inject: true` the pack is persisted to config as `context_gist`, which
+`assistant/llm.py` splices into **every** system prompt (truncated to
+`max_gist_chars`, default 4000). `DELETE /api/vault/gist` stops the injection.
+
+### `POST /api/vault/sync`
+
+Re-indexes the vault into the RAG store. `{ "ok": true, "message": "Indexed 17 notes…" }`
+
+### `GET /api/vault/graph`
+
+Wiki-link graph — **not** the Graphiti/Neo4j semantic graph (that one is
+reached through `graphiti_mcp_server.py`'s MCP `graph_search` tool).
+
+```json
+{ "nodes": [ { "id": "notes/Statistics MOC.md", "name": "Statistics MOC", "folder": "notes", "color": "#4CC9F0", "snippet": "…" } ],
+  "links": [ { "source": "notes/Statistics MOC.md", "target": "notes/Overdispersion….md" } ] }
+```
+
+Link targets that match no note become `folder: "unresolved"` ghost nodes
+(the vault's own Conventions calls these "hollow nodes" and treats them as a
+to-write signal). Link names are whitespace-normalized, so a `[[link]]`
+wrapped across a line break resolves to the real note rather than a phantom.
+
+---
+
+## 8. Tasks, reminders, backups
+
+### `GET /api/tasks` → `[ { "id": 1, "text": "…", "done": false } ]`
+### `POST /api/tasks` — body `{ "text": "…" }`
+### `PATCH /api/tasks/{id}` — body `{ "done": true }`
+### `DELETE /api/tasks/{id}`
+
+All three mutating calls return `{ "ok": true, "message": "…", "tasks": [ … ] }`
+(the full list back, so the UI needs no follow-up GET).
+
+### `GET /api/reminders` → `{ "reminders": [ { "id": 1, "text": "…", "due_at": "2026-08-12 09:00", "fired": false } ], "due": [ … ] }`
+### `POST /api/reminders` — body `{ "text": "…", "due_at": "YYYY-MM-DD HH:MM" }`
+### `DELETE /api/reminders/{id}`
+
+Reminders only fire while something polls them — install the daemon
+(`python assistant/reminder_daemon.py --install`) for 24/7 delivery.
+
+### `GET /api/backups` → `{ "location": "…", "backups": ["…"], "latest": "…", "size_bytes": 0 }`
+### `POST /api/backups` — snapshot `data/` now.
+
+---
+
+## 9. Documents (RAG)
+
+### `GET /api/documents` → `{ "documents": ["report.pdf"], "vault_notes": 10, "knowledge": 0 }`
+### `POST /api/documents` — `multipart/form-data`, field `file`. txt/md/pdf.
+### `DELETE /api/documents/{filename}`
+### `POST /api/knowledge/sync` — index the nightly-learn knowledge base.
+
+---
+
+## 10. Voice
+
+Local only (faster-whisper + pyttsx3). Both are heavy optional dependencies:
+if either is missing or broken the endpoint returns **`503`** with a clear
+message rather than a 500 traceback — the rest of KEN works without voice.
+
+### `POST /api/voice/transcribe` — `multipart/form-data`, field `file` → `{ "text": "…" }`
+### `POST /api/voice/speak` — body `{ "text": "…" }` → `audio/wav` bytes
+
+---
+
+## 11. Fleet admin
+
+Wraps `assistant/admin.py`, which shells out to docker/python and reads the
+deepseek-cave logs. Unknown actions return a usage string instead of
+executing anything.
+
+### `GET /api/admin/status` → `{ "status": "Ollama: UP (…)\nDocker:\n…" }`
+### `POST /api/admin`
+
+Body: `{ "action": "status", "name": null, "source": "crew-log", "lines": 40 }`
+
+Actions: `status`, `crew_sweep`, `crew_member`, `log`, `docker`,
+`docker_start`, `docker_stop`, `docker_restart`, `open_webui`.
+Response: `{ "action": "…", "output": "…" }`
+
+> The matching `admin` **chat tool** is in `DESTRUCTIVE_TOOLS` (default OFF)
+> since it can start/stop containers.
+
+---
+
+## 12. Config
+
+### `GET /api/config`
+
+Returns the whole merged config. `context_gist` is blanked out (it can be
+thousands of chars) and reported as `context_gist_chars` instead; fetch the
+body from `POST /api/vault/gist` when you actually need it.
+
+### `POST /api/config` — body `{ "key": "max_gist_chars", "value": 4000 }`
+
+---
+
+## 13. Root
 
 ### `GET /`
+
+Serves `ken.html` when the file is present, else the API info JSON:
 
 ```json
 { "app": "KEN", "version": "1.0.0", "endpoints": [ "..." ], "docs": "/docs" }
@@ -324,13 +482,16 @@ stricter per the build spec).
   ones a stub that returns "Tool unavailable…" without executing. Both are
   restored in a `finally` block; a module lock serializes turns.
 - **Config**: tool on/off overrides live in `data/config.json`
-  (`{ "tools": { "<name>": bool } }`). There is no `assistant/config.py`
-  module — the spec listed one, but it doesn't exist, so the server owns
-  `data/config.json` directly.
-- **Name corrections vs the build spec**: the spec's `sync_knowledge` is
-  `sync_vault` in the real REGISTRY, and `query_sql`, `transcribe_file`,
-  `mcp_*`, `list_skills`, `run_skill`, `fetch_webpage` don't exist — they are
-  omitted, not fabricated.
+  (`{ "tools": { "<name>": bool } }`). `assistant/config.py` now exists (it
+  arrived with the 2026-08-11 merge of the C: drive fork) and owns the same
+  file; `GET`/`POST /api/config` go through it, while the tool-toggle path
+  still reads/writes `data/config.json` directly.
+- **Tool inventory**: `sync_vault` and `sync_knowledge` are both real. As of
+  the 2026-08-11 merge, `query_sql`, `transcribe_file`, `mcp_list_tools`,
+  `mcp_call_tool`, `list_skills`, `run_skill`, `fetch_webpage` and `admin`
+  also exist in the REGISTRY. `TOOL_GROUPS` in `server.py` is the UI grouping
+  and may lag the registry; anything ungrouped is reported as `"other"` by
+  `GET /api/tools` rather than being hidden.
 - **Python**: the assistant requires Python 3.12+ (f-strings with backslashes
   in `assistant/llm.py`). Run with the 3.12 interpreter:
   `py -3.12 -m uvicorn server:app --port 8756 --reload`.

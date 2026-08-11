@@ -43,13 +43,27 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from assistant import crew_cache, llm, memory, observations, sessions, tools
+from assistant import (
+    admin as admin_mod,
+    backup,
+    config as config_mod,
+    crew_cache,
+    llm,
+    memory,
+    observations,
+    rag,
+    reminders,
+    sessions,
+    todo,
+    tools,
+    vault,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -80,19 +94,28 @@ _deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL) 
 # omitted rather than fabricated).
 # ---------------------------------------------------------------------------
 TOOL_GROUPS: dict[str, list[str]] = {
-    "core": ["calculator", "get_datetime", "web_search", "weather", "wikipedia_summary"],
-    "workspace": ["read_file", "write_file", "list_files", "run_python", "restart_python_session"],
-    "knowledge": ["search_documents", "sync_vault"],
-    "memory": ["remember", "recall", "forget", "recent_activity", "distill_memory", "backup_data"],
+    "core": ["calculator", "get_datetime", "web_search", "weather",
+             "wikipedia_summary", "fetch_webpage"],
+    "workspace": ["read_file", "write_file", "list_files", "run_python",
+                  "restart_python_session"],
+    "knowledge": ["search_documents", "sync_vault", "sync_knowledge",
+                  "query_sql", "transcribe_file"],
+    "memory": ["remember", "recall", "forget", "recent_activity",
+               "distill_memory", "backup_data"],
     "planning": ["add_task", "list_tasks", "complete_task", "clear_tasks",
                  "remind_me", "list_reminders", "cancel_reminder"],
-    "agents": ["deep_analysis", "clear_crew_cache"],
+    "agents": ["deep_analysis", "clear_crew_cache", "mcp_list_tools",
+               "mcp_call_tool", "list_skills", "run_skill", "admin"],
 }
 
 # Destructive tools — default OFF, only callable when explicitly enabled.
+# `admin` and `mcp_call_tool` execute arbitrary side effects (docker control,
+# process starts, whatever an MCP server exposes); `run_skill` executes a
+# stored procedure. They are gated the same way as write_file/run_python.
 DESTRUCTIVE_TOOLS = {
     "write_file", "run_python", "restart_python_session",
     "forget", "clear_tasks", "cancel_reminder", "clear_crew_cache",
+    "admin", "mcp_call_tool", "run_skill",
 }
 
 
@@ -203,6 +226,42 @@ class MemoryWrite(BaseModel):
     value: str
     facts: list[str] = Field(default_factory=list)
     concepts: list[str] = Field(default_factory=list)
+
+
+class TaskCreate(BaseModel):
+    text: str
+
+
+class TaskUpdate(BaseModel):
+    done: bool
+
+
+class ReminderCreate(BaseModel):
+    text: str
+    due_at: str
+
+
+class GistRequest(BaseModel):
+    memory_limit: int = 12
+    snippet_chars: int = 280
+    include_git: bool = True
+    inject: bool = False   # also persist as config context_gist (permanent injection)
+
+
+class ConfigWrite(BaseModel):
+    key: str
+    value: Any
+
+
+class SpeakRequest(BaseModel):
+    text: str
+
+
+class AdminRequest(BaseModel):
+    action: str = "status"
+    name: str | None = None
+    source: str = "crew-log"
+    lines: int = 40
 
 
 # ---------------------------------------------------------------------------
@@ -605,6 +664,15 @@ async def list_chats() -> list[dict]:
     return out
 
 
+@app.get("/api/chats/search")
+async def search_chats(q: str) -> list[dict]:
+    """Declared BEFORE /api/chats/{chat_id}: FastAPI resolves routes in
+    definition order, and "search" would otherwise be captured as a chat_id."""
+    if not q.strip():
+        return []
+    return await asyncio.to_thread(sessions.search_chats, q)
+
+
 @app.get("/api/chats/{chat_id}")
 async def get_chat(chat_id: str) -> dict:
     if not _valid_chat_id(chat_id):
@@ -648,6 +716,300 @@ async def add_memory(body: MemoryWrite) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# /api/vault  — Obsidian brain vault (assistant/vault.py)
+#
+# vault.py is deliberately dependency-free (files + git only), so every
+# endpoint here works even when Ollama and DeepSeek are both down.
+# ---------------------------------------------------------------------------
+@app.get("/api/vault/notes")
+async def vault_notes() -> dict:
+    notes = await asyncio.to_thread(vault.list_notes)
+    # mtime is a datetime; JSON-encode it and drop the heavy link list here
+    # (the note detail endpoint returns links for a single note).
+    return {
+        "vault_dir": str(vault.vault_dir()),
+        "count": len(notes),
+        "folders": sorted({n["folder"] for n in notes if n["folder"]}),
+        "notes": [
+            {
+                "rel": n["rel"], "folder": n["folder"], "name": n["name"],
+                "mtime": n["mtime"].isoformat(timespec="seconds"),
+                "chars": n["chars"], "lines": n["lines"],
+                "heading": n["heading"], "snippet": n["snippet"],
+                "links": n["links"],
+            }
+            for n in notes
+        ],
+    }
+
+
+@app.get("/api/vault/note")
+async def vault_note(rel: str) -> dict:
+    """Read one note. `rel` is a vault-relative posix path (?rel=notes/Foo.md)."""
+    body = await asyncio.to_thread(vault.read_note, rel)
+    if body is None:
+        raise HTTPException(404, f"Note not found: {rel}")
+    return {"rel": rel, "body": body}
+
+
+@app.get("/api/vault/search")
+async def vault_search(q: str) -> dict:
+    if not q.strip():
+        return {"query": q, "results": []}
+    hits = await asyncio.to_thread(vault.search_notes, q)
+    return {
+        "query": q,
+        "results": [
+            {"rel": h["rel"], "name": h["name"], "folder": h["folder"],
+             "heading": h.get("heading", ""), "match": h.get("match", "")}
+            for h in hits
+        ],
+    }
+
+
+@app.get("/api/vault/git")
+async def vault_git() -> dict:
+    info = await asyncio.to_thread(vault.git_info)
+    status = await asyncio.to_thread(vault.git_status_text)
+    return {**info, "status_text": status}
+
+
+@app.post("/api/vault/gist")
+async def vault_gist(body: GistRequest) -> dict:
+    """Build the context pack. With inject=true it is also persisted to
+    config as `context_gist`, which assistant/llm.py splices into every
+    system prompt (capped by max_gist_chars)."""
+    text = await asyncio.to_thread(
+        vault.build_gist, body.memory_limit, body.snippet_chars, body.include_git,
+    )
+    if body.inject:
+        await asyncio.to_thread(config_mod.set, "context_gist", text)
+    return {"gist": text, "chars": len(text), "injected": body.inject}
+
+
+@app.delete("/api/vault/gist")
+async def vault_gist_clear() -> dict:
+    """Stop injecting the context pack into the system prompt."""
+    await asyncio.to_thread(config_mod.set, "context_gist", "")
+    return {"ok": True, "injected": False}
+
+
+@app.post("/api/vault/sync")
+async def vault_sync() -> dict:
+    """Re-index the vault into the RAG store (assistant/rag.py)."""
+    msg = await asyncio.to_thread(rag.sync_vault)
+    return {"ok": True, "message": msg}
+
+
+@app.get("/api/vault/graph")
+async def vault_graph_data() -> dict:
+    """Wiki-link graph (nodes + links) for the vault. This is the simple
+    link graph from assistant/vault_graph.py — distinct from the Graphiti/
+    Neo4j semantic graph exposed via graphiti_mcp_server.py."""
+    from assistant import vault_graph as _vg  # lazy: only needed for this view
+    return await asyncio.to_thread(_vg.build_graph)
+
+
+# ---------------------------------------------------------------------------
+# /api/tasks  (assistant/todo.py)
+# ---------------------------------------------------------------------------
+@app.get("/api/tasks")
+async def get_tasks() -> list[dict]:
+    return await asyncio.to_thread(todo.get_tasks)
+
+
+@app.post("/api/tasks")
+async def create_task(body: TaskCreate) -> dict:
+    if not body.text.strip():
+        raise HTTPException(400, "text must not be empty")
+    msg = await asyncio.to_thread(todo.add_task, body.text.strip())
+    return {"ok": True, "message": msg, "tasks": todo.get_tasks()}
+
+
+@app.patch("/api/tasks/{task_id}")
+async def update_task(task_id: int, body: TaskUpdate) -> dict:
+    msg = await asyncio.to_thread(todo.set_task_done, task_id, body.done)
+    return {"ok": True, "message": msg, "tasks": todo.get_tasks()}
+
+
+@app.delete("/api/tasks/{task_id}")
+async def remove_task(task_id: int) -> dict:
+    msg = await asyncio.to_thread(todo.delete_task, task_id)
+    return {"ok": True, "message": msg, "tasks": todo.get_tasks()}
+
+
+# ---------------------------------------------------------------------------
+# /api/reminders  (assistant/reminders.py)
+# ---------------------------------------------------------------------------
+@app.get("/api/reminders")
+async def get_reminders() -> dict:
+    all_r = await asyncio.to_thread(reminders.get_reminders)
+    due = await asyncio.to_thread(reminders.due_reminders)
+    return {"reminders": all_r, "due": due}
+
+
+@app.post("/api/reminders")
+async def create_reminder(body: ReminderCreate) -> dict:
+    if not body.text.strip():
+        raise HTTPException(400, "text must not be empty")
+    msg = await asyncio.to_thread(reminders.remind_me, body.text.strip(), body.due_at)
+    return {"ok": True, "message": msg, "reminders": reminders.get_reminders()}
+
+
+@app.delete("/api/reminders/{reminder_id}")
+async def remove_reminder(reminder_id: int) -> dict:
+    msg = await asyncio.to_thread(reminders.cancel_reminder, reminder_id)
+    return {"ok": True, "message": msg, "reminders": reminders.get_reminders()}
+
+
+# ---------------------------------------------------------------------------
+# /api/backups  (assistant/backup.py)
+# ---------------------------------------------------------------------------
+@app.get("/api/backups")
+async def get_backups() -> dict:
+    return {
+        "location": backup.backup_location(),
+        "backups": await asyncio.to_thread(backup.list_backups),
+        "latest": await asyncio.to_thread(backup.latest_backup_time),
+        "size_bytes": await asyncio.to_thread(backup.size_bytes),
+    }
+
+
+@app.post("/api/backups")
+async def create_backup() -> dict:
+    msg = await asyncio.to_thread(backup.create_backup)
+    return {"ok": True, "message": msg, "backups": backup.list_backups()}
+
+
+# ---------------------------------------------------------------------------
+# /api/documents  — RAG store (assistant/rag.py)
+# ---------------------------------------------------------------------------
+@app.get("/api/documents")
+async def get_documents() -> dict:
+    docs = await asyncio.to_thread(rag.list_documents)
+    return {
+        "documents": [d for d in docs if not d.startswith(rag.VAULT_PREFIX)],
+        "vault_notes": len([d for d in docs if d.startswith(rag.VAULT_PREFIX)]),
+        "knowledge": len([d for d in docs if d.startswith("knowledge:")]),
+    }
+
+
+@app.post("/api/documents")
+async def upload_document(file: UploadFile = File(...)) -> dict:
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "empty file")
+    msg = await asyncio.to_thread(rag.ingest, file.filename or "upload.txt", raw)
+    return {"ok": True, "message": msg}
+
+
+@app.delete("/api/documents/{filename:path}")
+async def delete_document(filename: str) -> dict:
+    msg = await asyncio.to_thread(rag.remove_document, filename)
+    return {"ok": True, "message": msg}
+
+
+@app.post("/api/knowledge/sync")
+async def sync_knowledge() -> dict:
+    msg = await asyncio.to_thread(rag.sync_knowledge)
+    return {"ok": True, "message": msg}
+
+
+# ---------------------------------------------------------------------------
+# /api/voice  (assistant/voice.py — faster-whisper + pyttsx3, both local)
+#
+# Heavy optional deps: a missing/broken whisper or TTS install must return a
+# clean 503 rather than a 500 traceback, since the rest of KEN works fine
+# without voice.
+# ---------------------------------------------------------------------------
+@app.post("/api/voice/transcribe")
+async def voice_transcribe(file: UploadFile = File(...)) -> dict:
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "empty audio")
+    try:
+        from assistant import voice
+        text = await asyncio.to_thread(voice.transcribe, raw)
+    except Exception as e:  # noqa: BLE001 - optional dependency surface
+        raise HTTPException(503, f"Transcription unavailable: {e}")
+    return {"text": text}
+
+
+@app.post("/api/voice/speak")
+async def voice_speak(body: SpeakRequest):
+    if not body.text.strip():
+        raise HTTPException(400, "text must not be empty")
+    try:
+        from assistant import voice
+        wav = await asyncio.to_thread(voice.speak, body.text)
+    except Exception as e:  # noqa: BLE001 - optional dependency surface
+        raise HTTPException(503, f"Speech synthesis unavailable: {e}")
+    from fastapi.responses import Response
+    return Response(content=wav, media_type="audio/wav")
+
+
+# ---------------------------------------------------------------------------
+# /api/admin  — fleet administration (assistant/admin.py)
+#
+# Shells out to docker/python and reads logs. Local-only server, but the
+# action is still whitelisted by admin.py's own dispatch (unknown actions
+# return a usage string rather than executing anything).
+# ---------------------------------------------------------------------------
+@app.get("/api/admin/status")
+async def admin_status() -> dict:
+    return {"status": await asyncio.to_thread(admin_mod.admin_status)}
+
+
+@app.post("/api/admin")
+async def admin_action(body: AdminRequest) -> dict:
+    params = {"action": body.action, "name": body.name,
+              "source": body.source, "lines": body.lines}
+    out = await asyncio.to_thread(admin_mod.admin, params)
+    return {"action": body.action, "output": out}
+
+
+# ---------------------------------------------------------------------------
+# /api/config  — the same data/config.json the Settings page writes
+# ---------------------------------------------------------------------------
+@app.get("/api/config")
+async def get_config() -> dict:
+    cfg = await asyncio.to_thread(config_mod.all)
+    # context_gist can be thousands of chars; send its size, not its body
+    # (the full text is available from /api/vault/gist).
+    gist = cfg.get("context_gist") or ""
+    return {**cfg, "context_gist": "", "context_gist_chars": len(gist)}
+
+
+@app.post("/api/config")
+async def set_config(body: ConfigWrite) -> dict:
+    await asyncio.to_thread(config_mod.set, body.key, body.value)
+    return {"ok": True, "key": body.key, "value": config_mod.get(body.key)}
+
+
+# ---------------------------------------------------------------------------
+# Chat markdown export (assistant/sessions.py).
+# NOTE: /api/chats/search is declared next to /api/chats above — FastAPI
+# matches routes in definition order, so a literal path that could also match
+# /api/chats/{chat_id} must be registered before it or it never fires.
+# ---------------------------------------------------------------------------
+@app.get("/api/chats/{chat_id}/export")
+async def export_chat(chat_id: str):
+    if not _valid_chat_id(chat_id):
+        raise HTTPException(404, "Chat not found")
+    try:
+        chat = sessions.load(chat_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "Chat not found")
+    md = sessions.export_markdown(chat)
+    title = (chat.get("title") or "chat")[:40]
+    from fastapi.responses import Response
+    return Response(
+        content=md, media_type="text/markdown",
+        headers={"Content-Disposition": f'attachment; filename="{title}.md"'},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Root — serve the KEN web UI (ken.html) when present, else API info JSON.
 # ---------------------------------------------------------------------------
 @app.get("/")
@@ -662,8 +1024,20 @@ async def root():
         "endpoints": [
             "GET  /api/health", "GET  /api/tools", "POST /api/tools/toggle",
             "POST /api/chat (SSE)", "POST /api/deep-analysis (SSE)",
-            "GET  /api/chats", "GET|DELETE /api/chats/{id}",
+            "GET  /api/chats", "GET  /api/chats/search", "GET|DELETE /api/chats/{id}",
+            "GET  /api/chats/{id}/export",
             "GET  /api/memory", "POST /api/memory",
+            "GET  /api/vault/notes", "GET  /api/vault/note", "GET  /api/vault/search",
+            "GET  /api/vault/git", "GET  /api/vault/graph",
+            "POST|DELETE /api/vault/gist", "POST /api/vault/sync",
+            "GET|POST /api/tasks", "PATCH|DELETE /api/tasks/{id}",
+            "GET|POST /api/reminders", "DELETE /api/reminders/{id}",
+            "GET|POST /api/backups",
+            "GET|POST /api/documents", "DELETE /api/documents/{name}",
+            "POST /api/knowledge/sync",
+            "POST /api/voice/transcribe", "POST /api/voice/speak",
+            "GET  /api/admin/status", "POST /api/admin",
+            "GET|POST /api/config",
         ],
         "docs": "/docs",
     }

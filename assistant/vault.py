@@ -289,7 +289,11 @@ def _wikilinks(text: str) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for m in _WIKILINK_RE.finditer(text):
-        target = m.group(1).strip()
+        # Collapse internal whitespace, not just the ends: a [[link]] that wraps
+        # across a line break captures the newline, and "Foo\nbar" would never
+        # match the note named "Foo bar" — which silently turns a real link into
+        # a phantom unresolved node in the graph. Obsidian normalizes the same way.
+        target = " ".join(m.group(1).split())
         if target and target not in seen:
             seen.add(target)
             out.append(target)

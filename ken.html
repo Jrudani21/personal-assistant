@@ -193,6 +193,74 @@
   .da-guard { display: flex; gap: 18px; flex-wrap: wrap; font: 300 11px var(--mono); color: var(--muted); margin-top: 10px; }
   .da-guard b { color: var(--accent); font-weight: 400; }
 
+  /* ---------- generic list rows (tasks, reminders, docs, backups) ---------- */
+  .row-item { display: flex; align-items: center; gap: 12px; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 11px 14px; }
+  .row-item .grow { flex: 1; min-width: 0; }
+  .row-item .main { font: 300 14px/1.5 var(--body); color: rgba(242,233,238,.9); word-break: break-word; }
+  .row-item .sub2 { font: 300 10.5px var(--mono); color: var(--muted2); margin-top: 4px; }
+  .row-item .done { text-decoration: line-through; color: var(--muted2); }
+  .row-item .del { color: var(--muted2); cursor: pointer; padding: 2px 7px; border-radius: 4px; flex: none; }
+  .row-item .del:hover { color: var(--err); }
+  .row-item input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex: none; }
+  .empty-note { color: var(--muted); font: 300 12px var(--body); padding: 10px 2px; }
+
+  .add-row { display: flex; gap: 8px; padding: 14px 26px 0; }
+  .add-row input, .add-row textarea {
+    flex: 1; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px;
+    color: var(--ink); font: 300 13px var(--body); padding: 9px 12px; outline: none;
+  }
+  .add-row input:focus { border-color: var(--border); }
+  .add-row input[type=datetime-local] { flex: 0 0 200px; color-scheme: dark; }
+  .btn {
+    font: 400 11px var(--mono); letter-spacing: .06em; color: var(--bg); background: var(--accent);
+    border: none; border-radius: 8px; padding: 9px 15px; cursor: pointer; flex: none;
+  }
+  .btn:hover { opacity: .88; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
+  .btn.ghost:hover { color: var(--ink); border-color: var(--border); }
+
+  /* ---------- sub-tabs inside a panel ---------- */
+  .subtabs { display: flex; gap: 6px; padding: 14px 26px 0; flex-wrap: wrap; }
+  .subtabs span { font: 300 11px var(--mono); letter-spacing: .05em; color: var(--muted); border: 1px solid var(--border2); border-radius: 14px; padding: 6px 13px; cursor: pointer; }
+  .subtabs span:hover { color: var(--ink); }
+  .subtabs span.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .subview { display: none; flex-direction: column; gap: 10px; }
+  .subview.active { display: flex; }
+
+  /* ---------- brain / vault ---------- */
+  .vault-layout { display: grid; grid-template-columns: 270px 1fr; gap: 14px; min-height: 320px; }
+  .vault-list { display: flex; flex-direction: column; gap: 3px; max-height: 52vh; overflow-y: auto; padding-right: 4px; }
+  .vault-note { padding: 8px 11px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
+  .vault-note:hover { background: var(--panel3); }
+  .vault-note.active { background: var(--panel3); border-color: var(--border); }
+  .vault-note .nm { font: 300 12.5px var(--body); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vault-note .fld { font: 300 9.5px var(--mono); letter-spacing: .06em; color: var(--muted2); margin-top: 3px; text-transform: uppercase; }
+  .vault-reader { background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 16px 18px; max-height: 52vh; overflow-y: auto; }
+  .vault-reader pre { font: 300 12.5px/1.75 var(--mono); color: rgba(242,233,238,.85); white-space: pre-wrap; word-break: break-word; }
+  .wikilink { color: var(--accent); border-bottom: 1px dotted var(--accent); cursor: pointer; }
+  .wikilink.missing { color: var(--pink); border-bottom-style: dashed; cursor: help; }
+  .gist-box { font: 300 12px/1.7 var(--mono); color: rgba(242,233,238,.82); background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 14px 16px; max-height: 46vh; overflow-y: auto; white-space: pre-wrap; }
+  .git-line { font: 300 11px var(--mono); color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
+  .git-line b { color: var(--accent); font-weight: 400; }
+  #graphCanvas { width: 100%; height: 52vh; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; }
+
+  /* ---------- fleet ---------- */
+  .fleet-out { font: 300 12px/1.7 var(--mono); color: rgba(242,233,238,.85); background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 14px 16px; max-height: 50vh; overflow: auto; white-space: pre-wrap; }
+  .fleet-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 26px 0; }
+
+  .rec-btn { font: 300 15px; background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 2px 4px; flex: none; }
+  .rec-btn:hover { color: var(--ink); }
+  .rec-btn.recording { color: var(--pink); animation: ken-blink 1.1s ease-in-out infinite; }
+
+  .toast {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 20px; font: 300 13px var(--body); color: var(--ink);
+    box-shadow: 0 20px 60px rgba(0,0,0,.6); z-index: 90; animation: ken-fade .2s ease;
+    max-width: 80vw;
+  }
+
   @media (max-width: 720px) {
     header.topbar { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
     .hud { display: none; }
@@ -200,6 +268,8 @@
     .composer-wrap { padding: 12px 5vw 16px; }
     .mem-entry { grid-template-columns: 1fr; }
     .mem-entry .when { text-align: left; }
+    .vault-layout { grid-template-columns: 1fr; }
+    .vault-list { max-height: 26vh; }
   }
 </style>
 </head>
@@ -214,8 +284,12 @@
     <div class="spacer"></div>
     <button class="navbtn" id="newChatBtn">+ New</button>
     <button class="navbtn" id="chatsBtn">Chats</button>
+    <button class="navbtn" id="brainBtn">Brain</button>
     <button class="navbtn" id="memBtn">Memory</button>
+    <button class="navbtn" id="tasksBtn">Tasks</button>
+    <button class="navbtn" id="docsBtn">Docs</button>
     <button class="navbtn" id="daBtn">Deep analysis</button>
+    <button class="navbtn" id="fleetBtn">Fleet</button>
     <button class="navbtn" id="settingsBtn">Settings</button>
   </header>
 
@@ -241,6 +315,7 @@
       </div>
       <div class="composer">
         <textarea id="input" rows="1" placeholder="Ask KEN anything… (Enter to send, Shift+Enter for newline)"></textarea>
+        <button class="rec-btn" id="recBtn" title="Record a voice message (local Whisper)">🎙</button>
         <span class="send-hint" id="sendHint">⏎ SEND</span>
       </div>
     </div>
@@ -300,6 +375,123 @@
       <button id="daRunBtn">Run</button>
     </div>
     <div class="body" id="daBody"></div>
+  </div>
+</div>
+
+<!-- ---------- Brain: vault explorer / context pack / link graph ---------- -->
+<div class="scrim" id="brainScrim">
+  <div class="panel" style="width:min(1040px,95vw)">
+    <header>
+      <div><div class="title">Brain</div><div class="sub" id="brainSub">obsidian vault · local files + git only</div></div>
+      <span class="esc" data-close="brainScrim">ESC</span>
+    </header>
+    <div class="subtabs" id="brainTabs">
+      <span class="active" data-sub="vault">📚 Vault</span>
+      <span data-sub="gist">📦 Context pack</span>
+      <span data-sub="graph">🕸 Link graph</span>
+    </div>
+    <div class="add-row" id="vaultSearchRow">
+      <input id="vaultSearch" placeholder="Search notes (full text)…">
+      <button class="btn ghost" id="vaultSyncBtn" title="Re-index the vault into the RAG store">Sync to RAG</button>
+    </div>
+    <div class="body">
+      <div class="subview active" id="subVault">
+        <div class="git-line" id="vaultGit"></div>
+        <div class="vault-layout">
+          <div class="vault-list" id="vaultList"></div>
+          <div class="vault-reader" id="vaultReader"><div class="empty-note">Select a note to read it.</div></div>
+        </div>
+      </div>
+      <div class="subview" id="subGist">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn" id="gistBuildBtn">Build context pack</button>
+          <button class="btn ghost" id="gistCopyBtn">Copy</button>
+          <button class="btn ghost" id="gistDownloadBtn">Download .md</button>
+          <button class="btn ghost" id="gistInjectBtn" title="Persist into every system prompt">Inject into prompt</button>
+          <button class="btn ghost" id="gistClearBtn">Stop injecting</button>
+          <span id="gistState" style="font:300 11px var(--mono);color:var(--muted)"></span>
+        </div>
+        <div class="gist-box" id="gistBox">Nothing built yet — the pack bundles memory + vault home, MOCs, active projects, conventions, recent notes and inbox into one paste-ready blob.</div>
+      </div>
+      <div class="subview" id="subGraph">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn ghost" id="graphReloadBtn">Reload graph</button>
+          <span id="graphStat" style="font:300 11px var(--mono);color:var(--muted)"></span>
+        </div>
+        <canvas id="graphCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Tasks / reminders / backups ---------- -->
+<div class="scrim" id="tasksScrim">
+  <div class="panel">
+    <header>
+      <div><div class="title">Tasks</div><div class="sub" id="tasksSub">to-do · reminders · local backups</div></div>
+      <span class="esc" data-close="tasksScrim">ESC</span>
+    </header>
+    <div class="subtabs" id="tasksTabs">
+      <span class="active" data-sub="todo">✓ To-do</span>
+      <span data-sub="rem">⏰ Reminders</span>
+      <span data-sub="bk">💾 Backups</span>
+    </div>
+    <div class="add-row" id="taskAddRow">
+      <input id="taskInput" placeholder="New task…">
+      <button class="btn" id="taskAddBtn">Add</button>
+    </div>
+    <div class="add-row" id="remAddRow" style="display:none">
+      <input id="remInput" placeholder="Remind me to…">
+      <input id="remWhen" type="datetime-local">
+      <button class="btn" id="remAddBtn">Add</button>
+    </div>
+    <div class="body">
+      <div class="subview active" id="subTodo"></div>
+      <div class="subview" id="subRem"></div>
+      <div class="subview" id="subBk">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn" id="backupNowBtn">Back up data now</button>
+          <span id="backupInfo" style="font:300 11px var(--mono);color:var(--muted)"></span>
+        </div>
+        <div id="backupList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- Documents (RAG) ---------- -->
+<div class="scrim" id="docsScrim">
+  <div class="panel">
+    <header>
+      <div><div class="title">Documents</div><div class="sub" id="docsSub">hybrid BM25 + cosine RAG store</div></div>
+      <span class="esc" data-close="docsScrim">ESC</span>
+    </header>
+    <div class="add-row">
+      <input id="docFile" type="file" accept=".txt,.md,.pdf" multiple style="padding:7px 10px">
+      <button class="btn" id="docUploadBtn">Upload</button>
+      <button class="btn ghost" id="knowledgeSyncBtn" title="Index the nightly-learn knowledge base">Sync knowledge</button>
+    </div>
+    <div class="body" id="docsBody"></div>
+  </div>
+</div>
+
+<!-- ---------- Fleet admin ---------- -->
+<div class="scrim" id="fleetScrim">
+  <div class="panel" style="width:min(980px,94vw)">
+    <header>
+      <div><div class="title">Fleet</div><div class="sub">ollama · docker · system crew · logs</div></div>
+      <span class="esc" data-close="fleetScrim">ESC</span>
+    </header>
+    <div class="fleet-actions">
+      <button class="btn" data-admin="status">Status</button>
+      <button class="btn ghost" data-admin="docker">Containers</button>
+      <button class="btn ghost" data-admin="crew_sweep">Crew sweep</button>
+      <button class="btn ghost" data-admin="log" data-src="crew-log">Crew log</button>
+      <button class="btn ghost" data-admin="log" data-src="learn-log">Learn log</button>
+      <button class="btn ghost" data-admin="log" data-src="system-monitor">Monitor log</button>
+      <button class="btn ghost" data-admin="open_webui">Start Open WebUI</button>
+    </div>
+    <div class="body"><div class="fleet-out" id="fleetOut">Pick an action above.</div></div>
   </div>
 </div>
 
@@ -609,13 +801,383 @@ function handleDABlock(block) {
   body.scrollTop = body.scrollHeight;
 }
 
+/* ---------- toast ---------- */
+let _toastTimer = null;
+function toast(msg) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.remove(), 3200);
+}
+
+/* ---------- sub-tab helper (shared by Brain and Tasks panels) ---------- */
+function wireSubtabs(tabsId, map, onSwitch) {
+  $(tabsId).querySelectorAll("span").forEach(tab => tab.onclick = () => {
+    $(tabsId).querySelectorAll("span").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    for (const [key, viewId] of Object.entries(map)) {
+      $(viewId).classList.toggle("active", key === tab.dataset.sub);
+    }
+    if (onSwitch) onSwitch(tab.dataset.sub);
+  });
+}
+
+/* ---------- brain / vault ---------- */
+const brain = { notes: [], names: new Set(), current: null, gist: "" };
+
+async function loadVault() {
+  try {
+    const d = await api("/api/vault/notes");
+    brain.notes = d.notes;
+    brain.names = new Set(d.notes.map(n => n.name));
+    $("brainSub").textContent = `${d.count} NOTES · ${d.vault_dir}`;
+    renderVaultList(d.notes);
+    const g = await api("/api/vault/git");
+    $("vaultGit").innerHTML = g.ok
+      ? `<span>branch <b>${esc(g.branch)}</b></span><span>dirty <b>${g.dirty}</b></span><span>${esc(g.last_commit || "")}</span>`
+      : `<span>git: ${esc(g.error || "unavailable")}</span>`;
+  } catch (e) { toast("Vault: " + e.message); }
+}
+function renderVaultList(notes) {
+  $("vaultList").innerHTML = notes.length ? notes.map(n => `
+    <div class="vault-note ${n.rel === brain.current ? "active" : ""}" data-rel="${esc(n.rel)}">
+      <div class="nm">${esc(n.name)}</div>
+      <div class="fld">${esc(n.folder || "root")} · ${n.lines}L</div>
+    </div>`).join("") : `<div class="empty-note">No notes found.</div>`;
+  $("vaultList").querySelectorAll(".vault-note").forEach(el => el.onclick = () => openNote(el.dataset.rel));
+}
+async function openNote(rel) {
+  brain.current = rel;
+  renderVaultList(brain.notes);
+  try {
+    const d = await api(`/api/vault/note?rel=${encodeURIComponent(rel)}`);
+    // Render [[wiki links]] as clickable chips; unresolved ones flagged
+    // (the vault's Conventions call these "hollow nodes").
+    const html = esc(d.body).replace(/\[\[([^\]|#]+?)(#[^\]|]*)?(\|[^\]]*)?\]\]/g, (m, name) => {
+      // Collapse internal whitespace: a link wrapped across a line break would
+      // otherwise never match its note and render as a false "missing" link.
+      const clean = name.replace(/\s+/g, " ").trim();
+      const target = brain.notes.find(n => n.name === clean);
+      return target
+        ? `<span class="wikilink" data-goto="${esc(target.rel)}">${esc(clean)}</span>`
+        : `<span class="wikilink missing" title="No note with this name yet">${esc(clean)}</span>`;
+    });
+    $("vaultReader").innerHTML = `<pre>${html}</pre>`;
+    $("vaultReader").querySelectorAll("[data-goto]").forEach(a => a.onclick = () => openNote(a.dataset.goto));
+    $("vaultReader").scrollTop = 0;
+  } catch (e) { $("vaultReader").innerHTML = `<div class="msg error">${esc(e.message)}</div>`; }
+}
+let _vaultSearchTimer = null;
+$("vaultSearch").addEventListener("input", () => {
+  clearTimeout(_vaultSearchTimer);
+  _vaultSearchTimer = setTimeout(async () => {
+    const q = $("vaultSearch").value.trim();
+    if (!q) return renderVaultList(brain.notes);
+    try {
+      const d = await api(`/api/vault/search?q=${encodeURIComponent(q)}`);
+      const hits = d.results.map(r => brain.notes.find(n => n.rel === r.rel)).filter(Boolean);
+      renderVaultList(hits);
+      if (!hits.length) $("vaultList").innerHTML = `<div class="empty-note">No matches for "${esc(q)}".</div>`;
+    } catch (e) { toast("Search: " + e.message); }
+  }, 220);
+});
+$("vaultSyncBtn").onclick = async () => {
+  $("vaultSyncBtn").disabled = true;
+  try { toast((await api("/api/vault/sync", { method: "POST" })).message); }
+  catch (e) { toast("Sync failed: " + e.message); }
+  finally { $("vaultSyncBtn").disabled = false; }
+};
+
+/* ---------- context pack (gist) ---------- */
+async function buildGist(inject = false) {
+  $("gistBuildBtn").disabled = true;
+  $("gistBox").textContent = "Building…";
+  try {
+    const d = await api("/api/vault/gist", { method: "POST", body: JSON.stringify({ inject }) });
+    brain.gist = d.gist;
+    $("gistBox").textContent = d.gist;
+    $("gistState").textContent = `${d.chars} chars${d.injected ? " · INJECTED" : ""}`;
+    if (inject) toast("Context pack injected into every system prompt.");
+  } catch (e) { $("gistBox").textContent = ""; toast("Gist: " + e.message); }
+  finally { $("gistBuildBtn").disabled = false; }
+}
+$("gistBuildBtn").onclick = () => buildGist(false);
+$("gistInjectBtn").onclick = () => buildGist(true);
+$("gistClearBtn").onclick = async () => {
+  try { await api("/api/vault/gist", { method: "DELETE" }); $("gistState").textContent = "not injected"; toast("Stopped injecting the context pack."); }
+  catch (e) { toast(e.message); }
+};
+$("gistCopyBtn").onclick = async () => {
+  if (!brain.gist) return toast("Build the pack first.");
+  try { await navigator.clipboard.writeText(brain.gist); toast("Copied to clipboard."); }
+  catch (e) { toast("Clipboard blocked — select the text and copy manually."); }
+};
+$("gistDownloadBtn").onclick = () => {
+  if (!brain.gist) return toast("Build the pack first.");
+  const url = URL.createObjectURL(new Blob([brain.gist], { type: "text/markdown" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = `context-pack-${new Date().toISOString().slice(0,10)}.md`;
+  a.click(); URL.revokeObjectURL(url);
+};
+
+/* ---------- link graph (canvas, no external lib) ---------- */
+let graphData = null, graphRaf = null;
+async function loadGraph() {
+  try {
+    graphData = await api("/api/vault/graph");
+    $("graphStat").textContent = `${graphData.nodes.length} notes · ${graphData.links.length} links`;
+    layoutGraph();
+  } catch (e) { toast("Graph: " + e.message); }
+}
+function layoutGraph() {
+  const cv = $("graphCanvas");
+  const rect = cv.getBoundingClientRect();
+  cv.width = rect.width * devicePixelRatio; cv.height = rect.height * devicePixelRatio;
+  const W = rect.width, H = rect.height;
+  const idx = new Map(graphData.nodes.map((n, i) => [n.id, i]));
+  // Seed on a circle, then relax with simple spring/repulsion forces.
+  const P = graphData.nodes.map((n, i) => {
+    const a = (i / graphData.nodes.length) * Math.PI * 2;
+    return { x: W/2 + Math.cos(a) * Math.min(W,H) * 0.32, y: H/2 + Math.sin(a) * Math.min(W,H) * 0.32, vx: 0, vy: 0 };
+  });
+  const edges = graphData.links.map(l => [idx.get(l.source), idx.get(l.target)]).filter(([a,b]) => a != null && b != null);
+  for (let step = 0; step < 260; step++) {
+    for (let i = 0; i < P.length; i++) {
+      for (let j = i + 1; j < P.length; j++) {
+        let dx = P[j].x - P[i].x, dy = P[j].y - P[i].y;
+        let d2 = dx*dx + dy*dy || 0.01, d = Math.sqrt(d2);
+        const rep = 1400 / d2;
+        const ux = dx/d, uy = dy/d;
+        P[i].vx -= ux*rep; P[i].vy -= uy*rep;
+        P[j].vx += ux*rep; P[j].vy += uy*rep;
+      }
+    }
+    for (const [a, b] of edges) {
+      let dx = P[b].x - P[a].x, dy = P[b].y - P[a].y;
+      const d = Math.sqrt(dx*dx + dy*dy) || 0.01;
+      const f = (d - 90) * 0.012;
+      const ux = dx/d, uy = dy/d;
+      P[a].vx += ux*f; P[a].vy += uy*f;
+      P[b].vx -= ux*f; P[b].vy -= uy*f;
+    }
+    for (const p of P) {
+      p.x += (p.vx *= 0.82); p.y += (p.vy *= 0.82);
+      p.x = Math.max(30, Math.min(W - 30, p.x));
+      p.y = Math.max(24, Math.min(H - 24, p.y));
+    }
+  }
+  drawGraph(P, edges, W, H);
+  cv.onclick = (e) => {
+    const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    let best = null, bestD = 18;
+    P.forEach((p, i) => { const d = Math.hypot(p.x - mx, p.y - my); if (d < bestD) { bestD = d; best = i; } });
+    if (best != null) {
+      const node = graphData.nodes[best];
+      $("brainTabs").querySelector('[data-sub="vault"]').click();
+      openNote(node.id);
+    }
+  };
+}
+function drawGraph(P, edges, W, H) {
+  const cv = $("graphCanvas"), ctx = cv.getContext("2d");
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = "rgba(76,201,240,.22)"; ctx.lineWidth = 1;
+  for (const [a, b] of edges) { ctx.beginPath(); ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); ctx.stroke(); }
+  graphData.nodes.forEach((n, i) => {
+    const deg = edges.filter(([a,b]) => a === i || b === i).length;
+    const r = 4 + Math.min(7, deg * 1.1);
+    ctx.beginPath(); ctx.arc(P[i].x, P[i].y, r, 0, Math.PI*2);
+    ctx.fillStyle = n.color || "#4CC9F0"; ctx.fill();
+    ctx.font = "300 10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = "rgba(242,233,238,.62)"; ctx.textAlign = "center";
+    ctx.fillText(n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name, P[i].x, P[i].y + r + 11);
+  });
+}
+$("graphReloadBtn").onclick = loadGraph;
+
+/* ---------- tasks ---------- */
+async function loadTasks() {
+  try { renderTasks(await api("/api/tasks")); }
+  catch (e) { toast("Tasks: " + e.message); }
+}
+function renderTasks(tasks) {
+  $("subTodo").innerHTML = tasks.length ? tasks.map(t => `
+    <div class="row-item">
+      <input type="checkbox" data-task="${t.id}" ${t.done ? "checked" : ""}>
+      <div class="grow"><div class="main ${t.done ? "done" : ""}">${esc(t.text)}</div></div>
+      <span class="del" data-deltask="${t.id}">✕</span>
+    </div>`).join("") : `<div class="empty-note">No tasks yet.</div>`;
+  $("subTodo").querySelectorAll("[data-task]").forEach(cb => cb.onchange = async () => {
+    renderTasks((await api(`/api/tasks/${cb.dataset.task}`, { method: "PATCH", body: JSON.stringify({ done: cb.checked }) })).tasks);
+  });
+  $("subTodo").querySelectorAll("[data-deltask]").forEach(d => d.onclick = async () => {
+    renderTasks((await api(`/api/tasks/${d.dataset.deltask}`, { method: "DELETE" })).tasks);
+  });
+}
+async function addTask() {
+  const text = $("taskInput").value.trim();
+  if (!text) return;
+  $("taskInput").value = "";
+  try { renderTasks((await api("/api/tasks", { method: "POST", body: JSON.stringify({ text }) })).tasks); }
+  catch (e) { toast(e.message); }
+}
+$("taskAddBtn").onclick = addTask;
+$("taskInput").addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
+
+/* ---------- reminders ---------- */
+async function loadReminders() {
+  try { renderReminders(await api("/api/reminders")); }
+  catch (e) { toast("Reminders: " + e.message); }
+}
+function renderReminders(d) {
+  const pending = (d.reminders || []).filter(r => !r.fired);
+  $("subRem").innerHTML = (pending.length ? pending.map(r => `
+    <div class="row-item">
+      <div class="grow"><div class="main">${esc(r.text)}</div><div class="sub2">due ${esc(r.due_at)}</div></div>
+      <span class="del" data-delrem="${r.id}">✕</span>
+    </div>`).join("") : `<div class="empty-note">No pending reminders.</div>`)
+    + `<div class="empty-note" style="margin-top:8px">⚠️ Reminders only fire while something is polling them — run <code>python assistant/reminder_daemon.py --install</code> for 24/7 toasts.</div>`;
+  $("subRem").querySelectorAll("[data-delrem]").forEach(x => x.onclick = async () => {
+    renderReminders(await api(`/api/reminders/${x.dataset.delrem}`, { method: "DELETE" }));
+  });
+}
+$("remAddBtn").onclick = async () => {
+  const text = $("remInput").value.trim(), when = $("remWhen").value;
+  if (!text || !when) return toast("Need both a reminder and a time.");
+  try {
+    // <input type=datetime-local> gives "YYYY-MM-DDTHH:MM"; reminders.py wants a space.
+    const r = await api("/api/reminders", { method: "POST", body: JSON.stringify({ text, due_at: when.replace("T", " ") }) });
+    $("remInput").value = "";
+    renderReminders(r);
+  } catch (e) { toast(e.message); }
+};
+
+/* ---------- backups ---------- */
+async function loadBackups() {
+  try {
+    const d = await api("/api/backups");
+    $("backupInfo").textContent = `${d.backups.length} snapshots · ${(d.size_bytes/1048576).toFixed(1)} MB · ${d.location}`;
+    $("backupList").innerHTML = d.backups.length
+      ? d.backups.map(b => `<div class="row-item"><div class="grow"><div class="main">${esc(b)}</div></div></div>`).join("")
+      : `<div class="empty-note">No backups yet.</div>`;
+  } catch (e) { toast("Backups: " + e.message); }
+}
+$("backupNowBtn").onclick = async () => {
+  $("backupNowBtn").disabled = true;
+  try { toast((await api("/api/backups", { method: "POST" })).message); await loadBackups(); }
+  catch (e) { toast(e.message); }
+  finally { $("backupNowBtn").disabled = false; }
+};
+
+/* ---------- documents ---------- */
+async function loadDocs() {
+  try {
+    const d = await api("/api/documents");
+    $("docsSub").textContent = `${d.documents.length} UPLOADED · ${d.vault_notes} VAULT · ${d.knowledge} KNOWLEDGE`;
+    $("docsBody").innerHTML = d.documents.length ? d.documents.map(name => `
+      <div class="row-item">
+        <div class="grow"><div class="main">${esc(name)}</div></div>
+        <span class="del" data-deldoc="${esc(name)}">✕</span>
+      </div>`).join("") : `<div class="empty-note">No uploaded documents. Vault notes are managed from the Brain panel.</div>`;
+    $("docsBody").querySelectorAll("[data-deldoc]").forEach(x => x.onclick = async () => {
+      if (!confirm(`Remove "${x.dataset.deldoc}" from the RAG store?`)) return;
+      await api(`/api/documents/${encodeURIComponent(x.dataset.deldoc)}`, { method: "DELETE" });
+      loadDocs();
+    });
+  } catch (e) { toast("Docs: " + e.message); }
+}
+$("docUploadBtn").onclick = async () => {
+  const files = $("docFile").files;
+  if (!files.length) return toast("Pick a file first.");
+  $("docUploadBtn").disabled = true;
+  try {
+    for (const f of files) {
+      const fd = new FormData(); fd.append("file", f);
+      const res = await fetch("/api/documents", { method: "POST", body: fd });
+      if (!res.ok) throw new Error(`${f.name}: ${res.status}`);
+      toast((await res.json()).message);
+    }
+    $("docFile").value = "";
+    loadDocs();
+  } catch (e) { toast("Upload: " + e.message); }
+  finally { $("docUploadBtn").disabled = false; }
+};
+$("knowledgeSyncBtn").onclick = async () => {
+  $("knowledgeSyncBtn").disabled = true;
+  try { toast((await api("/api/knowledge/sync", { method: "POST" })).message); loadDocs(); }
+  catch (e) { toast(e.message); }
+  finally { $("knowledgeSyncBtn").disabled = false; }
+};
+
+/* ---------- fleet admin ---------- */
+document.querySelectorAll("[data-admin]").forEach(btn => btn.onclick = async () => {
+  const action = btn.dataset.admin;
+  $("fleetOut").textContent = "Running…";
+  try {
+    const d = await api("/api/admin", { method: "POST", body: JSON.stringify({ action, source: btn.dataset.src || "crew-log", lines: 60 }) });
+    $("fleetOut").textContent = d.output || "(no output)";
+  } catch (e) { $("fleetOut").textContent = "Error: " + e.message; }
+});
+
+/* ---------- voice ---------- */
+let mediaRecorder = null, audioChunks = [];
+async function toggleRecording() {
+  const btn = $("recBtn");
+  if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      btn.classList.remove("recording");
+      btn.textContent = "🎙";
+      const blob = new Blob(audioChunks, { type: "audio/webm" });
+      const fd = new FormData(); fd.append("file", blob, "recording.webm");
+      toast("Transcribing…");
+      try {
+        const res = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || res.statusText);
+        if (d.text) { $("input").value = d.text; $("input").focus(); toast("Transcribed."); }
+        else toast("Nothing recognised.");
+      } catch (e) { toast("Voice: " + e.message); }
+    };
+    mediaRecorder.start();
+    btn.classList.add("recording");
+    btn.textContent = "⏹";
+    toast("Recording — click again to stop.");
+  } catch (e) { toast("Mic unavailable: " + e.message); }
+}
+
 /* ---------- wiring ---------- */
+wireSubtabs("brainTabs", { vault: "subVault", gist: "subGist", graph: "subGraph" }, (sub) => {
+  $("vaultSearchRow").style.display = sub === "vault" ? "flex" : "none";
+  if (sub === "graph" && !graphData) loadGraph();
+});
+wireSubtabs("tasksTabs", { todo: "subTodo", rem: "subRem", bk: "subBk" }, (sub) => {
+  $("taskAddRow").style.display = sub === "todo" ? "flex" : "none";
+  $("remAddRow").style.display = sub === "rem" ? "flex" : "none";
+  if (sub === "rem") loadReminders();
+  if (sub === "bk") loadBackups();
+});
+
 $("newChatBtn").onclick = newChat;
 $("chatsBtn").onclick = () => { loadChats(); openPanel("chatsScrim"); };
+$("brainBtn").onclick = () => { loadVault(); openPanel("brainScrim"); };
+$("tasksBtn").onclick = () => { loadTasks(); openPanel("tasksScrim"); };
+$("docsBtn").onclick = () => { loadDocs(); openPanel("docsScrim"); };
+$("fleetBtn").onclick = () => { openPanel("fleetScrim"); document.querySelector('[data-admin="status"]').click(); };
 $("memBtn").onclick = () => { loadMemory(); openPanel("memScrim"); };
 $("settingsBtn").onclick = () => openPanel("settingsScrim");
 $("daBtn").onclick = () => openPanel("daScrim");
 $("daRunBtn").onclick = () => runDeepAnalysis($("daQuestion").value);
+$("recBtn").onclick = toggleRecording;
 $("qaDeep").onclick = () => { openPanel("daScrim"); if (state.history.length) $("daQuestion").value = state.history[state.history.length-1].content; };
 $("qaRemember").onclick = () => sendMessage("Remember the key point from what I just said.");
 $("qaClear").onclick = () => { $("msgs").innerHTML = ""; };
