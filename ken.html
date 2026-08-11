@@ -566,6 +566,27 @@
 
 <script>
 "use strict";
+// Surface failures instead of dying silently. Without this, one thrown error
+// during setup leaves a fully rendered but completely inert page — which is
+// exactly what it looked like on iOS, where the console isn't reachable.
+function fatal(msg) {
+  let bar = document.getElementById("jsErrBar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "jsErrBar";
+    bar.style.cssText =
+      "position:fixed;left:0;right:0;bottom:0;z-index:200;background:#f5a3c7;color:#12060E;" +
+      "font:400 12px/1.5 ui-monospace,Consolas,monospace;padding:10px 14px;max-height:45vh;" +
+      "overflow:auto;white-space:pre-wrap;-webkit-user-select:text;user-select:text";
+    (document.body || document.documentElement).appendChild(bar);
+  }
+  bar.textContent = (bar.textContent ? bar.textContent + "\n" : "") + msg;
+}
+window.addEventListener("error", (e) =>
+  fatal(`JS error: ${e.message}\n  at ${e.filename || "?"}:${e.lineno || "?"}:${e.colno || "?"}`));
+window.addEventListener("unhandledrejection", (e) =>
+  fatal(`Unhandled promise rejection: ${(e.reason && (e.reason.stack || e.reason.message)) || e.reason}`));
+
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -1365,13 +1386,17 @@ document.addEventListener("keydown", e => {
 
 /* ---------- init ---------- */
 async function init() {
-  await Promise.all([loadTools(), loadChats(), loadMemory()]);
-  await loadHealth();
-  // Surfaces the PUBLIC badge on load, so you always know from the phone
-  // whether KEN is currently exposed to the internet.
-  loadAccess();
-  setInterval(loadHealth, 15000);
-  setInterval(loadAccess, 60000);
+  // settleAll, not Promise.all: one failing loader must not abort the others
+  // or leave the app half-initialised. Failures are reported, not swallowed.
+  const steps = [["tools", loadTools], ["chats", loadChats],
+                 ["memory", loadMemory], ["health", loadHealth],
+                 ["access", loadAccess]];
+  for (const [name, fn] of steps) {
+    try { await fn(); }
+    catch (e) { fatal(`Failed to load ${name}: ${e.message}`); }
+  }
+  setInterval(() => loadHealth().catch(() => {}), 15000);
+  setInterval(() => loadAccess().catch(() => {}), 60000);
 }
 init();
 </script>

@@ -47,7 +47,7 @@ from typing import Any, AsyncGenerator
 import requests
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -318,6 +318,38 @@ def _audit(ip: str, who: str, method: str, path: str) -> None:
         pass
 
 
+def _signin_page() -> str:
+    """Minimal sign-in page shown when / is reached without a valid token.
+
+    Self-contained (no fetches, no external assets) so it renders even when
+    everything else is unreachable. Submits via GET ?token=… — the same path
+    the emailed/bookmarked link uses — so there is one code path to maintain.
+    """
+    return """<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KEN - sign in</title><style>
+:root{color-scheme:dark}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+ background:#0a0409;color:#F2E9EE;font:400 15px/1.5 system-ui,-apple-system,sans-serif;padding:24px}
+.card{width:100%;max-width:360px;background:#12060E;border:1px solid rgba(76,201,240,.16);
+ border-radius:16px;padding:26px}
+h1{margin:0 0 6px;font-size:20px;letter-spacing:.14em}
+p{margin:0 0 18px;color:rgba(242,233,238,.55);font-size:13px}
+input{width:100%;box-sizing:border-box;padding:13px 14px;font-size:16px;border-radius:9px;
+ background:rgba(242,233,238,.04);border:1px solid rgba(242,233,238,.12);color:#F2E9EE;outline:none}
+input:focus{border-color:#4CC9F0}
+button{width:100%;margin-top:12px;padding:13px;font-size:15px;font-weight:600;border:0;
+ border-radius:9px;background:#4CC9F0;color:#0a0409}
+</style></head><body>
+<form class="card" method="get" action="">
+  <h1>KEN</h1>
+  <p>This page needs your access token. Paste it below, or open the full link that already contains it.</p>
+  <input name="token" type="password" placeholder="access token" autofocus
+         autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button type="submit">Unlock</button>
+</form></body></html>"""
+
+
 def _token_from(request: Request) -> str | None:
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):
@@ -455,12 +487,10 @@ async def _auth_gate(request: Request, call_next):
         _record_fail(ip)
         _audit(ip, "DENIED", request.method, path)
         if path == "/":
-            return JSONResponse(
-                {"detail": "KEN requires an access token. Open this page once as "
-                           "https://<host>/?token=<your token>; a cookie is set "
-                           "and the token drops out of the URL."},
-                status_code=401,
-            )
+            # A browser landing here must get something usable, not a raw JSON
+            # blob — on a phone that reads as "the app is broken, nothing is
+            # clickable". Give it a real sign-in page instead.
+            return HTMLResponse(_signin_page(), status_code=401)
         return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
     # Guests are barred from the configuration/security surface. Checked here
@@ -503,7 +533,13 @@ def _set_token_cookie(resp, request: Request, token: str) -> None:
     resp.set_cookie(
         COOKIE_NAME, token,
         httponly=True,           # JS can't read it -> XSS can't exfiltrate it
-        samesite="strict",       # not sent on cross-site requests
+        # Lax, not Strict. Strict withholds the cookie on top-level navigation
+        # that originates off-site — which is exactly how this gets opened on a
+        # phone (tapping the link from a chat app, or a bookmark opened from
+        # another app). That produced a bare 401 instead of the app. Lax still
+        # blocks cross-site POSTs and subresource requests, which is the part
+        # that matters here.
+        samesite="lax",
         secure=(proto == "https"),
         max_age=60 * 60 * 24 * 365,
         path="/",
