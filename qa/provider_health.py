@@ -21,16 +21,20 @@ STATE = ROOT / "data" / "provider_health_state.json"
 
 
 def _load_env() -> None:
-    """Tiny .env loader (keys live in the repo .env, gitignored)."""
-    env_file = ROOT / ".env"
-    if not env_file.exists():
-        return
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    """Tiny .env loader: repo .env first, then Hermes .env (KEN_* keys).
+
+    setdefault means the repo .env wins for names present in both.
+    """
+    hermes_env = Path(os.environ.get("LOCALAPPDATA", "")) / "hermes" / ".env"
+    for env_file in (ROOT / ".env", hermes_env):
+        if not env_file.exists():
             continue
-        k, _, v = line.partition("=")
-        os.environ.setdefault(k.strip(), v.strip())
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            os.environ.setdefault(k.strip(), v.strip())
 
 
 _load_env()
@@ -41,6 +45,8 @@ KEYS = {
     "sambanova": os.environ.get("SAMBANOVA_API_KEY", ""),
     "gemini": os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("GEMINI_API_KEY", ""),
     "groq": os.environ.get("GROQ_API_KEY", ""),
+    "bluesminds": os.environ.get("BLUESMINDS_API_KEY", "")
+                  or os.environ.get("KEN_BLUESMINDS_API_KEY", ""),
 }
 
 # provider -> (url, model, key_name)
@@ -52,6 +58,8 @@ PROVIDERS = {
     "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
                "gemini-3-flash-preview", "gemini"),
     "groq": ("https://api.groq.com/openai/v1/chat/completions", "llama-3.3-70b-versatile", "groq"),
+    "bluesminds": ("https://api.bluesminds.com/v1/chat/completions",
+                   "meta/llama-3.1-70b-instruct", "bluesminds"),
 }
 
 
@@ -76,9 +84,13 @@ def _ping(provider: str) -> tuple[bool, str]:
             with urllib.request.urlopen(req, timeout=20) as r:
                 return r.status, f"HTTP {r.status}"
         except urllib.error.HTTPError as e:
-            # 429 = alive but throttled -> retry (transient); 4xx permanent -> no retry
-            return e.code, f"HTTP {e.code}"
-        except Exception as e:
+            # Transient (429/5xx) -> raise so fleet_common.retry backs off;
+            # 4xx (auth, not found) -> permanent, return for immediate verdict.
+            if e.code in (429, 500, 502, 503, 504):
+                raise
+            hint = " (auth — check key)" if e.code in (401, 403) else ""
+            return e.code, f"HTTP {e.code}{hint}"
+        except Exception:
             raise  # network error -> retry
 
     # Retry taxonomy: transient (429/5xx/timeouts) retried w/ backoff; 4xx never.

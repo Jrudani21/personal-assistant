@@ -76,20 +76,13 @@ def main() -> int:
 
     fleet_report = []
     issues = []
-    # Heartbeat check: any bot with a standby_for counterpart whose heartbeat
-    # is stale (or missing) gets flagged — the standby takes over (big-company
-    # failover: one hot spare per fleet on heartbeat loss).
-    # Guard: only flag TAKEOVER when the heartbeat system has producers —
-    # if NO bot has ever beaten, primaries would all look dead on first run.
+    # Heartbeat check: any bot with a standby_for counterpart whose primary is
+    # unhealthy gets flagged — the standby takes over (big-company failover:
+    # one hot spare per fleet). Per-primary guard (fixed 2026-08-13): a primary
+    # is only judged by heartbeat if it HAS a heartbeat producer; otherwise
+    # (research bots) it's judged by schedule freshness. This kills the
+    # permanent false TAKEOVER for bots that never produce heartbeats.
     from fleet_common import is_stale
-    from fleet_common import STATE_FILE as _STATE_FILE
-    _any_beat = False
-    try:
-        _s = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
-        _any_beat = any(v.get("last_heartbeat") for v in _s.values())
-    except Exception:
-        _any_beat = False
-    heartbeat_live = _any_beat
     for fleet in fleets:
         members = [b for b in bots if b["id"] in fleet.get("members", [])]
         rows = []
@@ -108,13 +101,25 @@ def main() -> int:
                 issues.append(f"{b['id']}: over budget {runs}/{max_runs}")
             if not b.get("enabled", True):
                 flags.append("disabled")
-            # Heartbeat loss -> standby takeover signal (only when the
-            # heartbeat system actually has producers — avoids first-run noise).
-            if b.get("standby_for") and heartbeat_live:
+            # Heartbeat loss -> standby takeover signal. Per-primary logic:
+            # (a) primary has a heartbeat producer -> TAKEOVER only if its
+            #     heartbeat AND its last run are both stale;
+            # (b) primary has no heartbeat producer (research bots) ->
+            #     TAKEOVER only if its last run is stale by schedule.
+            if b.get("standby_for"):
                 primary = b["standby_for"]
-                if is_stale(primary, max_idle_hours=3.0):
-                    flags.append("TAKEOVER")
-                    issues.append(f"{b['id']}: taking over for {primary} (heartbeat lost)")
+                prim_state = state.get(primary) or {}
+                prim_bot = next((x for x in bots if x["id"] == primary), None)
+                if prim_state.get("last_heartbeat") is not None:
+                    if is_stale(primary, max_idle_hours=3.0) and prim_bot \
+                            and not freshness_ok(prim_bot, state, now)[0]:
+                        flags.append("TAKEOVER")
+                        issues.append(f"{b['id']}: taking over for {primary} (heartbeat lost)")
+                elif prim_bot:
+                    ok_p, _ = freshness_ok(prim_bot, state, now)
+                    if not ok_p:
+                        flags.append("TAKEOVER")
+                        issues.append(f"{b['id']}: taking over for {primary} (last run stale)")
             rows.append(f"- **{b.get('name', b['id'])}** `{b['id']}` — {detail}"
                         + (f" ⚠️ {', '.join(flags)}" if flags else " ✅"))
         fleet_report.append(f"### {fleet.get('name', fleet['id'])} "

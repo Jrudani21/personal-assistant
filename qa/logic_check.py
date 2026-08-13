@@ -43,7 +43,8 @@ check("price 15:00 discount", br.price_window(datetime(2026,8,13,15,0)), "discou
 
 # Research defers in peak
 check("research defers at peak", br.is_due(bots["career-ops"], {}, datetime(2026,8,13,3,0), cfg), False)
-check("research runs at neutral", br.is_due(bots["career-ops"], {}, now, cfg), True)
+# career-ops schedule = daily:18:20 (moved off the 02:00-05:00 dead window)
+check("research runs when due (off-peak)", br.is_due(bots["career-ops"], {}, datetime(2026,8,13,18,30), cfg), True)
 
 # --- Coordinator approval ---
 ops_boss = bots["ops-boss"]

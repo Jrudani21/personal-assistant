@@ -10,6 +10,7 @@ Usage:
   python qa/bot_runner.py               # print work order for due bots
   python qa/bot_runner.py --list        # list all bots + their schedule
   python qa/bot_runner.py --force <id>  # force-run a bot (ignore schedule)
+  python qa/bot_runner.py --mark-done <id> [<id> ...]  # record true completion time
 """
 import argparse
 import json
@@ -191,13 +192,27 @@ def work_order(bot: dict, force: bool = False) -> str:
         )
     if btype == "agent":
         # 500-AI-Agents-Projects script agent: run the generic wrapper against
-        # the DeepSeek-swapped agent in the sibling repo.
+        # the DeepSeek-swapped agent in the sibling repo. Local-tier bots carry
+        # an "env" dict (e.g. DEEPSEEK_API_BASE=ollama) that is forwarded via
+        # --env so they run on qwen3:8b for zero tokens.
         agent_dir = bot.get("agent_dir", "")
         agent_args = bot.get("agent_args", "")
-        cmd = f"python qa/run_500agent.py {agent_dir} {agent_args}".strip()
+        env_opt = ""
+        if bot.get("env"):
+            pairs = " ".join(f"{k}={v}" for k, v in bot["env"].items())
+            env_opt = f" --env {pairs}"
+        cmd = f"python qa/run_500agent.py {agent_dir} {agent_args}{env_opt}".strip()
+        tier = bot.get("tier", "flash")
+        vstep = ""
+        if bot.get("verify") == "review":
+            vstep = (
+                f"\n  VERIFY: after the run, have a flash-tier model review {bot.get('output', 'the output')} "
+                f"for correctness/quality before it is used. If the review fails, do NOT apply — re-run or escalate."
+            )
         return (
-            f"AGENT_BOT {bid}: run `{cmd}` (500-AI-Agents repo, DeepSeek-v4-flash). "
-            f"Output to data/agents/{agent_dir}.log. Rules: BOT_RULES §2 (LLM billed via DeepSeek)."
+            f"AGENT_BOT {bid}: run `{cmd}` (500-AI-Agents repo, tier={tier}). "
+            f"Output to data/agents/{agent_dir}.log. Rules: BOT_RULES §2 (LLM billed via DeepSeek unless tier=local)."
+            f"{vstep}"
         )
     return f"BOT {bid}: unknown type {btype}"
 
@@ -207,6 +222,8 @@ def main() -> int:
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--force", metavar="ID")
     ap.add_argument("--dry-run", action="store_true", help="print due bots without marking run")
+    ap.add_argument("--mark-done", nargs="+", metavar="ID",
+                    help="record last_run=now for completed bot id(s) and exit")
     args = ap.parse_args()
 
     bots = load_bots()
@@ -223,6 +240,20 @@ def main() -> int:
     now = datetime.now()
     state = load_state()
     bots_cfg = load_config()
+
+    # --mark-done: record TRUE completion time (the executing agent calls this
+    # after a work order finishes, so last_run reflects execution, not print).
+    if args.mark_done:
+        known = {b["id"] for b in bots}
+        missing = [i for i in args.mark_done if i not in known]
+        if missing:
+            print(f"NO_BOT {', '.join(missing)}")
+            return 1
+        for bid in args.mark_done:
+            state.setdefault(bid, {})["last_run"] = now.isoformat()
+        save_state(state)
+        print("MARKED_DONE " + " ".join(args.mark_done))
+        return 0
 
     # Peak-price reminder: even if no bot is due, tell the scheduler agent
     # why heavy work is parked (it may want to warn the user / log it).
