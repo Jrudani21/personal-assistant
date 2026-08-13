@@ -61,11 +61,17 @@ def main() -> int:
     fleets = data.get("fleets", [])
     if args.fleet:
         fleets = [f for f in fleets if f["id"] == args.fleet]
+        member_ids = {m for f in fleets for m in f.get("members", [])}
+        bots = [b for b in bots if b["id"] in member_ids]
     state = load_json(STATE, {})
     now = datetime.now()
 
     fleet_report = []
     issues = []
+    # Heartbeat check: any bot with a standby_for counterpart whose heartbeat
+    # is stale (or missing) gets flagged — the standby takes over (big-company
+    # failover: one hot spare per fleet on heartbeat loss).
+    from fleet_common import is_stale
     for fleet in fleets:
         members = [b for b in bots if b["id"] in fleet.get("members", [])]
         rows = []
@@ -84,6 +90,12 @@ def main() -> int:
                 issues.append(f"{b['id']}: over budget {runs}/{max_runs}")
             if not b.get("enabled", True):
                 flags.append("disabled")
+            # Heartbeat loss -> standby takeover signal
+            if b.get("standby_for"):
+                primary = b["standby_for"]
+                if is_stale(primary, max_idle_hours=3.0):
+                    flags.append("TAKEOVER")
+                    issues.append(f"{b['id']}: taking over for {primary} (heartbeat lost)")
             rows.append(f"- **{b.get('name', b['id'])}** `{b['id']}` — {detail}"
                         + (f" ⚠️ {', '.join(flags)}" if flags else " ✅"))
         fleet_report.append(f"### {fleet.get('name', fleet['id'])} "
@@ -95,8 +107,9 @@ def main() -> int:
     total = len(bots)
     enabled = sum(1 for b in bots if b.get("enabled", True))
     stale = len([i for i in issues if "STALE" in i])
+    fleet_word = "fleet" if len(fleets) == 1 else "fleets"
     summary_lines.append(f"- **{total} bots** registered, **{enabled} enabled** "
-                         f"across **{len(fleets)} fleets**.")
+                         f"across **{len(fleets)} {fleet_word}**.")
     if issues:
         summary_lines.append(f"- ⚠️ **{len(issues)} issue(s)**:")
         for i in issues:

@@ -67,16 +67,24 @@ def _ping(provider: str) -> tuple[bool, str]:
         "messages": [{"role": "user", "content": "hi"}],
         "max_tokens": 1,
     }).encode()
-    req = urllib.request.Request(url, data=body, headers={
-        "Authorization": f"Bearer {key}", "Content-Type": "application/json",
-    })
-    try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return r.status == 200, f"HTTP {r.status}"
-    except urllib.error.HTTPError as e:
-        return e.code in (200, 429), f"HTTP {e.code}"   # 429 = alive, just limited
-    except Exception as e:
-        return False, str(e)[:80]
+
+    def _one_attempt():
+        req = urllib.request.Request(url, data=body, headers={
+            "Authorization": f"Bearer {key}", "Content-Type": "application/json",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status, f"HTTP {r.status}"
+        except urllib.error.HTTPError as e:
+            # 429 = alive but throttled -> retry (transient); 4xx permanent -> no retry
+            return e.code, f"HTTP {e.code}"
+        except Exception as e:
+            raise  # network error -> retry
+
+    # Retry taxonomy: transient (429/5xx/timeouts) retried w/ backoff; 4xx never.
+    from fleet_common import retry
+    ok, body_out, status, _ = retry(_one_attempt, attempts=3)
+    return (status in (200, 429)), body_out or f"HTTP {status}"
 
 
 def main() -> int:
