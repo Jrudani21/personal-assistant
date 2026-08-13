@@ -75,6 +75,10 @@ def is_due(bot: dict, state: dict, now: datetime) -> bool:
     # Deterministic bots (qa/health) cost nothing -> always run regardless of price.
     if bot.get("type") in ("qa", "health"):
         return _sched_due(bot, state, now)
+    # TIME-SENSITIVE bots (live tracking: market scans, price monitors, ledgers)
+    # run on schedule no matter the price — a missed tick costs more than tokens.
+    if bot.get("time_sensitive"):
+        return _sched_due(bot, state, now)
     # LLM-heavy bots (research/watch): NEVER run in the expensive window.
     if price_window(now) == "expensive":
         return False

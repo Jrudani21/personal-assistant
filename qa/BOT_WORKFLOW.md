@@ -47,6 +47,7 @@ Edit `data/bots.json`. Fields:
 | `depth` / `subagents` / `model` | crew size + model |
 | `sources` | `web_search`, `web_extract`, `arxiv` |
 | `output` | report dir |
+| `time_sensitive` | `true` = run on schedule even in peak price (live tracking: market scans, price monitors, ledgers). Default false — research/watch defer out of peak. |
 
 ## Step 2 — The scheduler tick (cron, deterministic)
 
