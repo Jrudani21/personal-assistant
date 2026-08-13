@@ -19,42 +19,54 @@ from crewai.llm import LLM
 DS_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 GM_KEY = os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
 OR_KEY = os.environ.get("OPENROUTER_API_KEY", "")   # free tier drop-in (Fable 5 expiry backup)
+SN_KEY = os.environ.get("SAMBANOVA_API_KEY", "")    # SambaNova free (UUID key, 200K tok/day)
 
 DS_URL = "https://api.deepseek.com"
 GM_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
 OR_URL = "https://openrouter.ai/api/v1"
+SN_URL = "https://api.sambanova.ai/v1"
 OL_URL = "http://localhost:11434"
 
 # ── Fallback chains per agent role ──────────────────────────────────────
 # Each entry: (condition, model, base_url)
 # condition: truthy = try this entry. Last entry is always True (guaranteed local).
-# Order: DeepSeek (primary) → OpenRouter free (if key) → Gemini free (if key)
-# → local Ollama. OpenRouter free is the Fable-5-expiry safety net — add the
-# key when you want it live (see brain/notes/Fable 5 alternatives.md).
+# Order: DeepSeek (primary) → OpenRouter free → SambaNova free → Gemini free
+# → local Ollama. All free tiers verified 2026-08-13:
+#   OpenRouter  nvidia/nemotron-3-super-120b-a12b:free (reasoning, WORKS)
+#   SambaNova   DeepSeek-V3.2 / gpt-oss-120b (free, sometimes rate-limited)
+#   Gemini      gemini-3-flash-preview (free 1500/day)
+# deepseek/deepseek-r1:free is GONE from OpenRouter's free list — use nemotron.
 # "openai/" prefix is added for non-Ollama URLs so CrewAI treats them as API calls.
+
+OR_FREE = "nvidia/nemotron-3-super-120b-a12b:free"
+SN_FREE = "DeepSeek-V3.2"
 
 CHAINS = {
     "fetcher": [
         (DS_KEY, "deepseek-chat",                            DS_URL),
-        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
+        (OR_KEY, OR_FREE,                                     OR_URL),
+        (SN_KEY, SN_FREE,                                     SN_URL),
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (True,    "ollama/deepseek-r1-tool-calling:7b",      OL_URL),
     ],
     "quant": [
         (DS_KEY, "deepseek-chat",                            DS_URL),
-        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
+        (OR_KEY, OR_FREE,                                     OR_URL),
+        (SN_KEY, SN_FREE,                                     SN_URL),
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (True,    "ollama/deepseek-r1-tool-calling:7b",      OL_URL),
     ],
     "analyst": [
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (DS_KEY, "deepseek-chat",                            DS_URL),
-        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
+        (OR_KEY, OR_FREE,                                     OR_URL),
+        (SN_KEY, SN_FREE,                                     SN_URL),
         (True,    "ollama/deepseek-r1:14b",                  OL_URL),
     ],
     "reporter": [
         (DS_KEY, "deepseek-chat",                            DS_URL),
-        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
+        (OR_KEY, OR_FREE,                                     OR_URL),
+        (SN_KEY, SN_FREE,                                     SN_URL),
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (True,    "ollama/deepseek-r1:8b",                   OL_URL),
     ],
