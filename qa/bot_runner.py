@@ -76,10 +76,33 @@ def save_state(state: dict) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def is_due(bot: dict, state: dict, now: datetime) -> bool:
-    """Schedule-aware due check, deferring LLM-heavy bots out of peak price."""
+def is_due(bot: dict, state: dict, now: datetime, config: dict | None = None) -> bool:
+    """Schedule-aware due check, deferring LLM-heavy bots out of peak price.
+
+    Standby/failover: a bot with `standby_for` set only runs when its primary
+    has MISSED its window (so if the primary crashes, the spare takes over;
+    otherwise the spare stays idle and costs nothing).
+    """
     if not bot.get("enabled", True):
         return False
+    # Standby bot: only run if the primary is stale.
+    primary = bot.get("standby_for")
+    if primary:
+        prim_state = state.get(primary, {})
+        last = prim_state.get("last_run")
+        prim_sched = ""
+        if config:
+            for b in config.get("bots", []):
+                if b.get("id") == primary:
+                    prim_sched = b.get("schedule", "")
+                    break
+        if last:
+            last_dt = datetime.fromisoformat(last)
+            # Primary considered healthy if it ran within 2x its schedule gap.
+            gap = 3 if prim_sched == "hourly" else (30 if prim_sched.startswith("daily") else 8 * 24)
+            if now - last_dt < timedelta(hours=gap):
+                return False   # primary is fine; spare stays idle
+        return _sched_due(bot, state, now)
     # Deterministic bots (qa/health) cost nothing -> always run regardless of price.
     if bot.get("type") in ("qa", "health"):
         return _sched_due(bot, state, now)
@@ -202,7 +225,7 @@ def main() -> int:
             return 1
         due = [bot]
     else:
-        due = [b for b in bots if is_due(b, state, now)]
+        due = [b for b in bots if is_due(b, state, now, bots_cfg)]
 
     if not due:
         if win == "expensive":
