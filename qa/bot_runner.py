@@ -93,7 +93,7 @@ def work_order(bot: dict, force: bool = False) -> str:
     if btype == "qa":
         return (f"QA_BOT {bid}: run `python {bot['runner']}` "
                 f"against {bot.get('target', 'sandbox')}. Rules: BOT_RULES.md §2 (no LLM).")
-    if btype == "research":
+    if btype in ("research", "watch"):
         topic = bot.get("topic", "")
         depth = bot.get("depth", "medium")
         n = bot.get("subagents", 3)

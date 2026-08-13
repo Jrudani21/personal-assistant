@@ -86,8 +86,8 @@ def main() -> int:
     if not bot:
         print(f"NO_BOT {a.bot_id} (check data/bots.json)")
         return 1
-    if bot.get("type") != "research":
-        print(f"BOT {a.bot_id} is type={bot['type']}, not research")
+    if bot.get("type") not in ("research", "watch"):
+        print(f"BOT {a.bot_id} is type={bot['type']}, not research/watch")
         return 1
 
     topic = a.topic or bot.get("topic", "")
