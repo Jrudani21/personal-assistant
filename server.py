@@ -702,7 +702,7 @@ async def _iter_queue(q: queue.Queue, thread: threading.Thread) -> AsyncGenerato
 # -> execute tool_calls via REGISTRY -> append results -> repeat, up to
 # MAX_TOOL_ROUNDS) but targets DeepSeek's OpenAI-compatible streaming API
 # instead of `ollama.chat`. Reuses llm._system_prompt() (memory/reminders
-# injection) and tools.REGISTRY/llm.SCHEMAS so behavior stays identical to
+# injection) and tools.REGISTRY/tools.SCHEMAS so behavior stays identical to
 # the Ollama loop apart from the transport. Tool execution goes through
 # tools.REGISTRY[name] directly (not assistant.llm's loop), so the
 # tool_start/tool_end timing wrapper _chat_worker installs on REGISTRY
@@ -714,7 +714,7 @@ def _deepseek_stream_chat(model: str, history: list[dict]):
     for _round in range(llm.MAX_TOOL_ROUNDS):
         try:
             stream = _deepseek_client.chat.completions.create(
-                model=model, messages=messages, tools=llm.SCHEMAS or None, stream=True,
+                model=model, messages=messages, tools=tools.SCHEMAS or None, stream=True,
             )
         except Exception as e:
             yield f"\n\n_Error talking to DeepSeek: {e}_"
@@ -824,7 +824,7 @@ async def toggle_tool(body: ToolToggle) -> dict:
 # /api/chat  (STREAMING, SSE)
 #
 # For the duration of the turn only:
-#   * llm.SCHEMAS  -> filtered to the request's enabled_tools (model is only
+#   * tools.SCHEMAS -> filtered to the request's enabled_tools (model is only
 #                     *offered* enabled tools),
 #   * REGISTRY     -> wrapped so disabled tools return "unavailable" without
 #                     executing, and enabled tools emit tool_start/tool_end
@@ -840,11 +840,11 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
     """Run the real assistant loop; push (event, payload) tuples onto q."""
     turn_id = uuid.uuid4().hex[:12]
     saved_registry = dict(tools.REGISTRY)
-    saved_schemas = llm.SCHEMAS
+    saved_schemas = tools.SCHEMAS
     full_reply: list[str] = []
     try:
         # 1) Only offer enabled tools to the model.
-        llm.SCHEMAS = [
+        tools.SCHEMAS = [
             s for s in saved_schemas if s["function"]["name"] in enabled
         ]
 
@@ -922,7 +922,7 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
         # 5) Restore the real REGISTRY/SCHEMAS for the next turn.
         tools.REGISTRY.clear()
         tools.REGISTRY.update(saved_registry)
-        llm.SCHEMAS = saved_schemas
+        tools.SCHEMAS = saved_schemas
 
 
 async def _sse_chat(req: ChatRequest, role: str = "owner") -> AsyncGenerator[dict, None]:
@@ -1637,6 +1637,24 @@ async def root():
         ],
         "docs": "/docs",
     }
+
+
+# ---------------------------------------------------------------------------
+# Static assets (three.min.js for the GPU 3D idle scene, force-graph libs for
+# the vault graph). Auth-gated by the middleware like every other route.
+# ---------------------------------------------------------------------------
+@app.get("/assets/{name:path}")
+async def assets(name: str):
+    from fastapi.responses import FileResponse  # local import, matches root route
+
+    root = (BASE_DIR / "assets").resolve()
+    f = (root / name).resolve()
+    if not str(f).startswith(str(root)) or not f.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(
+        f,
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 if __name__ == "__main__":

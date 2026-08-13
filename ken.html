@@ -1,679 +1,2259 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KEN — Personal Assistant</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg:      #0a0409;
-    --panel:   #12060E;
-    --panel2:  #1b0a18;
-    --panel3:  rgba(242,233,238,.04);
-    --border:  rgba(76,201,240,.16);
-    --border2: rgba(242,233,238,.09);
-    --ink:     #F2E9EE;
-    --muted:   rgba(242,233,238,.5);
-    --muted2:  rgba(242,233,238,.32);
-    --accent:  #4CC9F0;
-    --accent-tint: rgba(76,201,240,.14);
-    --pink:    #f5a3c7;
-    --pink-tint: rgba(255,180,220,.25);
-    --ok:      #4CC9F0;
-    --err:     #f5a3c7;
-    --display: 'Michroma', system-ui, sans-serif;
-    --body: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
-    font: 400 14px/1.5 var(--body);
-    background: var(--bg); color: var(--ink);
-    overflow: hidden;
-  }
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 5px; }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KEN — Personal Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Michroma&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0409;
+      --panel: #12060E;
+      --panel2: #1b0a18;
+      --panel3: rgba(242, 233, 238, .04);
+      --border: rgba(76, 201, 240, .16);
+      --border2: rgba(242, 233, 238, .09);
+      --ink: #F2E9EE;
+      --muted: rgba(242, 233, 238, .5);
+      --muted2: rgba(242, 233, 238, .32);
+      --accent: #4CC9F0;
+      --accent-tint: rgba(76, 201, 240, .14);
+      --pink: #f5a3c7;
+      --pink-tint: rgba(255, 180, 220, .25);
+      --ok: #4CC9F0;
+      --err: #f5a3c7;
+      --display: 'Michroma', system-ui, sans-serif;
+      --body: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    }
 
-  @keyframes ken-ring1 { from { transform: rotateX(74deg) rotateZ(0deg); } to { transform: rotateX(74deg) rotateZ(360deg); } }
-  @keyframes ken-ring2 { from { transform: rotateY(70deg) rotateZ(0deg); } to { transform: rotateY(70deg) rotateZ(-360deg); } }
-  @keyframes ken-ring3 { from { transform: rotateX(28deg) rotateY(38deg) rotateZ(0deg); } to { transform: rotateX(28deg) rotateY(38deg) rotateZ(360deg); } }
-  @keyframes ken-float { 0%,100% { transform: translateY(-4px) scale(1); } 50% { transform: translateY(4px) scale(1.02); } }
-  @keyframes ken-halo   { 0%,100% { opacity: .45; transform: scale(1); } 50% { opacity: .85; transform: scale(1.08); } }
-  @keyframes ken-blink  { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
-  @keyframes ken-bar    { 0%,100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
-  @keyframes ken-fade   { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-  .orb { position: relative; perspective: 400px; transform-style: preserve-3d; flex: none; }
-  .orb .ring1, .orb .ring2, .orb .ring3, .orb .core { position: absolute; border-radius: 50%; }
-  .orb .ring1 { inset: 0; border: 1px solid rgba(76,201,240,.4); animation: ken-ring1 9s linear infinite; }
-  .orb .ring2 { inset: 6%; border: 1px solid rgba(76,201,240,.26); animation: ken-ring2 12s linear infinite; }
-  .orb .ring3 { inset: -6%; border: 1px dashed var(--pink-tint); animation: ken-ring3 16s linear infinite; }
-  .orb .core  { inset: 24%; background: radial-gradient(circle at 34% 28%, #b9f0ff 0%, #4CC9F0 34%, #1a5f7a 66%, #0d2c3a 100%); box-shadow: 0 0 18px rgba(76,201,240,.55); animation: ken-float 5s ease-in-out infinite; }
-  .orb.thinking .core { animation: ken-float 1.4s ease-in-out infinite; box-shadow: 0 0 26px rgba(76,201,240,.85); }
-  .orb.thinking .ring1 { animation-duration: 3s; }
-  .orb.thinking .ring2 { animation-duration: 4s; }
-  .orb.sm { width: 30px; height: 30px; }
-  .orb.lg { width: 220px; height: 220px; }
-  .orb.lg::before { content:""; position:absolute; inset:-16%; border-radius:50%; background: radial-gradient(circle, rgba(76,201,240,.24), transparent 62%); animation: ken-halo 6s ease-in-out infinite; }
+    html,
+    body {
+      height: 100%;
+    }
 
-  /* minmax(0,1fr): without it the implicit `auto` column sizes to the widest
+    body {
+      font: 400 14px/1.5 var(--body);
+      background: var(--bg);
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border2);
+      border-radius: 5px;
+    }
+
+    @keyframes ken-ring1 {
+      from {
+        transform: rotateX(74deg) rotateZ(0deg);
+      }
+
+      to {
+        transform: rotateX(74deg) rotateZ(360deg);
+      }
+    }
+
+    @keyframes ken-ring2 {
+      from {
+        transform: rotateY(70deg) rotateZ(0deg);
+      }
+
+      to {
+        transform: rotateY(70deg) rotateZ(-360deg);
+      }
+    }
+
+    @keyframes ken-ring3 {
+      from {
+        transform: rotateX(28deg) rotateY(38deg) rotateZ(0deg);
+      }
+
+      to {
+        transform: rotateX(28deg) rotateY(38deg) rotateZ(360deg);
+      }
+    }
+
+    @keyframes ken-float {
+
+      0%,
+      100% {
+        transform: translateY(-4px) scale(1);
+      }
+
+      50% {
+        transform: translateY(4px) scale(1.02);
+      }
+    }
+
+    @keyframes ken-halo {
+
+      0%,
+      100% {
+        opacity: .45;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: .85;
+        transform: scale(1.08);
+      }
+    }
+
+    @keyframes ken-blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: .25;
+      }
+    }
+
+    @keyframes ken-bar {
+
+      0%,
+      100% {
+        transform: scaleY(.25);
+      }
+
+      50% {
+        transform: scaleY(1);
+      }
+    }
+
+    @keyframes ken-fade {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes ken-pulse {
+
+      0%,
+      100% {
+        opacity: .5;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
+
+    @keyframes ken-glow {
+
+      0%,
+      100% {
+        box-shadow: 0 0 18px rgba(76, 201, 240, .35);
+      }
+
+      50% {
+        box-shadow: 0 0 32px rgba(76, 201, 240, .6);
+      }
+    }
+
+    .orb {
+      position: relative;
+      perspective: 400px;
+      transform-style: preserve-3d;
+      flex: none;
+    }
+
+    .orb .ring1,
+    .orb .ring2,
+    .orb .ring3,
+    .orb .core {
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .orb .ring1 {
+      inset: 0;
+      border: 1px solid rgba(76, 201, 240, .4);
+      animation: ken-ring1 9s linear infinite;
+    }
+
+    .orb .ring2 {
+      inset: 6%;
+      border: 1px solid rgba(76, 201, 240, .26);
+      animation: ken-ring2 12s linear infinite;
+    }
+
+    .orb .ring3 {
+      inset: -6%;
+      border: 1px dashed var(--pink-tint);
+      animation: ken-ring3 16s linear infinite;
+    }
+
+    .orb .core {
+      inset: 24%;
+      background: radial-gradient(circle at 34% 28%, #b9f0ff 0%, #4CC9F0 34%, #1a5f7a 66%, #0d2c3a 100%);
+      box-shadow: 0 0 18px rgba(76, 201, 240, .55);
+      animation: ken-float 5s ease-in-out infinite;
+    }
+
+    .orb.thinking .core {
+      animation: ken-float 1.4s ease-in-out infinite;
+      box-shadow: 0 0 26px rgba(76, 201, 240, .85);
+    }
+
+    .orb.thinking .ring1 {
+      animation-duration: 3s;
+    }
+
+    .orb.thinking .ring2 {
+      animation-duration: 4s;
+    }
+
+    .orb.sm {
+      width: 30px;
+      height: 30px;
+    }
+
+    .orb.lg {
+      width: 220px;
+      height: 220px;
+    }
+
+    .orb.lg::before {
+      content: "";
+      position: absolute;
+      inset: -16%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(76, 201, 240, .24), transparent 62%);
+      animation: ken-halo 6s ease-in-out infinite;
+    }
+
+    /* minmax(0,1fr): without it the implicit `auto` column sizes to the widest
      child, so the 9-button nav made the whole page 865px wide on a phone and
      scrolled sideways. `auto` tracks refuse to shrink below min-content;
      minmax(0,…) lets them. */
-  .layout { display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); height: 100vh; }
-
-  /* ---------- top bar ---------- */
-  header.topbar {
-    display: flex; align-items: center; gap: 16px; padding: 14px 24px;
-    border-bottom: 1px solid var(--border2); background: var(--panel);
-    min-width: 0;   /* allow the nav inside to shrink and scroll */
-  }
-  .wordmark { font: 400 16px var(--display); letter-spacing: .16em; color: var(--ink); }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted2); flex: none; }
-  .status-dot.ok { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  .status-dot.bad { background: var(--err); }
-  .hud { display: flex; gap: 18px; font: 300 10.5px var(--mono); letter-spacing: .08em; color: var(--muted2); flex-wrap: wrap; }
-  .hud b { color: var(--accent); font-weight: 400; }
-  .topbar .spacer { flex: 1; }
-  .topbar nav { display: flex; gap: 8px; align-items: center; }
-  .navbtn {
-    font: 300 11px var(--mono); letter-spacing: .06em; color: var(--muted);
-    border: 1px solid var(--border2); border-radius: 6px; padding: 7px 13px;
-    background: transparent; cursor: pointer; white-space: nowrap;
-  }
-  .navbtn:hover { border-color: var(--border); color: var(--ink); }
-  .navbtn.active { color: var(--accent); border-color: var(--border); background: var(--accent-tint); }
-
-  /* ---------- main ---------- */
-  main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-
-  .idle-view {
-    flex: 1; min-height: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 36px;
-    background: radial-gradient(120% 90% at 50% 55%, #1d0a1a 0%, #12060E 45%, #0a0409 100%);
-  }
-  .idle-view .greeting { font: 300 26px/1.35 var(--body); color: rgba(242,233,238,.85); text-align: center; max-width: 640px; padding: 0 20px; }
-  .idle-view .standby { font: 300 12px var(--mono); letter-spacing: .3em; color: rgba(76,201,240,.8); }
-  .idle-view .hints { display: flex; gap: 10px; }
-  .idle-view .hints span { font: 300 11px var(--mono); letter-spacing: .06em; color: var(--muted); border: 1px solid var(--border2); border-radius: 20px; padding: 8px 16px; }
-
-  .chat-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .msgs { flex: 1; overflow-y: auto; padding: 26px 8vw 10px; display: flex; flex-direction: column; gap: 18px; }
-  .msg { max-width: 68ch; animation: ken-fade .25s ease; }
-  .msg.user { align-self: flex-end; background: var(--accent-tint); border: 1px solid var(--border); border-radius: 14px 14px 4px 14px; padding: 14px 18px; font: 400 15px/1.6 var(--body); color: var(--ink); }
-  .msg.assistant { align-self: flex-start; font: 300 16px/1.7 var(--body); color: rgba(242,233,238,.9); }
-  .msg.assistant .caret::after { content: "▍"; animation: ken-blink 1s steps(2) infinite; color: var(--accent); }
-  .msg.error { align-self: flex-start; background: rgba(245,163,199,.08); border: 1px solid var(--pink-tint); border-radius: 10px; padding: 12px 16px; font: 300 13px var(--body); color: var(--pink); }
-
-  .tool-row { display: flex; gap: 10px; flex-wrap: wrap; align-self: flex-start; max-width: 84ch; }
-  .tool-chip {
-    display: flex; align-items: center; gap: 9px; background: var(--panel3);
-    border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px;
-    font: 400 11px var(--mono); letter-spacing: .04em; color: var(--ink);
-  }
-  .tool-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pink); animation: ken-blink 1.2s ease-in-out infinite; }
-  .tool-chip.done .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: none; }
-  .tool-chip.err .dot { background: var(--err); animation: none; }
-  .tool-chip .meta { color: var(--muted); font-weight: 300; }
-
-  .composer-wrap { padding: 16px 8vw 22px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border2); background: linear-gradient(0deg, var(--bg) 60%, transparent); }
-  .quick-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-  .quick-actions span { font: 300 12px var(--body); color: var(--muted); border: 1px solid var(--border2); border-radius: 18px; padding: 7px 14px; cursor: pointer; }
-  .quick-actions span:hover { border-color: var(--border); color: var(--ink); }
-  .composer {
-    display: flex; align-items: flex-end; gap: 14px; background: var(--panel3);
-    border: 1px solid var(--border); border-radius: 14px; padding: 13px 18px;
-  }
-  .composer textarea {
-    flex: 1; background: transparent; border: none; outline: none; resize: none;
-    color: var(--ink); font: 300 15px/1.5 var(--body); max-height: 140px;
-  }
-  .composer textarea::placeholder { color: rgba(242,233,238,.35); }
-  .send-hint { font: 300 10px var(--mono); letter-spacing: .1em; color: var(--muted2); white-space: nowrap; }
-
-  /* ---------- overlays ---------- */
-  .scrim { position: fixed; inset: 0; background: rgba(10,4,9,.72); display: none; align-items: center; justify-content: center; z-index: 40; }
-  .scrim.open { display: flex; }
-  .panel {
-    width: min(920px, 92vw); max-height: 84vh; display: flex; flex-direction: column;
-    background: linear-gradient(180deg, var(--panel2), var(--panel));
-    border: 1px solid var(--border); border-radius: 16px; overflow: hidden;
-    box-shadow: 0 40px 120px rgba(0,0,0,.7);
-  }
-  .panel header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 20px 26px; border-bottom: 1px solid var(--border2);
-  }
-  .panel header .title { font: 400 18px var(--body); color: var(--ink); }
-  .panel header .sub { font: 300 10px var(--mono); letter-spacing: .1em; color: var(--muted); margin-top: 4px; }
-  .panel .esc { font: 300 11px var(--mono); color: var(--muted); border: 1px solid var(--border2); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
-  .panel .esc:hover { color: var(--ink); border-color: var(--border); }
-  .panel .body { flex: 1; overflow-y: auto; padding: 16px 26px 24px; display: flex; flex-direction: column; gap: 10px; }
-
-  .filter-row { display: flex; gap: 8px; padding: 14px 26px 0; }
-  .filter-row span { font: 300 11px var(--mono); color: var(--muted); border: 1px solid var(--border2); border-radius: 14px; padding: 6px 12px; cursor: pointer; }
-  .filter-row span.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
-
-  .mem-entry { display: grid; grid-template-columns: 160px 1fr 90px; gap: 16px; align-items: start; background: var(--panel3); border: 1px solid var(--border2); border-left: 2px solid var(--border); border-radius: 8px; padding: 13px 16px; }
-  .mem-entry .key { font: 400 12px var(--mono); color: var(--accent); word-break: break-word; }
-  .mem-entry .val { font: 300 14px/1.6 var(--body); color: rgba(242,233,238,.85); }
-  .mem-entry .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .mem-entry .tags span { font: 300 10px var(--mono); color: var(--muted); border: 1px solid var(--border2); border-radius: 3px; padding: 3px 7px; }
-  .mem-entry .when { font: 300 10.5px var(--mono); color: var(--muted2); text-align: right; }
-
-  .distill-btn { font: 400 11px var(--mono); letter-spacing: .06em; color: var(--bg); background: var(--accent); border: none; border-radius: 6px; padding: 8px 13px; cursor: pointer; }
-  .distill-btn:hover { opacity: .88; }
-
-  .tool-toggle-group { margin-bottom: 4px; }
-  .tool-toggle-group h3 { font: 300 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-  .tool-toggle-row { display: flex; align-items: center; gap: 12px; padding: 7px 2px; }
-  .tool-toggle-row label.name { flex: 1; font: 300 13px var(--body); color: var(--ink); cursor: help; }
-  .switch { position: relative; width: 34px; height: 19px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; inset: 0; border-radius: 19px; background: var(--border2); cursor: pointer; transition: .15s; }
-  .slider::before { content: ""; position: absolute; width: 13px; height: 13px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: .15s; }
-  .switch input:checked + .slider { background: var(--accent); }
-  .switch input:checked + .slider::before { transform: translateX(15px); }
-
-  .chats-list { display: flex; flex-direction: column; gap: 4px; }
-  .chat-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
-  .chat-item:hover { background: var(--panel3); }
-  .chat-item.active { background: var(--panel3); border-color: var(--border); }
-  .chat-item .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 300 13px var(--body); }
-  .chat-item .del { color: var(--muted2); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
-  .chat-item .del:hover { color: var(--err); }
-
-  .da-input-row { display: flex; gap: 10px; padding: 16px 26px 0; }
-  .da-input-row textarea { flex: 1; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; color: var(--ink); font: 300 14px var(--body); padding: 10px 12px; resize: vertical; min-height: 42px; }
-  .da-input-row button { font: 400 11px var(--mono); letter-spacing: .06em; color: var(--bg); background: var(--accent); border: none; border-radius: 8px; padding: 0 18px; cursor: pointer; }
-  .da-input-row button:disabled { opacity: .5; cursor: default; }
-
-  .da-stage { display: flex; align-items: center; gap: 9px; font: 300 11px var(--mono); letter-spacing: .05em; color: var(--muted); }
-  .da-stage .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  .da-stage.running .dot { background: var(--pink); animation: ken-blink 1.2s ease-in-out infinite; }
-  .da-findings { font: 300 17px/1.7 var(--body); color: rgba(242,233,238,.9); white-space: pre-wrap; margin-top: 6px; }
-  .da-guard { display: flex; gap: 18px; flex-wrap: wrap; font: 300 11px var(--mono); color: var(--muted); margin-top: 10px; }
-  .da-guard b { color: var(--accent); font-weight: 400; }
-
-  /* ---------- generic list rows (tasks, reminders, docs, backups) ---------- */
-  .row-item { display: flex; align-items: center; gap: 12px; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 11px 14px; }
-  .row-item .grow { flex: 1; min-width: 0; }
-  .row-item .main { font: 300 14px/1.5 var(--body); color: rgba(242,233,238,.9); word-break: break-word; }
-  .row-item .sub2 { font: 300 10.5px var(--mono); color: var(--muted2); margin-top: 4px; }
-  .row-item .done { text-decoration: line-through; color: var(--muted2); }
-  .row-item .del { color: var(--muted2); cursor: pointer; padding: 2px 7px; border-radius: 4px; flex: none; }
-  .row-item .del:hover { color: var(--err); }
-  .row-item input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; flex: none; }
-  .empty-note { color: var(--muted); font: 300 12px var(--body); padding: 10px 2px; }
-
-  .add-row { display: flex; gap: 8px; padding: 14px 26px 0; }
-  .add-row input, .add-row textarea {
-    flex: 1; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px;
-    color: var(--ink); font: 300 13px var(--body); padding: 9px 12px; outline: none;
-  }
-  .add-row input:focus { border-color: var(--border); }
-  .add-row input[type=datetime-local] { flex: 0 0 200px; color-scheme: dark; }
-  .btn {
-    font: 400 11px var(--mono); letter-spacing: .06em; color: var(--bg); background: var(--accent);
-    border: none; border-radius: 8px; padding: 9px 15px; cursor: pointer; flex: none;
-  }
-  .btn:hover { opacity: .88; }
-  .btn:disabled { opacity: .45; cursor: default; }
-  .btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
-  .btn.ghost:hover { color: var(--ink); border-color: var(--border); }
-
-  /* ---------- sub-tabs inside a panel ---------- */
-  .subtabs { display: flex; gap: 6px; padding: 14px 26px 0; flex-wrap: wrap; }
-  .subtabs span { font: 300 11px var(--mono); letter-spacing: .05em; color: var(--muted); border: 1px solid var(--border2); border-radius: 14px; padding: 6px 13px; cursor: pointer; }
-  .subtabs span:hover { color: var(--ink); }
-  .subtabs span.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
-  .subview { display: none; flex-direction: column; gap: 10px; }
-  .subview.active { display: flex; }
-
-  /* ---------- brain / vault ---------- */
-  .vault-layout { display: grid; grid-template-columns: 270px 1fr; gap: 14px; min-height: 320px; }
-  .vault-list { display: flex; flex-direction: column; gap: 3px; max-height: 52vh; overflow-y: auto; padding-right: 4px; }
-  .vault-note { padding: 8px 11px; border-radius: 7px; cursor: pointer; border: 1px solid transparent; }
-  .vault-note:hover { background: var(--panel3); }
-  .vault-note.active { background: var(--panel3); border-color: var(--border); }
-  .vault-note .nm { font: 300 12.5px var(--body); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vault-note .fld { font: 300 9.5px var(--mono); letter-spacing: .06em; color: var(--muted2); margin-top: 3px; text-transform: uppercase; }
-  .vault-reader { background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 16px 18px; max-height: 52vh; overflow-y: auto; }
-  .vault-reader pre { font: 300 12.5px/1.75 var(--mono); color: rgba(242,233,238,.85); white-space: pre-wrap; word-break: break-word; }
-  .wikilink { color: var(--accent); border-bottom: 1px dotted var(--accent); cursor: pointer; }
-  .wikilink.missing { color: var(--pink); border-bottom-style: dashed; cursor: help; }
-  .gist-box { font: 300 12px/1.7 var(--mono); color: rgba(242,233,238,.82); background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 14px 16px; max-height: 46vh; overflow-y: auto; white-space: pre-wrap; }
-  .git-line { font: 300 11px var(--mono); color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
-  .git-line b { color: var(--accent); font-weight: 400; }
-  #graphCanvas { width: 100%; height: 52vh; background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; }
-
-  /* ---------- fleet ---------- */
-  .fleet-out { font: 300 12px/1.7 var(--mono); color: rgba(242,233,238,.85); background: var(--panel3); border: 1px solid var(--border2); border-radius: 8px; padding: 14px 16px; max-height: 50vh; overflow: auto; white-space: pre-wrap; }
-  .fleet-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 14px 26px 0; }
-
-  .rec-btn { font: 300 15px; background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 2px 4px; flex: none; }
-  .rec-btn:hover { color: var(--ink); }
-  .rec-btn.recording { color: var(--pink); animation: ken-blink 1.1s ease-in-out infinite; }
-
-  /* ---------- access / funnel ---------- */
-  .access-box { background: var(--panel3); border: 1px solid var(--border2); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
-  .access-box.public { border-color: var(--pink); background: rgba(245,163,199,.07); }
-  .access-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .access-state { flex: 1; font: 400 12px var(--mono); letter-spacing: .05em; color: var(--accent); min-width: 160px; }
-  .access-box.public .access-state { color: var(--pink); }
-  .access-url { font: 300 11px var(--mono); color: var(--muted); margin-top: 8px; word-break: break-all; }
-  .access-note { font: 300 11.5px/1.6 var(--body); color: var(--muted); margin-top: 8px; }
-  .access-guests { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
-  .guest-row { display: flex; align-items: center; gap: 10px; font: 300 11.5px var(--mono); color: var(--muted); }
-  .guest-row .gname { flex: 1; color: var(--ink); }
-  .guest-row .revoke { color: var(--muted2); cursor: pointer; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border2); }
-  .guest-row .revoke:hover { color: var(--err); border-color: var(--pink-tint); }
-
-  /* Persistent reminder in the top bar while KEN is on the public internet. */
-  .public-warn {
-    display: none; align-items: center; gap: 8px; cursor: pointer;
-    font: 400 10px var(--mono); letter-spacing: .08em; color: var(--bg);
-    background: var(--pink); border-radius: 5px; padding: 5px 10px; flex: none;
-  }
-  .public-warn.on { display: flex; }
-
-  .toast {
-    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
-    background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 20px; font: 300 13px var(--body); color: var(--ink);
-    box-shadow: 0 20px 60px rgba(0,0,0,.6); z-index: 90; animation: ken-fade .2s ease;
-    max-width: 80vw;
-  }
-
-  @media (max-width: 720px) {
-    /* The nav is 9 buttons — wrapped onto 3 rows it ate 131px of a 852px
-       phone screen. Scroll it horizontally on one row instead. */
-    header.topbar { gap: 8px; padding: 10px 12px; flex-wrap: nowrap; }
-    .topbar nav {
-      flex: 1; min-width: 0; overflow-x: auto; flex-wrap: nowrap;
-      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    .layout {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: minmax(0, 1fr);
+      height: 100vh;
     }
-    .topbar nav::-webkit-scrollbar { display: none; }
-    .navbtn { flex: none; }
-    .hud { display: none; }
-    .wordmark { font-size: 14px; }
-    .msgs { padding: 18px 5vw 6px; }
-    .composer-wrap { padding: 12px 5vw 16px; }
-    .mem-entry { grid-template-columns: 1fr; }
-    .mem-entry .when { text-align: left; }
-    .vault-layout { grid-template-columns: 1fr; }
-    .vault-list { max-height: 30vh; }
-    .vault-reader { max-height: 40vh; }
-    .panel { max-height: 90vh; width: 96vw; }
-    .panel header { padding: 14px 16px; }
-    .panel .body { padding: 12px 16px 18px; }
-    .subtabs, .add-row, .filter-row, .da-input-row, .fleet-actions { padding-left: 16px; padding-right: 16px; }
-    /* Stop iOS Safari zooming the page when a sub-16px input is focused. */
-    input, textarea, select { font-size: 16px !important; }
-    .add-row { flex-wrap: wrap; }
-    .add-row input[type=datetime-local] { flex: 1 1 100%; }
-    #graphCanvas { height: 44vh; }
-    /* Comfortable tap targets. */
-    .navbtn, .btn, .subtabs span, .filter-row span { min-height: 38px; }
-    .row-item .del, .chat-item .del { padding: 8px 12px; }
-  }
-</style>
+
+    /* ---------- top bar ---------- */
+    header.topbar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border2);
+      background: var(--panel);
+      min-width: 0;
+      /* allow the nav inside to shrink and scroll */
+    }
+
+    .wordmark {
+      font: 400 16px var(--display);
+      letter-spacing: .16em;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wordmark .tag {
+      font: 300 8.5px var(--mono);
+      letter-spacing: .14em;
+      color: var(--muted2);
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      padding: 2px 5px;
+      margin-left: 2px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted2);
+      flex: none;
+    }
+
+    .status-dot.ok {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .status-dot.bad {
+      background: var(--err);
+    }
+
+    .hud {
+      display: flex;
+      gap: 18px;
+      font: 300 10.5px var(--mono);
+      letter-spacing: .08em;
+      color: var(--muted2);
+      flex-wrap: wrap;
+    }
+
+    .hud b {
+      color: var(--accent);
+      font-weight: 400;
+    }
+
+    .topbar .spacer {
+      flex: 1;
+    }
+
+    .topbar nav {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .navbtn {
+      font: 300 11px var(--mono);
+      letter-spacing: .06em;
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 7px 13px;
+      background: transparent;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s ease;
+    }
+
+    .navbtn:hover {
+      border-color: var(--border);
+      color: var(--ink);
+      transform: translateY(-1px);
+    }
+
+    .navbtn.active {
+      color: var(--accent);
+      border-color: var(--border);
+      background: var(--accent-tint);
+    }
+
+    /* ---------- main ---------- */
+    main {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .idle-view {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      background:
+        radial-gradient(120% 90% at 50% 55%, #1d0a1a 0%, #12060E 45%, #0a0409 100%);
+      overflow-y: auto;
+      padding: 20px 8vw 30px;
+      position: relative;
+    }
+
+    /* everything except the 3D canvas sits above it */
+    .idle-view > *:not(canvas):not(#ken3dWrap) {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* 3D wrap: contains the canvas + the fullscreen exit button, so both
+       fullscreen together (the browser hides everything else in FS). */
+    #ken3dWrap {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+    #ken3dWrap:fullscreen {
+      background: #05020a;
+    }
+    #fsExit {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 3;
+      pointer-events: auto;
+      display: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid var(--border2);
+      background: rgba(18, 6, 14, .72);
+      color: var(--muted);
+      font: 400 15px var(--mono);
+      cursor: pointer;
+    }
+    #fsExit:hover {
+      color: var(--accent);
+      border-color: rgba(76, 201, 240, .5);
+    }
+    #ken3dWrap:fullscreen #fsExit {
+      display: block;
+    }
+
+    /* idle hero action buttons (minimize / fullscreen) */
+    .idle-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .idle-actions button {
+      font: 400 11px var(--mono);
+      letter-spacing: .12em;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 999px;
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: color .15s ease, border-color .15s ease;
+    }
+    .idle-actions button:hover {
+      color: var(--accent);
+      border-color: rgba(76, 201, 240, .5);
+    }
+
+    /* minimized floating widget (shown when the idle view is collapsed) */
+    #kenWidget {
+      position: fixed;
+      right: 24px;
+      bottom: 88px;
+      z-index: 60;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: var(--panel2);
+      border: 1px solid var(--border2);
+      box-shadow: 0 0 22px rgba(76, 201, 240, .35);
+      cursor: pointer;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    #kenWidget:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 30px rgba(76, 201, 240, .6);
+    }
+
+    .idle-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      animation: ken-fade .5s ease;
+    }
+
+    .idle-view .greeting {
+      font: 400 30px/1.35 var(--body);
+      color: rgba(242, 233, 238, .9);
+      text-align: center;
+      max-width: 640px;
+      padding: 0 20px;
+      letter-spacing: -.01em;
+    }
+
+    .idle-view .greeting .accent {
+      color: var(--accent);
+    }
+
+    .idle-view .standby {
+      font: 300 12px var(--mono);
+      letter-spacing: .3em;
+      color: rgba(76, 201, 240, .8);
+      animation: ken-pulse 2.5s ease-in-out infinite;
+    }
+
+    .idle-view .subline {
+      font: 300 13.5px/1.7 var(--body);
+      color: var(--muted);
+      text-align: center;
+      max-width: 520px;
+    }
+
+    /* ---------- live stats strip ---------- */
+    .stats-strip {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .stat-tile {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 12px 22px;
+      min-width: 90px;
+    }
+
+    .stat-tile .num {
+      font: 500 19px var(--mono);
+      color: var(--accent);
+      letter-spacing: .02em;
+    }
+
+    .stat-tile .lbl {
+      font: 300 9.5px var(--mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--muted2);
+    }
+
+    /* ---------- feature cards ---------- */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      width: min(860px, 100%);
+      max-height: 260px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+
+    .feature-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      padding: 16px 18px;
+      cursor: pointer;
+      transition: all .18s ease;
+      border-left: 2px solid var(--border);
+    }
+
+    .feature-card:hover {
+      border-color: var(--border);
+      background: var(--accent-tint);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(76, 201, 240, .06);
+    }
+
+    .feature-card .fc-icon {
+      font-size: 20px;
+    }
+
+    .feature-card .fc-name {
+      font: 500 13px var(--body);
+      color: var(--ink);
+    }
+
+    .feature-card .fc-desc {
+      font: 300 11.5px/1.55 var(--body);
+      color: var(--muted);
+    }
+
+    .feature-card .fc-meta {
+      font: 300 9.5px var(--mono);
+      letter-spacing: .1em;
+      color: var(--muted2);
+      margin-top: 2px;
+    }
+
+    /* ---------- suggested prompts ---------- */
+    .suggest-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 760px;
+    }
+
+    .suggest-chip {
+      font: 300 11.5px var(--body);
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 18px;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .suggest-chip:hover {
+      border-color: var(--border);
+      color: var(--ink);
+      background: var(--accent-tint);
+    }
+
+    .suggest-chip .s-arrow {
+      color: var(--accent);
+      margin-left: 5px;
+      opacity: .7;
+    }
+
+    .idle-view .hints {
+      display: flex;
+      gap: 10px;
+    }
+
+    .idle-view .hints span {
+      font: 300 11px var(--mono);
+      letter-spacing: .06em;
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      padding: 8px 16px;
+    }
+
+    .chat-view {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .msgs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 26px 8vw 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .msg {
+      max-width: 68ch;
+      animation: ken-fade .25s ease;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: var(--accent-tint);
+      border: 1px solid var(--border);
+      border-radius: 14px 14px 4px 14px;
+      padding: 14px 18px;
+      font: 400 15px/1.6 var(--body);
+      color: var(--ink);
+    }
+
+    .msg.assistant {
+      align-self: flex-start;
+      font: 300 16px/1.7 var(--body);
+      color: rgba(242, 233, 238, .9);
+    }
+
+    .msg.assistant .caret::after {
+      content: "▍";
+      animation: ken-blink 1s steps(2) infinite;
+      color: var(--accent);
+    }
+
+    .msg.error {
+      align-self: flex-start;
+      background: rgba(245, 163, 199, .08);
+      border: 1px solid var(--pink-tint);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font: 300 13px var(--body);
+      color: var(--pink);
+    }
+
+    .tool-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-self: flex-start;
+      max-width: 84ch;
+    }
+
+    .tool-chip {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      background: var(--panel3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font: 400 11px var(--mono);
+      letter-spacing: .04em;
+      color: var(--ink);
+    }
+
+    .tool-chip .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--pink);
+      animation: ken-blink 1.2s ease-in-out infinite;
+    }
+
+    .tool-chip.done .dot {
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: none;
+    }
+
+    .tool-chip.err .dot {
+      background: var(--err);
+      animation: none;
+    }
+
+    .tool-chip .meta {
+      color: var(--muted);
+      font-weight: 300;
+    }
+
+    .composer-wrap {
+      padding: 16px 8vw 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border-top: 1px solid var(--border2);
+      background: linear-gradient(0deg, var(--bg) 60%, transparent);
+    }
+
+    .quick-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .quick-actions span {
+      font: 300 12px var(--body);
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 18px;
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: all .15s ease;
+    }
+
+    .quick-actions span:hover {
+      border-color: var(--border);
+      color: var(--ink);
+      background: var(--accent-tint);
+    }
+
+    .composer {
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+      background: var(--panel3);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 13px 18px;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    .composer:focus-within {
+      border-color: rgba(76, 201, 240, .4);
+      box-shadow: 0 0 0 1px rgba(76, 201, 240, .12), 0 8px 32px rgba(76, 201, 240, .05);
+    }
+
+    .composer textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      resize: none;
+      color: var(--ink);
+      font: 300 15px/1.5 var(--body);
+      max-height: 140px;
+    }
+
+    .composer textarea::placeholder {
+      color: rgba(242, 233, 238, .35);
+    }
+
+    .send-hint {
+      font: 300 10px var(--mono);
+      letter-spacing: .1em;
+      color: var(--muted2);
+      white-space: nowrap;
+    }
+
+    /* ---------- overlays ---------- */
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 4, 9, .72);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+
+    .scrim.open {
+      display: flex;
+      animation: ken-fade .15s ease;
+    }
+
+    .panel {
+      width: min(920px, 92vw);
+      max-height: 84vh;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, var(--panel2), var(--panel));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 40px 120px rgba(0, 0, 0, .7);
+    }
+
+    .panel header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 26px;
+      border-bottom: 1px solid var(--border2);
+    }
+
+    .panel header .title {
+      font: 400 18px var(--body);
+      color: var(--ink);
+    }
+
+    .panel header .sub {
+      font: 300 10px var(--mono);
+      letter-spacing: .1em;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .panel .esc {
+      font: 300 11px var(--mono);
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 7px 12px;
+      cursor: pointer;
+    }
+
+    .panel .esc:hover {
+      color: var(--ink);
+      border-color: var(--border);
+    }
+
+    .panel .body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 26px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      padding: 14px 26px 0;
+    }
+
+    .filter-row span {
+      font: 300 11px var(--mono);
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+
+    .filter-row span.active {
+      color: var(--bg);
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .mem-entry {
+      display: grid;
+      grid-template-columns: 160px 1fr 90px;
+      gap: 16px;
+      align-items: start;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-left: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 13px 16px;
+    }
+
+    .mem-entry .key {
+      font: 400 12px var(--mono);
+      color: var(--accent);
+      word-break: break-word;
+    }
+
+    .mem-entry .val {
+      font: 300 14px/1.6 var(--body);
+      color: rgba(242, 233, 238, .85);
+    }
+
+    .mem-entry .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .mem-entry .tags span {
+      font: 300 10px var(--mono);
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      padding: 3px 7px;
+    }
+
+    .mem-entry .when {
+      font: 300 10.5px var(--mono);
+      color: var(--muted2);
+      text-align: right;
+    }
+
+    .distill-btn {
+      font: 400 11px var(--mono);
+      letter-spacing: .06em;
+      color: var(--bg);
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      padding: 8px 13px;
+      cursor: pointer;
+    }
+
+    .distill-btn:hover {
+      opacity: .88;
+    }
+
+    .tool-toggle-group {
+      margin-bottom: 4px;
+    }
+
+    .tool-toggle-group h3 {
+      font: 300 10px var(--mono);
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .tool-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 7px 2px;
+    }
+
+    .tool-toggle-row label.name {
+      flex: 1;
+      font: 300 13px var(--body);
+      color: var(--ink);
+      cursor: help;
+    }
+
+    .switch {
+      position: relative;
+      width: 34px;
+      height: 19px;
+      flex: none;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      inset: 0;
+      border-radius: 19px;
+      background: var(--border2);
+      cursor: pointer;
+      transition: .15s;
+    }
+
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 13px;
+      height: 13px;
+      left: 3px;
+      top: 3px;
+      border-radius: 50%;
+      background: #fff;
+      transition: .15s;
+    }
+
+    .switch input:checked+.slider {
+      background: var(--accent);
+    }
+
+    .switch input:checked+.slider::before {
+      transform: translateX(15px);
+    }
+
+    .chats-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .chat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .chat-item:hover {
+      background: var(--panel3);
+    }
+
+    .chat-item.active {
+      background: var(--panel3);
+      border-color: var(--border);
+    }
+
+    .chat-item .title {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font: 300 13px var(--body);
+    }
+
+    .chat-item .del {
+      color: var(--muted2);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .chat-item .del:hover {
+      color: var(--err);
+    }
+
+    .da-input-row {
+      display: flex;
+      gap: 10px;
+      padding: 16px 26px 0;
+    }
+
+    .da-input-row textarea {
+      flex: 1;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      color: var(--ink);
+      font: 300 14px var(--body);
+      padding: 10px 12px;
+      resize: vertical;
+      min-height: 42px;
+    }
+
+    .da-input-row button {
+      font: 400 11px var(--mono);
+      letter-spacing: .06em;
+      color: var(--bg);
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 0 18px;
+      cursor: pointer;
+    }
+
+    .da-input-row button:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+
+    .da-stage {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font: 300 11px var(--mono);
+      letter-spacing: .05em;
+      color: var(--muted);
+    }
+
+    .da-stage .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    .da-stage.running .dot {
+      background: var(--pink);
+      animation: ken-blink 1.2s ease-in-out infinite;
+    }
+
+    .da-findings {
+      font: 300 17px/1.7 var(--body);
+      color: rgba(242, 233, 238, .9);
+      white-space: pre-wrap;
+      margin-top: 6px;
+    }
+
+    .da-guard {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      font: 300 11px var(--mono);
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    .da-guard b {
+      color: var(--accent);
+      font-weight: 400;
+    }
+
+    /* ---------- generic list rows (tasks, reminders, docs, backups) ---------- */
+    .row-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 11px 14px;
+    }
+
+    .row-item .grow {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .row-item .main {
+      font: 300 14px/1.5 var(--body);
+      color: rgba(242, 233, 238, .9);
+      word-break: break-word;
+    }
+
+    .row-item .sub2 {
+      font: 300 10.5px var(--mono);
+      color: var(--muted2);
+      margin-top: 4px;
+    }
+
+    .row-item .done {
+      text-decoration: line-through;
+      color: var(--muted2);
+    }
+
+    .row-item .del {
+      color: var(--muted2);
+      cursor: pointer;
+      padding: 2px 7px;
+      border-radius: 4px;
+      flex: none;
+    }
+
+    .row-item .del:hover {
+      color: var(--err);
+    }
+
+    .row-item input[type=checkbox] {
+      accent-color: var(--accent);
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      flex: none;
+    }
+
+    .empty-note {
+      color: var(--muted);
+      font: 300 12px var(--body);
+      padding: 10px 2px;
+    }
+
+    .add-row {
+      display: flex;
+      gap: 8px;
+      padding: 14px 26px 0;
+    }
+
+    .add-row input,
+    .add-row textarea {
+      flex: 1;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      color: var(--ink);
+      font: 300 13px var(--body);
+      padding: 9px 12px;
+      outline: none;
+    }
+
+    .add-row input:focus {
+      border-color: var(--border);
+    }
+
+    .add-row input[type=datetime-local] {
+      flex: 0 0 200px;
+      color-scheme: dark;
+    }
+
+    .btn {
+      font: 400 11px var(--mono);
+      letter-spacing: .06em;
+      color: var(--bg);
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 9px 15px;
+      cursor: pointer;
+      flex: none;
+      transition: all .15s ease;
+    }
+
+    .btn:hover {
+      opacity: .88;
+    }
+
+    .btn:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .btn.ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border2);
+    }
+
+    .btn.ghost:hover {
+      color: var(--ink);
+      border-color: var(--border);
+    }
+
+    /* ---------- sub-tabs inside a panel ---------- */
+    .subtabs {
+      display: flex;
+      gap: 6px;
+      padding: 14px 26px 0;
+      flex-wrap: wrap;
+    }
+
+    .subtabs span {
+      font: 300 11px var(--mono);
+      letter-spacing: .05em;
+      color: var(--muted);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      padding: 6px 13px;
+      cursor: pointer;
+    }
+
+    .subtabs span:hover {
+      color: var(--ink);
+    }
+
+    .subtabs span.active {
+      color: var(--bg);
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .subview {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .subview.active {
+      display: flex;
+    }
+
+    /* ---------- brain / vault ---------- */
+    .vault-layout {
+      display: grid;
+      grid-template-columns: 270px 1fr;
+      gap: 14px;
+      min-height: 320px;
+    }
+
+    .vault-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 52vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .vault-note {
+      padding: 8px 11px;
+      border-radius: 7px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .vault-note:hover {
+      background: var(--panel3);
+    }
+
+    .vault-note.active {
+      background: var(--panel3);
+      border-color: var(--border);
+    }
+
+    .vault-note .nm {
+      font: 300 12.5px var(--body);
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .vault-note .fld {
+      font: 300 9.5px var(--mono);
+      letter-spacing: .06em;
+      color: var(--muted2);
+      margin-top: 3px;
+      text-transform: uppercase;
+    }
+
+    .vault-reader {
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 16px 18px;
+      max-height: 52vh;
+      overflow-y: auto;
+    }
+
+    .vault-reader pre {
+      font: 300 12.5px/1.75 var(--mono);
+      color: rgba(242, 233, 238, .85);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .wikilink {
+      color: var(--accent);
+      border-bottom: 1px dotted var(--accent);
+      cursor: pointer;
+    }
+
+    .wikilink.missing {
+      color: var(--pink);
+      border-bottom-style: dashed;
+      cursor: help;
+    }
+
+    .gist-box {
+      font: 300 12px/1.7 var(--mono);
+      color: rgba(242, 233, 238, .82);
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 14px 16px;
+      max-height: 46vh;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .git-line {
+      font: 300 11px var(--mono);
+      color: var(--muted);
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .git-line b {
+      color: var(--accent);
+      font-weight: 400;
+    }
+
+    #graphCanvas {
+      width: 100%;
+      height: 52vh;
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+    }
+
+    /* ---------- fleet ---------- */
+    .fleet-out {
+      font: 300 12px/1.7 var(--mono);
+      color: rgba(242, 233, 238, .85);
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 14px 16px;
+      max-height: 50vh;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    .fleet-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 14px 26px 0;
+    }
+
+    .rec-btn {
+      font: 300 15px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 4px;
+      flex: none;
+    }
+
+    .rec-btn:hover {
+      color: var(--ink);
+    }
+
+    .rec-btn.recording {
+      color: var(--pink);
+      animation: ken-blink 1.1s ease-in-out infinite;
+    }
+
+    /* ---------- access / funnel ---------- */
+    .access-box {
+      background: var(--panel3);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+
+    .access-box.public {
+      border-color: var(--pink);
+      background: rgba(245, 163, 199, .07);
+    }
+
+    .access-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .access-state {
+      flex: 1;
+      font: 400 12px var(--mono);
+      letter-spacing: .05em;
+      color: var(--accent);
+      min-width: 160px;
+    }
+
+    .access-box.public .access-state {
+      color: var(--pink);
+    }
+
+    .access-url {
+      font: 300 11px var(--mono);
+      color: var(--muted);
+      margin-top: 8px;
+      word-break: break-all;
+    }
+
+    .access-note {
+      font: 300 11.5px/1.6 var(--body);
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .access-guests {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .guest-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font: 300 11.5px var(--mono);
+      color: var(--muted);
+    }
+
+    .guest-row .gname {
+      flex: 1;
+      color: var(--ink);
+    }
+
+    .guest-row .revoke {
+      color: var(--muted2);
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border2);
+    }
+
+    .guest-row .revoke:hover {
+      color: var(--err);
+      border-color: var(--pink-tint);
+    }
+
+    /* Persistent reminder in the top bar while KEN is on the public internet. */
+    .public-warn {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font: 400 10px var(--mono);
+      letter-spacing: .08em;
+      color: var(--bg);
+      background: var(--pink);
+      border-radius: 5px;
+      padding: 5px 10px;
+      flex: none;
+    }
+
+    .public-warn.on {
+      display: flex;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font: 300 13px var(--body);
+      color: var(--ink);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+      z-index: 90;
+      animation: ken-fade .2s ease;
+      max-width: 80vw;
+    }
+
+    @media (max-width: 720px) {
+
+      /* The nav is 9 buttons — wrapped onto 3 rows it ate 131px of a 852px
+       phone screen. Scroll it horizontally on one row instead. */
+      header.topbar {
+        gap: 8px;
+        padding: 10px 12px;
+        flex-wrap: nowrap;
+      }
+
+      .topbar nav {
+        flex: 1;
+        min-width: 0;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .topbar nav::-webkit-scrollbar {
+        display: none;
+      }
+
+      .navbtn {
+        flex: none;
+      }
+
+      .hud {
+        display: none;
+      }
+
+      .wordmark {
+        font-size: 14px;
+      }
+
+      .msgs {
+        padding: 18px 5vw 6px;
+      }
+
+      .composer-wrap {
+        padding: 12px 5vw 16px;
+      }
+
+      .mem-entry {
+        grid-template-columns: 1fr;
+      }
+
+      .mem-entry .when {
+        text-align: left;
+      }
+
+      .vault-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .vault-list {
+        max-height: 30vh;
+      }
+
+      .vault-reader {
+        max-height: 40vh;
+      }
+
+      .panel {
+        max-height: 90vh;
+        width: 96vw;
+      }
+
+      .panel header {
+        padding: 14px 16px;
+      }
+
+      .panel .body {
+        padding: 12px 16px 18px;
+      }
+
+      .subtabs,
+      .add-row,
+      .filter-row,
+      .da-input-row,
+      .fleet-actions {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      /* Stop iOS Safari zooming the page when a sub-16px input is focused. */
+      input,
+      textarea,
+      select {
+        font-size: 16px !important;
+      }
+
+      .add-row {
+        flex-wrap: wrap;
+      }
+
+      .add-row input[type=datetime-local] {
+        flex: 1 1 100%;
+      }
+
+      #graphCanvas {
+        height: 44vh;
+      }
+
+      /* Comfortable tap targets. */
+      .navbtn,
+      .btn,
+      .subtabs span,
+      .filter-row span {
+        min-height: 38px;
+      }
+
+      .row-item .del,
+      .chat-item .del {
+        padding: 8px 12px;
+      }
+
+      .idle-view {
+        justify-content: flex-start;
+        overflow-y: auto;
+        padding: 24px 5vw 20px;
+        gap: 24px;
+      }
+
+      .idle-view .greeting {
+        font-size: 22px;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+        max-height: none;
+      }
+
+      .feature-card {
+        flex-direction: row;
+        align-items: center;
+        padding: 12px 14px;
+      }
+
+      .feature-card .fc-desc {
+        display: none;
+      }
+
+      .feature-card .fc-meta {
+        display: none;
+      }
+
+      .feature-card .fc-name {
+        flex: 1;
+      }
+
+      .stats-strip {
+        gap: 6px;
+      }
+
+      .stat-tile {
+        padding: 8px 14px;
+        min-width: 70px;
+      }
+
+      .stat-tile .num {
+        font-size: 15px;
+      }
+
+      .idle-view .subline {
+        font-size: 12px;
+        max-width: 90%;
+      }
+
+      .suggest-row {
+        display: none;
+      }
+    }
+  </style>
 </head>
+
 <body>
 
-<div class="layout">
-  <header class="topbar">
-    <div class="orb sm" id="topOrb"><div class="ring1"></div><div class="ring2"></div><div class="core"></div></div>
-    <span class="wordmark">KEN</span>
-    <span class="status-dot" id="healthDot" title="provider status"></span>
-    <div class="hud" id="hud"></div>
-    <div class="public-warn" id="publicWarn" title="KEN is reachable from the public internet — tap to manage">● PUBLIC</div>
-    <div class="spacer"></div>
-    <nav>
-      <button class="navbtn" id="newChatBtn">+ New</button>
-      <button class="navbtn" id="chatsBtn">Chats</button>
-      <button class="navbtn" id="brainBtn">Brain</button>
-      <button class="navbtn" id="memBtn">Memory</button>
-      <button class="navbtn" id="tasksBtn">Tasks</button>
-      <button class="navbtn" id="docsBtn">Docs</button>
-      <button class="navbtn" id="daBtn">Deep analysis</button>
-      <button class="navbtn" id="fleetBtn">Fleet</button>
-      <button class="navbtn" id="settingsBtn">Settings</button>
-    </nav>
-  </header>
+  <div class="layout">
+    <header class="topbar">
+      <div class="orb sm" id="topOrb">
+        <div class="ring1"></div>
+        <div class="ring2"></div>
+        <div class="core"></div>
+      </div>
+      <span class="wordmark">KEN<span class="tag">v1</span></span>
+      <span class="status-dot" id="healthDot" title="provider status"></span>
+      <div class="hud" id="hud"></div>
+      <div class="public-warn" id="publicWarn" title="KEN is reachable from the public internet — tap to manage">●
+        PUBLIC</div>
+      <div class="spacer"></div>
+      <nav>
+        <button class="navbtn" id="newChatBtn">+ New</button>
+        <button class="navbtn" id="chatsBtn">Chats</button>
+        <button class="navbtn" id="brainBtn">Brain</button>
+        <button class="navbtn" id="memBtn">Memory</button>
+        <button class="navbtn" id="tasksBtn">Tasks</button>
+        <button class="navbtn" id="docsBtn">Docs</button>
+        <button class="navbtn" id="daBtn">Deep analysis</button>
+        <button class="navbtn" id="fleetBtn">Fleet</button>
+        <button class="navbtn" id="settingsBtn">Settings</button>
+      </nav>
+    </header>
 
-  <main>
-    <div class="idle-view" id="idleView">
-      <div class="orb lg" id="idleOrb"><div class="ring1"></div><div class="ring2"></div><div class="core"></div></div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:16px">
-        <div class="standby">STANDBY</div>
-        <div class="greeting" id="greeting">Ask KEN anything. Tools, memory, and deep analysis run for real behind this.</div>
+    <main>
+      <div class="idle-view" id="idleView">
+        <div class="idle-hero">
+          <div class="orb lg" id="idleOrb">
+            <div class="ring1"></div>
+            <div class="ring2"></div>
+            <div class="core"></div>
+          </div>
+          <div class="standby" id="standbyLabel">STANDBY</div>
+          <div class="greeting" id="greeting">Ask KEN anything.</div>
+          <div class="subline" id="subline">Your local AI assistant — tools, memory, and deep analysis run for real
+            behind this.</div>
+          <div class="idle-actions">
+            <button id="minimizeBtn" title="Minimize to a small widget">— Minimize</button>
+            <button id="fsBtn" title="Fullscreen showcase">⛶ Fullscreen</button>
+          </div>
+        </div>
+
+        <div class="stats-strip" id="statsStrip">
+          <div class="stat-tile"><span class="num" id="statTools">—</span><span class="lbl">Tools</span></div>
+          <div class="stat-tile"><span class="num" id="statMem">—</span><span class="lbl">Memories</span></div>
+          <div class="stat-tile"><span class="num" id="statChats">—</span><span class="lbl">Chats</span></div>
+          <div class="stat-tile"><span class="num" id="statDocs">—</span><span class="lbl">Documents</span></div>
+          <div class="stat-tile"><span class="num" id="statVault">—</span><span class="lbl">Vault notes</span></div>
+        </div>
+
+        <div class="feature-grid" id="featureGrid">
+          <div class="feature-card" data-open="chatsScrim">
+            <span class="fc-icon">💬</span>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+              <span class="fc-name">Chats</span>
+              <span class="fc-desc">Browse and continue past conversations</span>
+              <span class="fc-meta" data-count="chats">— ACTIVE</span>
+            </div>
+          </div>
+          <div class="feature-card" data-open="brainScrim">
+            <span class="fc-icon">🧠</span>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+              <span class="fc-name">Brain</span>
+              <span class="fc-desc">Obsidian vault, context pack, link graph</span>
+              <span class="fc-meta" data-count="vault">— NOTES</span>
+            </div>
+          </div>
+          <div class="feature-card" data-open="memScrim">
+            <span class="fc-icon">🗂</span>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+              <span class="fc-name">Memory</span>
+              <span class="fc-desc">Facts, concepts, and things KEN knows</span>
+              <span class="fc-meta" data-count="memory">— ENTRIES</span>
+            </div>
+          </div>
+          <div class="feature-card" data-open="tasksScrim">
+            <span class="fc-icon">✓</span>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+              <span class="fc-name">Tasks</span>
+              <span class="fc-desc">To-dos, reminders, and local backups</span>
+              <span class="fc-meta" data-count="tasks">— PENDING</span>
+            </div>
+          </div>
+          <div class="feature-card" data-open="docsScrim">
+            <span class="fc-icon">📄</span>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+              <span class="fc-name">Documents</span>
+              <span class="fc-desc">Upload notes for RAG search & answers</span>
+              <span class="fc-meta" data-count="docs">— INDEXED</span>
+            </div>
+          </div>
+          <div class="feature-card" data-open="daScrim">
+            <span class="fc-icon">🔬</span>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:1">
+              <span class="fc-name">Deep Analysis</span>
+              <span class="fc-desc">4-agent crew pipeline with guardrails</span>
+              <span class="fc-meta">FRESH · CACHED</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="suggest-row" id="suggestRow">
+          <span class="suggest-chip" data-prompt="What can you do? Give me a quick tour of your capabilities.">What can
+            you do?<span class="s-arrow">→</span></span>
+          <span class="suggest-chip"
+            data-prompt="What's in my vault? Find recent notes and summarize key themes.">Summarize my vault<span
+              class="s-arrow">→</span></span>
+          <span class="suggest-chip" data-prompt="Remind me to review my GitHub repos in 30 minutes.">Set a
+            reminder<span class="s-arrow">→</span></span>
+          <span class="suggest-chip"
+            data-prompt="Run a deep analysis on my applied statistics work and suggest next steps.">Deep dive my stats
+            work<span class="s-arrow">→</span></span>
+        </div>
+
         <div class="hints"><span>Type below</span><span>⌘K to focus</span></div>
       </div>
-    </div>
 
-    <div class="chat-view" id="chatView" style="display:none">
-      <div class="msgs" id="msgs"></div>
-    </div>
-
-    <div class="composer-wrap">
-      <div class="quick-actions">
-        <span id="qaDeep">Run deep analysis</span>
-        <span id="qaRemember">Remember this</span>
-        <span id="qaClear">Clear view</span>
+      <div class="chat-view" id="chatView" style="display:none">
+        <div class="msgs" id="msgs"></div>
       </div>
-      <div class="composer">
-        <textarea id="input" rows="1" placeholder="Ask KEN anything… (Enter to send, Shift+Enter for newline)"></textarea>
-        <button class="rec-btn" id="recBtn" title="Record a voice message (local Whisper)">🎙</button>
-        <span class="send-hint" id="sendHint">⏎ SEND</span>
-      </div>
-    </div>
-  </main>
-</div>
 
-<!-- Memory overlay -->
-<div class="scrim" id="memScrim">
-  <div class="panel">
-    <header>
-      <div><div class="title">Memory</div><div class="sub" id="memSub">0 ENTRIES · data/memory.json</div></div>
-      <div style="display:flex;gap:10px">
-        <button class="distill-btn" id="distillBtn">🧠 Distill from activity</button>
-        <span class="esc" data-close="memScrim">ESC</span>
-      </div>
-    </header>
-    <div class="filter-row" id="memFilters">
-      <span class="active" data-f="all">all</span>
-      <span data-f="facts">facts</span>
-      <span data-f="concepts">concepts</span>
-    </div>
-    <div class="body" id="memBody"></div>
-  </div>
-</div>
-
-<!-- Chats overlay -->
-<div class="scrim" id="chatsScrim">
-  <div class="panel" style="width:min(560px,92vw)">
-    <header>
-      <div class="title">Chats</div>
-      <span class="esc" data-close="chatsScrim">ESC</span>
-    </header>
-    <div class="body"><div class="chats-list" id="chatsList"></div></div>
-  </div>
-</div>
-
-<!-- Settings / tools overlay -->
-<div class="scrim" id="settingsScrim">
-  <div class="panel">
-    <header>
-      <div><div class="title">Settings</div><div class="sub" id="settingsSub">access &amp; tool permissions</div></div>
-      <span class="esc" data-close="settingsScrim">ESC</span>
-    </header>
-    <div class="body">
-      <div id="accessBox" class="access-box" style="display:none">
-        <div class="access-head">
-          <span id="accessState" class="access-state">checking…</span>
-          <button class="btn" id="funnelBtn" style="display:none">…</button>
+      <div class="composer-wrap">
+        <div class="quick-actions">
+          <span id="qaDeep">🔬 Run deep analysis</span>
+          <span id="qaRemember">🧠 Remember this</span>
+          <span id="qaClear">✕ Clear view</span>
         </div>
-        <div class="access-url" id="accessUrl"></div>
-        <div class="access-note" id="accessNote"></div>
-        <div class="access-guests" id="accessGuests"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-          <input id="guestName" placeholder="tester name" style="flex:1;min-width:120px;background:var(--panel3);border:1px solid var(--border2);border-radius:8px;color:var(--ink);font:300 13px var(--body);padding:8px 11px;outline:none">
-          <input id="guestHours" type="number" min="0" max="720" value="24" title="hours until it expires (0 = never)" style="width:80px;background:var(--panel3);border:1px solid var(--border2);border-radius:8px;color:var(--ink);font:300 13px var(--body);padding:8px 11px;outline:none">
-          <button class="btn ghost" id="inviteBtn">Invite tester</button>
+        <div class="composer">
+          <textarea id="input" rows="1"
+            placeholder="Ask KEN anything… (Enter to send, Shift+Enter for newline)"></textarea>
+          <button class="rec-btn" id="recBtn" title="Record a voice message (local Whisper)">🎙</button>
+          <span class="send-hint" id="sendHint">⏎ SEND</span>
         </div>
       </div>
-      <div id="toolsBody"></div>
+    </main>
+  </div>
+
+  <!-- Memory overlay -->
+  <div class="scrim" id="memScrim">
+    <div class="panel">
+      <header>
+        <div>
+          <div class="title">Memory</div>
+          <div class="sub" id="memSub">0 ENTRIES · data/memory.json</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="distill-btn" id="distillBtn">🧠 Distill from activity</button>
+          <span class="esc" data-close="memScrim">ESC</span>
+        </div>
+      </header>
+      <div class="filter-row" id="memFilters">
+        <span class="active" data-f="all">all</span>
+        <span data-f="facts">facts</span>
+        <span data-f="concepts">concepts</span>
+      </div>
+      <div class="body" id="memBody"></div>
     </div>
   </div>
-</div>
 
-<!-- Deep analysis overlay -->
-<div class="scrim" id="daScrim">
-  <div class="panel" style="width:min(980px,94vw)">
-    <header>
-      <div><div class="title">Deep analysis</div><div class="sub">4-agent crew pipeline · ~45–120s fresh, instant if cached</div></div>
-      <span class="esc" data-close="daScrim">ESC</span>
-    </header>
-    <div class="da-input-row">
-      <textarea id="daQuestion" placeholder="Question for the crew…"></textarea>
-      <button id="daRunBtn">Run</button>
-    </div>
-    <div class="body" id="daBody"></div>
-  </div>
-</div>
-
-<!-- ---------- Brain: vault explorer / context pack / link graph ---------- -->
-<div class="scrim" id="brainScrim">
-  <div class="panel" style="width:min(1040px,95vw)">
-    <header>
-      <div><div class="title">Brain</div><div class="sub" id="brainSub">obsidian vault · local files + git only</div></div>
-      <span class="esc" data-close="brainScrim">ESC</span>
-    </header>
-    <div class="subtabs" id="brainTabs">
-      <span class="active" data-sub="vault">📚 Vault</span>
-      <span data-sub="gist">📦 Context pack</span>
-      <span data-sub="graph">🕸 Link graph</span>
-    </div>
-    <div class="add-row" id="vaultSearchRow">
-      <input id="vaultSearch" placeholder="Search notes (full text)…">
-      <button class="btn ghost" id="vaultSyncBtn" title="Re-index the vault into the RAG store">Sync to RAG</button>
-    </div>
-    <div class="body">
-      <div class="subview active" id="subVault">
-        <div class="git-line" id="vaultGit"></div>
-        <div class="vault-layout">
-          <div class="vault-list" id="vaultList"></div>
-          <div class="vault-reader" id="vaultReader"><div class="empty-note">Select a note to read it.</div></div>
-        </div>
-      </div>
-      <div class="subview" id="subGist">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button class="btn" id="gistBuildBtn">Build context pack</button>
-          <button class="btn ghost" id="gistCopyBtn">Copy</button>
-          <button class="btn ghost" id="gistDownloadBtn">Download .md</button>
-          <button class="btn ghost" id="gistInjectBtn" title="Persist into every system prompt">Inject into prompt</button>
-          <button class="btn ghost" id="gistClearBtn">Stop injecting</button>
-          <span id="gistState" style="font:300 11px var(--mono);color:var(--muted)"></span>
-        </div>
-        <div class="gist-box" id="gistBox">Nothing built yet — the pack bundles memory + vault home, MOCs, active projects, conventions, recent notes and inbox into one paste-ready blob.</div>
-      </div>
-      <div class="subview" id="subGraph">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="btn ghost" id="graphReloadBtn">Reload graph</button>
-          <span id="graphStat" style="font:300 11px var(--mono);color:var(--muted)"></span>
-        </div>
-        <canvas id="graphCanvas"></canvas>
+  <!-- Chats overlay -->
+  <div class="scrim" id="chatsScrim">
+    <div class="panel" style="width:min(560px,92vw)">
+      <header>
+        <div class="title">Chats</div>
+        <span class="esc" data-close="chatsScrim">ESC</span>
+      </header>
+      <div class="body">
+        <div class="chats-list" id="chatsList"></div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- ---------- Tasks / reminders / backups ---------- -->
-<div class="scrim" id="tasksScrim">
-  <div class="panel">
-    <header>
-      <div><div class="title">Tasks</div><div class="sub" id="tasksSub">to-do · reminders · local backups</div></div>
-      <span class="esc" data-close="tasksScrim">ESC</span>
-    </header>
-    <div class="subtabs" id="tasksTabs">
-      <span class="active" data-sub="todo">✓ To-do</span>
-      <span data-sub="rem">⏰ Reminders</span>
-      <span data-sub="bk">💾 Backups</span>
-    </div>
-    <div class="add-row" id="taskAddRow">
-      <input id="taskInput" placeholder="New task…">
-      <button class="btn" id="taskAddBtn">Add</button>
-    </div>
-    <div class="add-row" id="remAddRow" style="display:none">
-      <input id="remInput" placeholder="Remind me to…">
-      <input id="remWhen" type="datetime-local">
-      <button class="btn" id="remAddBtn">Add</button>
-    </div>
-    <div class="body">
-      <div class="subview active" id="subTodo"></div>
-      <div class="subview" id="subRem"></div>
-      <div class="subview" id="subBk">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="btn" id="backupNowBtn">Back up data now</button>
-          <span id="backupInfo" style="font:300 11px var(--mono);color:var(--muted)"></span>
+  <!-- Settings / tools overlay -->
+  <div class="scrim" id="settingsScrim">
+    <div class="panel">
+      <header>
+        <div>
+          <div class="title">Settings</div>
+          <div class="sub" id="settingsSub">access & tool permissions</div>
         </div>
-        <div id="backupList"></div>
+        <span class="esc" data-close="settingsScrim">ESC</span>
+      </header>
+      <div class="body">
+        <div id="accessBox" class="access-box" style="display:none">
+          <div class="access-head">
+            <span id="accessState" class="access-state">checking…</span>
+            <button class="btn" id="funnelBtn" style="display:none">…</button>
+          </div>
+          <div class="access-url" id="accessUrl"></div>
+          <div class="access-note" id="accessNote"></div>
+          <div class="access-guests" id="accessGuests"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <input id="guestName" placeholder="tester name"
+              style="flex:1;min-width:120px;background:var(--panel3);border:1px solid var(--border2);border-radius:8px;color:var(--ink);font:300 13px var(--body);padding:8px 11px;outline:none">
+            <input id="guestHours" type="number" min="0" max="720" value="24" title="hours until it expires (0 = never)"
+              style="width:80px;background:var(--panel3);border:1px solid var(--border2);border-radius:8px;color:var(--ink);font:300 13px var(--body);padding:8px 11px;outline:none">
+            <button class="btn ghost" id="inviteBtn">Invite tester</button>
+          </div>
+        </div>
+        <div id="toolsBody"></div>
       </div>
     </div>
   </div>
-</div>
 
-<!-- ---------- Documents (RAG) ---------- -->
-<div class="scrim" id="docsScrim">
-  <div class="panel">
-    <header>
-      <div><div class="title">Documents</div><div class="sub" id="docsSub">hybrid BM25 + cosine RAG store</div></div>
-      <span class="esc" data-close="docsScrim">ESC</span>
-    </header>
-    <div class="add-row">
-      <input id="docFile" type="file" accept=".txt,.md,.pdf" multiple style="padding:7px 10px">
-      <button class="btn" id="docUploadBtn">Upload</button>
-      <button class="btn ghost" id="knowledgeSyncBtn" title="Index the nightly-learn knowledge base">Sync knowledge</button>
+  <!-- Deep analysis overlay -->
+  <div class="scrim" id="daScrim">
+    <div class="panel" style="width:min(980px,94vw)">
+      <header>
+        <div>
+          <div class="title">Deep analysis</div>
+          <div class="sub">4-agent crew pipeline · ~45–120s fresh, instant if cached</div>
+        </div>
+        <span class="esc" data-close="daScrim">ESC</span>
+      </header>
+      <div class="da-input-row">
+        <textarea id="daQuestion" placeholder="Question for the crew…"></textarea>
+        <button id="daRunBtn">Run</button>
+      </div>
+      <div class="body" id="daBody"></div>
     </div>
-    <div class="body" id="docsBody"></div>
   </div>
-</div>
 
-<!-- ---------- Fleet admin ---------- -->
-<div class="scrim" id="fleetScrim">
-  <div class="panel" style="width:min(980px,94vw)">
-    <header>
-      <div><div class="title">Fleet</div><div class="sub">ollama · docker · system crew · logs</div></div>
-      <span class="esc" data-close="fleetScrim">ESC</span>
-    </header>
-    <div class="fleet-actions">
-      <button class="btn" data-admin="status">Status</button>
-      <button class="btn ghost" data-admin="docker">Containers</button>
-      <button class="btn ghost" data-admin="crew_sweep">Crew sweep</button>
-      <button class="btn ghost" data-admin="log" data-src="crew-log">Crew log</button>
-      <button class="btn ghost" data-admin="log" data-src="learn-log">Learn log</button>
-      <button class="btn ghost" data-admin="log" data-src="system-monitor">Monitor log</button>
-      <button class="btn ghost" data-admin="open_webui">Start Open WebUI</button>
+  <!-- ---------- Brain: vault explorer / context pack / link graph ---------- -->
+  <div class="scrim" id="brainScrim">
+    <div class="panel" style="width:min(1040px,95vw)">
+      <header>
+        <div>
+          <div class="title">Brain</div>
+          <div class="sub" id="brainSub">obsidian vault · local files + git only</div>
+        </div>
+        <span class="esc" data-close="brainScrim">ESC</span>
+      </header>
+      <div class="subtabs" id="brainTabs">
+        <span class="active" data-sub="vault">📚 Vault</span>
+        <span data-sub="gist">📦 Context pack</span>
+        <span data-sub="graph">🕸 Link graph</span>
+      </div>
+      <div class="add-row" id="vaultSearchRow">
+        <input id="vaultSearch" placeholder="Search notes (full text)…">
+        <button class="btn ghost" id="vaultSyncBtn" title="Re-index the vault into the RAG store">Sync to RAG</button>
+      </div>
+      <div class="body">
+        <div class="subview active" id="subVault">
+          <div class="git-line" id="vaultGit"></div>
+          <div class="vault-layout">
+            <div class="vault-list" id="vaultList"></div>
+            <div class="vault-reader" id="vaultReader">
+              <div class="empty-note">Select a note to read it.</div>
+            </div>
+          </div>
+        </div>
+        <div class="subview" id="subGist">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn" id="gistBuildBtn">Build context pack</button>
+            <button class="btn ghost" id="gistCopyBtn">Copy</button>
+            <button class="btn ghost" id="gistDownloadBtn">Download .md</button>
+            <button class="btn ghost" id="gistInjectBtn" title="Persist into every system prompt">Inject into
+              prompt</button>
+            <button class="btn ghost" id="gistClearBtn">Stop injecting</button>
+            <span id="gistState" style="font:300 11px var(--mono);color:var(--muted)"></span>
+          </div>
+          <div class="gist-box" id="gistBox">Nothing built yet — the pack bundles memory + vault home, MOCs, active
+            projects, conventions, recent notes and inbox into one paste-ready blob.</div>
+        </div>
+        <div class="subview" id="subGraph">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn ghost" id="graphReloadBtn">Reload graph</button>
+            <span id="graphStat" style="font:300 11px var(--mono);color:var(--muted)"></span>
+          </div>
+          <canvas id="graphCanvas"></canvas>
+        </div>
+      </div>
     </div>
-    <div class="body"><div class="fleet-out" id="fleetOut">Pick an action above.</div></div>
   </div>
-</div>
 
-<script>
-"use strict";
-// Surface failures instead of dying silently. Without this, one thrown error
-// during setup leaves a fully rendered but completely inert page — which is
-// exactly what it looked like on iOS, where the console isn't reachable.
-function fatal(msg) {
-  let bar = document.getElementById("jsErrBar");
-  if (!bar) {
-    bar = document.createElement("div");
-    bar.id = "jsErrBar";
-    bar.style.cssText =
-      "position:fixed;left:0;right:0;bottom:0;z-index:200;background:#f5a3c7;color:#12060E;" +
-      "font:400 12px/1.5 ui-monospace,Consolas,monospace;padding:10px 14px;max-height:45vh;" +
-      "overflow:auto;white-space:pre-wrap;-webkit-user-select:text;user-select:text";
-    (document.body || document.documentElement).appendChild(bar);
-  }
-  bar.textContent = (bar.textContent ? bar.textContent + "\n" : "") + msg;
-}
-// Ship diagnostics to the server too: a phone has no console, so an error
-// here is otherwise invisible. Uses XMLHttpRequest rather than fetch, on
-// purpose — if fetch or its surrounding code is what's broken, a fetch-based
-// reporter would fail silently in exactly the case that matters most.
-function report(payload) {
-  try {
-    const base = location.pathname.replace(/\/+$/, "");
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", base + "/api/clientlog", true);
-    xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.send(JSON.stringify(payload));
-  } catch (e) { /* diagnostics must never themselves throw */ }
-}
-window.addEventListener("error", (e) => {
-  const msg = `JS error: ${e.message}\n  at ${e.filename || "?"}:${e.lineno || "?"}:${e.colno || "?"}`;
-  fatal(msg);
-  report({ kind: "error", message: e.message, file: e.filename,
-           line: e.lineno, col: e.colno, ua: navigator.userAgent });
-});
-window.addEventListener("unhandledrejection", (e) => {
-  const reason = (e.reason && (e.reason.stack || e.reason.message)) || String(e.reason);
-  fatal(`Unhandled promise rejection: ${reason}`);
-  report({ kind: "rejection", reason: String(reason), ua: navigator.userAgent });
-});
+  <!-- ---------- Tasks / reminders / backups ---------- -->
+  <div class="scrim" id="tasksScrim">
+    <div class="panel">
+      <header>
+        <div>
+          <div class="title">Tasks</div>
+          <div class="sub" id="tasksSub">to-do · reminders · local backups</div>
+        </div>
+        <span class="esc" data-close="tasksScrim">ESC</span>
+      </header>
+      <div class="subtabs" id="tasksTabs">
+        <span class="active" data-sub="todo">✓ To-do</span>
+        <span data-sub="rem">⏰ Reminders</span>
+        <span data-sub="bk">💾 Backups</span>
+      </div>
+      <div class="add-row" id="taskAddRow">
+        <input id="taskInput" placeholder="New task…">
+        <button class="btn" id="taskAddBtn">Add</button>
+      </div>
+      <div class="add-row" id="remAddRow" style="display:none">
+        <input id="remInput" placeholder="Remind me to…">
+        <input id="remWhen" type="datetime-local">
+        <button class="btn" id="remAddBtn">Add</button>
+      </div>
+      <div class="body">
+        <div class="subview active" id="subTodo"></div>
+        <div class="subview" id="subRem"></div>
+        <div class="subview" id="subBk">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn" id="backupNowBtn">Back up data now</button>
+            <span id="backupInfo" style="font:300 11px var(--mono);color:var(--muted)"></span>
+          </div>
+          <div id="backupList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  <!-- ---------- Documents (RAG) ---------- -->
+  <div class="scrim" id="docsScrim">
+    <div class="panel">
+      <header>
+        <div>
+          <div class="title">Documents</div>
+          <div class="sub" id="docsSub">hybrid BM25 + cosine RAG store</div>
+        </div>
+        <span class="esc" data-close="docsScrim">ESC</span>
+      </header>
+      <div class="add-row">
+        <input id="docFile" type="file" accept=".txt,.md,.pdf" multiple style="padding:7px 10px">
+        <button class="btn" id="docUploadBtn">Upload</button>
+        <button class="btn ghost" id="knowledgeSyncBtn" title="Index the nightly-learn knowledge base">Sync
+          knowledge</button>
+      </div>
+      <div class="body" id="docsBody"></div>
+    </div>
+  </div>
 
-const state = { chatId: null, history: [], tools: new Map(), memory: [], streaming: false, daRunning: false, memFilter: "all" };
+  <!-- ---------- Fleet admin ---------- -->
+  <div class="scrim" id="fleetScrim">
+    <div class="panel" style="width:min(980px,94vw)">
+      <header>
+        <div>
+          <div class="title">Fleet</div>
+          <div class="sub">ollama · docker · system crew · logs</div>
+        </div>
+        <span class="esc" data-close="fleetScrim">ESC</span>
+      </header>
+      <div class="fleet-actions">
+        <button class="btn" data-admin="status">Status</button>
+        <button class="btn ghost" data-admin="docker">Containers</button>
+        <button class="btn ghost" data-admin="crew_sweep">Crew sweep</button>
+        <button class="btn ghost" data-admin="log" data-src="crew-log">Crew log</button>
+        <button class="btn ghost" data-admin="log" data-src="learn-log">Learn log</button>
+        <button class="btn ghost" data-admin="log" data-src="system-monitor">Monitor log</button>
+        <button class="btn ghost" data-admin="open_webui">Start Open WebUI</button>
+      </div>
+      <div class="body">
+        <div class="fleet-out" id="fleetOut">Pick an action above.</div>
+      </div>
+    </div>
+  </div>
 
-// KEN may be served under a path prefix (Tailscale mounts it at /ken so it
-// doesn't collide with the other services on this host). The backend never
-// sees that prefix — the proxy strips it — so absolute "/api/..." URLs would
-// resolve against the site root and hit a different app entirely. Derive the
-// prefix from our own location and put it in front of every request.
-//   "/"      -> ""      -> /api/health
-//   "/ken/"  -> "/ken"  -> /ken/api/health
-//   "/ken"   -> "/ken"  -> /ken/api/health
-const BASE = location.pathname.replace(/\/+$/, "");
-const url = (p) => BASE + p;
+  <!-- minimized floating widget (appears when the idle view is collapsed) -->
+  <div id="kenWidget" title="Open KEN">
+    <div class="orb sm">
+      <div class="ring1"></div>
+      <div class="ring2"></div>
+      <div class="core"></div>
+    </div>
+  </div>
 
-// The token arrives once as ?token=… and is exchanged for an HttpOnly cookie.
-// Strip it from the address bar so it doesn't linger in history or get
-// shoulder-surfed. Done client-side because the server can't build a correct
-// absolute redirect without knowing the proxy's path prefix.
-if (location.search.includes("token=")) {
-  const clean = new URL(location.href);
-  clean.searchParams.delete("token");
-  history.replaceState({}, "", clean.pathname + (clean.search || "") + clean.hash);
-}
+  <script src="assets/three.min.js"></script>
+  <script>
+    "use strict";
+    // Surface failures instead of dying silently. Without this, one thrown error
+    // during setup leaves a fully rendered but completely inert page — which is
+    // exactly what it looked like on iOS, where the console isn't reachable.
+    function fatal(msg) {
+      let bar = document.getElementById("jsErrBar");
+      if (!bar) {
+        bar = document.createElement("div");
+        bar.id = "jsErrBar";
+        bar.style.cssText =
+          "position:fixed;left:0;right:0;bottom:0;z-index:200;background:#f5a3c7;color:#12060E;" +
+          "font:400 12px/1.5 ui-monospace,Consolas,monospace;padding:10px 14px;max-height:45vh;" +
+          "overflow:auto;white-space:pre-wrap;-webkit-user-select:text;user-select:text";
+        (document.body || document.documentElement).appendChild(bar);
+      }
+      bar.textContent = (bar.textContent ? bar.textContent + "\n" : "") + msg;
+    }
+    // Ship diagnostics to the server too: a phone has no console, so an error
+    // here is otherwise invisible. Uses XMLHttpRequest rather than fetch, on
+    // purpose — if fetch or its surrounding code is what's broken, a fetch-based
+    // reporter would fail silently in exactly the case that matters most.
+    function report(payload) {
+      try {
+        const base = location.pathname.replace(/\/+$/, "");
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", base + "/api/clientlog", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.send(JSON.stringify(payload));
+      } catch (e) { /* diagnostics must never themselves throw */ }
+    }
+    window.addEventListener("error", (e) => {
+      const msg = `JS error: ${e.message}\n  at ${e.filename || "?"}:${e.lineno || "?"}:${e.colno || "?"}`;
+      fatal(msg);
+      report({
+        kind: "error", message: e.message, file: e.filename,
+        line: e.lineno, col: e.colno, ua: navigator.userAgent
+      });
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      const reason = (e.reason && (e.reason.stack || e.reason.message)) || String(e.reason);
+      fatal(`Unhandled promise rejection: ${reason}`);
+      report({ kind: "rejection", reason: String(reason), ua: navigator.userAgent });
+    });
 
-async function api(path, opts = {}) {
-  const res = await fetch(url(path), { headers: opts.body ? { "Content-Type": "application/json" } : {}, ...opts });
-  if (!res.ok) {
-    let detail = res.statusText;
-    try { detail = (await res.json()).detail || detail; } catch (e) {}
-    throw new Error(`${res.status} ${detail}`);
-  }
-  return res.json();
-}
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "\x26amp;", "<": "\x26lt;", ">": "\x26gt;", '"': "\x26quot;", "'": "\x26#39;" }[c]));
 
-function openPanel(id) { $(id).classList.add("open"); }
-function closePanel(id) { $(id).classList.remove("open"); }
-document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closePanel(el.dataset.close));
-document.querySelectorAll(".scrim").forEach(s => s.addEventListener("click", e => { if (e.target === s) s.classList.remove("open"); }));
-document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".scrim.open").forEach(s => s.classList.remove("open")); });
+    const state = { chatId: null, history: [], tools: new Map(), memory: [], streaming: false, daRunning: false, memFilter: "all", chats: [], vaultCount: 0, docsCount: 0, tasksCount: 0 };
 
-/* ---------- health / HUD ---------- */
-async function loadHealth() {
-  try {
-    const h = await api("/api/health");
-    $("healthDot").className = "status-dot " + (h.status === "ok" ? "ok" : "bad");
-    const bits = [`${esc(h.provider || "").toUpperCase()} <b>${h.status === "ok" ? "ONLINE" : "DOWN"}</b>`, esc(h.model || "")];
-    bits.push(`FALLBACK ${h.ollama_up ? "<b>READY</b>" : "OFFLINE"}`);
-    bits.push(`MEM ${state.memory.length}`);
-    bits.push(`${state.tools.size} TOOLS`);
-    $("hud").innerHTML = bits.map(b => `<span>${b}</span>`).join("");
-  } catch (e) {
-    $("healthDot").className = "status-dot bad";
-  }
-}
+    // KEN may be served under a path prefix (Tailscale mounts it at /ken so it
+    // doesn't collide with the other services on this host). The backend never
+    // sees that prefix — the proxy strips it — so absolute "/api/..." URLs would
+    // resolve against the site root and hit a different app entirely. Derive the
+    // prefix from our own location and put it in front of every request.
+    //   "/"      -> ""      -> /api/health
+    //   "/ken/"  -> "/ken"  -> /ken/api/health
+    //   "/ken"   -> "/ken"  -> /ken/api/health
+    const BASE = location.pathname.replace(/\/+$/, "");
+    const url = (p) => BASE + p;
 
-/* ---------- tools ---------- */
-async function loadTools() {
-  const tools = await api("/api/tools");
-  state.tools = new Map(tools.map(t => [t.name, t]));
-  renderTools();
-}
-function renderTools() {
-  const groups = {};
-  for (const t of state.tools.values()) (groups[t.group] ||= []).push(t);
-  $("toolsBody").innerHTML = Object.entries(groups).map(([g, tools]) => `
+    // The token arrives once as ?token=… and is exchanged for an HttpOnly cookie.
+    // Strip it from the address bar so it doesn't linger in history or get
+    // shoulder-surfed. Done client-side because the server can't build a correct
+    // absolute redirect without knowing the proxy's path prefix.
+    if (location.search.includes("token=")) {
+      const clean = new URL(location.href);
+      clean.searchParams.delete("token");
+      history.replaceState({}, "", clean.pathname + (clean.search || "") + clean.hash);
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch(url(path), { headers: opts.body ? { "Content-Type": "application/json" } : {}, ...opts });
+      if (!res.ok) {
+        let detail = res.statusText;
+        try { detail = (await res.json()).detail || detail; } catch (e) { }
+        throw new Error(`${res.status} ${detail}`);
+      }
+      return res.json();
+    }
+
+    function openPanel(id) { $(id).classList.add("open"); }
+    function closePanel(id) { $(id).classList.remove("open"); }
+    document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closePanel(el.dataset.close));
+    document.querySelectorAll(".scrim").forEach(s => s.addEventListener("click", e => { if (e.target === s) s.classList.remove("open"); }));
+    document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".scrim.open").forEach(s => s.classList.remove("open")); });
+
+    /* ---------- health / HUD ---------- */
+    async function loadHealth() {
+      try {
+        const h = await api("/api/health");
+        $("healthDot").className = "status-dot " + (h.status === "ok" ? "ok" : "bad");
+        const bits = [`${esc(h.provider || "").toUpperCase()} <b>${h.status === "ok" ? "ONLINE" : "DOWN"}</b>`, esc(h.model || "")];
+        bits.push(`FALLBACK ${h.ollama_up ? "<b>READY</b>" : "OFFLINE"}`);
+        bits.push(`MEM ${state.memory.length}`);
+        bits.push(`${state.tools.size} TOOLS`);
+        $("hud").innerHTML = bits.map(b => `<span>${b}</span>`).join("");
+      } catch (e) {
+        $("healthDot").className = "status-dot bad";
+      }
+    }
+
+    /* ---------- stats strip / feature card counts ---------- */
+    function refreshStats() {
+      const s = state;
+      $("statTools").textContent = s.tools.size || "—";
+      $("statMem").textContent = s.memory.length || "—";
+      $("statChats").textContent = s.chats.length || "—";
+      $("statDocs").textContent = s.docsCount || "—";
+      $("statVault").textContent = s.vaultCount || "—";
+
+      const cardCounts = {
+        chats: `${s.chats.length || 0} ACTIVE`,
+        vault: `${s.vaultCount || 0} NOTES`,
+        memory: `${s.memory.length || 0} ENTRIES`,
+        tasks: `${s.tasksCount || 0} PENDING`,
+        docs: `${s.docsCount || 0} INDEXED`
+      };
+      document.querySelectorAll("[data-count]").forEach(el => {
+        const k = el.dataset.count;
+        if (cardCounts[k]) el.textContent = cardCounts[k];
+      });
+    }
+
+    /* ---------- dynamic greeting ---------- */
+    function updateGreeting() {
+      const h = new Date().getHours();
+      let timeGreet;
+      if (h < 5) timeGreet = "Working late";
+      else if (h < 12) timeGreet = "Good morning";
+      else if (h < 17) timeGreet = "Good afternoon";
+      else if (h < 21) timeGreet = "Good evening";
+      else timeGreet = "Good night";
+      $("greeting").innerHTML = `${timeGreet}, <span class="accent">Janak</span>. What&#39;s on your mind?`;
+    }
+
+    /* ---------- tools ---------- */
+    async function loadTools() {
+      const tools = await api("/api/tools");
+      state.tools = new Map(tools.map(t => [t.name, t]));
+      renderTools();
+      refreshStats();
+    }
+    function renderTools() {
+      const groups = {};
+      for (const t of state.tools.values()) (groups[t.group] ||= []).push(t);
+      $("toolsBody").innerHTML = Object.entries(groups).map(([g, tools]) => `
     <div class="tool-toggle-group">
       <h3>${esc(g)}</h3>
       ${tools.map(t => `
@@ -682,841 +2262,1225 @@ function renderTools() {
           <label class="name" title="${esc(t.description)}">${esc(t.name)}</label>
         </div>`).join("")}
     </div>`).join("");
-  $("toolsBody").querySelectorAll("input[data-tool]").forEach(cb => cb.onchange = () => toggleTool(cb.dataset.tool, cb.checked));
-}
-async function toggleTool(name, enabled) {
-  const t = await api("/api/tools/toggle", { method: "POST", body: JSON.stringify({ name, enabled }) });
-  state.tools.set(name, { ...state.tools.get(name), enabled: t.enabled });
-}
-function enabledTools() { return [...state.tools.values()].filter(t => t.enabled).map(t => t.name); }
+      $("toolsBody").querySelectorAll("input[data-tool]").forEach(cb => cb.onchange = () => toggleTool(cb.dataset.tool, cb.checked));
+    }
+    async function toggleTool(name, enabled) {
+      const t = await api("/api/tools/toggle", { method: "POST", body: JSON.stringify({ name, enabled }) });
+      state.tools.set(name, { ...state.tools.get(name), enabled: t.enabled });
+    }
+    function enabledTools() { return [...state.tools.values()].filter(t => t.enabled).map(t => t.name); }
 
-/* ---------- chats ---------- */
-async function loadChats() {
-  const chats = await api("/api/chats");
-  $("chatsList").innerHTML = chats.map(c => `
+    /* ---------- chats ---------- */
+    async function loadChats() {
+      const chats = await api("/api/chats");
+      state.chats = chats;
+      refreshStats();
+      $("chatsList").innerHTML = chats.map(c => `
     <div class="chat-item ${c.id === state.chatId ? "active" : ""}" data-id="${esc(c.id)}">
       <span class="title">${esc(c.title)}</span>
       <span class="del" data-del="${esc(c.id)}" title="Delete">✕</span>
     </div>`).join("") || `<div style="color:var(--muted);font-size:12px;padding:10px">No chats yet.</div>`;
-  $("chatsList").querySelectorAll(".chat-item").forEach(item => item.onclick = () => { openChat(item.dataset.id); closePanel("chatsScrim"); });
-  $("chatsList").querySelectorAll(".del").forEach(d => d.onclick = async (e) => {
-    e.stopPropagation();
-    if (!confirm("Delete this chat?")) return;
-    await api(`/api/chats/${d.dataset.del}`, { method: "DELETE" });
-    if (d.dataset.del === state.chatId) newChat();
-    loadChats();
-  });
-}
-function newChat() {
-  state.chatId = null; state.history = [];
-  showIdle();
-  loadChats();
-}
-async function openChat(id) {
-  const chat = await api(`/api/chats/${id}`);
-  state.chatId = chat.id;
-  state.history = chat.messages.map(m => ({ role: m.role, content: m.content }));
-  showChatView();
-  $("msgs").innerHTML = "";
-  for (const m of state.history) appendMsg(m.role, m.content);
-  loadChats();
-}
+      $("chatsList").querySelectorAll(".chat-item").forEach(item => item.onclick = () => { openChat(item.dataset.id); closePanel("chatsScrim"); });
+      $("chatsList").querySelectorAll(".del").forEach(d => d.onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm("Delete this chat?")) return;
+        await api(`/api/chats/${d.dataset.del}`, { method: "DELETE" });
+        if (d.dataset.del === state.chatId) newChat();
+        loadChats();
+      });
+    }
+    function newChat() {
+      if (state.streaming) return toast("Wait for the current response to finish.");
+      state.chatId = null; state.history = [];
+      $("msgs").innerHTML = "";
+      showIdle();
+      loadChats();
+    }
+    async function openChat(id) {
+      if (state.streaming) return toast("Wait for the current response to finish.");
+      const chat = await api(`/api/chats/${id}`);
+      state.chatId = chat.id;
+      state.history = chat.messages.map(m => ({ role: m.role, content: m.content }));
+      showChatView();
+      $("msgs").innerHTML = "";
+      for (const m of state.history) appendMsg(m.role, m.content);
+      loadChats();
+    }
 
-function showIdle() { $("idleView").style.display = "flex"; $("chatView").style.display = "none"; }
-function showChatView() { $("idleView").style.display = "none"; $("chatView").style.display = "flex"; }
+    function showIdle() { $("idleView").style.display = "flex"; $("chatView").style.display = "none"; }
+    function showChatView() { $("idleView").style.display = "none"; $("chatView").style.display = "flex"; }
 
-/* ---------- memory ---------- */
-async function loadMemory() {
-  try {
-    state.memory = await api("/api/memory");
-    $("memSub").textContent = `${state.memory.length} ENTRIES · data/memory.json`;
-    renderMemory();
-  } catch (e) { /* keep quiet */ }
-}
-function renderMemory() {
-  let items = state.memory;
-  if (state.memFilter === "facts") items = items.filter(m => (m.facts || []).length);
-  if (state.memFilter === "concepts") items = items.filter(m => (m.concepts || []).length);
-  $("memBody").innerHTML = items.length ? items.map(m => `
+    /* ---------- memory ---------- */
+    async function loadMemory() {
+      try {
+        state.memory = await api("/api/memory");
+        $("memSub").textContent = `${state.memory.length} ENTRIES · data/memory.json`;
+        renderMemory();
+        refreshStats();
+      } catch (e) { /* keep quiet */ }
+    }
+    function renderMemory() {
+      let items = state.memory;
+      if (state.memFilter === "facts") items = items.filter(m => (m.facts || []).length);
+      if (state.memFilter === "concepts") items = items.filter(m => (m.concepts || []).length);
+      $("memBody").innerHTML = items.length ? items.map(m => `
     <div class="mem-entry">
       <span class="key">${esc(m.key)}</span>
       <div>
         <div class="val">${esc(m.value)}</div>
-        <div class="tags">${(m.facts||[]).map(f=>`<span>${esc(f)}</span>`).join("")}${(m.concepts||[]).map(c=>`<span>${esc(c)}</span>`).join("")}</div>
+        <div class="tags">${(m.facts || []).map(f => `<span>${esc(f)}</span>`).join("")}${(m.concepts || []).map(c => `<span>${esc(c)}</span>`).join("")}</div>
       </div>
-      <span class="when">${m.updated_at ? esc(m.updated_at.slice(0,10)) : ""}</span>
+      <span class="when">${m.updated_at ? esc(m.updated_at.slice(0, 10)) : ""}</span>
     </div>`).join("") : `<div style="color:var(--muted);font-size:12px">No stored memories yet.</div>`;
-}
-$("memFilters").querySelectorAll("span").forEach(el => el.onclick = () => {
-  $("memFilters").querySelectorAll("span").forEach(x => x.classList.remove("active"));
-  el.classList.add("active");
-  state.memFilter = el.dataset.f;
-  renderMemory();
-});
-$("distillBtn").onclick = () => sendMessage("Run distill_memory now and summarize what you learned.", ["distill_memory"]);
-
-/* ---------- chat sending ---------- */
-async function sendMessage(text, forceTools) {
-  if (state.streaming || !text.trim()) return;
-  showChatView();
-  const hint = $("msgs").querySelector(".idle-hint");
-  if (hint) hint.remove();
-  appendMsg("user", text);
-  const messages = [...state.history, { role: "user", content: text }];
-  const enabled = forceTools || enabledTools();
-  state.streaming = true;
-  $("topOrb").classList.add("thinking");
-  try {
-    await streamChat(messages, enabled);
-    state.history.push({ role: "user", content: text });
-  } catch (e) {
-    appendMsg("error", `Request failed: ${e.message}`);
-  } finally {
-    state.streaming = false;
-    $("topOrb").classList.remove("thinking");
-    loadChats();
-  }
-}
-async function streamChat(messages, enabledToolsList) {
-  const res = await fetch(url("/api/chat"), {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, enabled_tools: enabledToolsList, chat_id: state.chatId || null }),
-  });
-  if (!res.ok || !res.body) throw new Error(res.statusText);
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    // sse-starlette emits \r\n\r\n block separators; normalize to \n\n so
-    // the indexOf/split parsing below (and the CRLF-in-arg-strings tokens)
-    // aren't corrupted by stray \r characters.
-    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-    let idx;
-    while ((idx = buffer.indexOf("\n\n")) !== -1) {
-      handleSSEBlock(buffer.slice(0, idx));
-      buffer = buffer.slice(idx + 2);
     }
-  }
-}
-function handleSSEBlock(block) {
-  let event = "message", data = "";
-  for (const line of block.split("\n")) {
-    if (line.startsWith(":")) continue;
-    if (line.startsWith("event:")) event = line.slice(6).trim();
-    else if (line.startsWith("data:")) data += line.slice(5).trim();
-  }
-  if (!data) return;
-  let obj;
-  try { obj = JSON.parse(data); } catch (e) { return; }
-  dispatch(event, obj);
-}
-const handlers = {};
-function dispatch(event, obj) { (handlers[event] || []).forEach(fn => fn(obj)); }
-function on(event, fn) { (handlers[event] ||= []).push(fn); }
+    $("memFilters").querySelectorAll("span").forEach(el => el.onclick = () => {
+      $("memFilters").querySelectorAll("span").forEach(x => x.classList.remove("active"));
+      el.classList.add("active");
+      state.memFilter = el.dataset.f;
+      renderMemory();
+    });
+    $("distillBtn").onclick = () => { closePanel("memScrim"); sendMessage("Run distill_memory now and summarize what you learned.", ["distill_memory"]); };
 
-on("token", (d) => {
-  const msgs = $("msgs");
-  let last = msgs.lastElementChild;
-  if (!last || !last.classList.contains("assistant") || last.dataset.finalized) {
-    last = appendMsg("assistant", "");
-    last.dataset.finalized = "";
-  }
-  last.textContent += d.delta;
-  last.classList.add("caret");
-  msgs.scrollTop = msgs.scrollHeight;
-});
-on("tool_start", (d) => {
-  const msgs = $("msgs");
-  let row = msgs.lastElementChild;
-  if (!row || !row.classList.contains("tool-row") || row.dataset.locked) {
-    row = document.createElement("div");
-    row.className = "tool-row";
-    msgs.appendChild(row);
-  }
-  const chip = document.createElement("div");
-  chip.className = "tool-chip";
-  chip.dataset.tool = d.name;
-  chip.innerHTML = `<span class="dot"></span><span>${esc(d.name)}</span><span class="meta">${esc(JSON.stringify(d.args || {}))}</span>`;
-  row.appendChild(chip);
-  msgs.scrollTop = msgs.scrollHeight;
-});
-on("tool_end", (d) => {
-  const chips = $("msgs").querySelectorAll(`.tool-chip[data-tool="${CSS.escape(d.name)}"]`);
-  const chip = chips[chips.length - 1];
-  if (!chip) return;
-  chip.classList.add(d.ok ? "done" : "err");
-  chip.querySelector(".dot");
-  chip.querySelector(".meta").textContent = `${d.ok ? "✓" : "✗"} ${d.ms}ms${d.summary ? " · " + d.summary : ""}`;
-  const row = chip.closest(".tool-row");
-  if (row) row.dataset.locked = "";
-});
-on("error", (d) => {
-  const msgs = $("msgs");
-  const last = msgs.lastElementChild;
-  if (last && last.classList.contains("assistant") && last.classList.contains("caret")) {
-    last.classList.remove("caret"); last.dataset.finalized = "1";
-  }
-  appendMsg("error", d.message || "Unknown error");
-});
-on("done", (d) => {
-  const msgs = $("msgs");
-  const last = msgs.lastElementChild;
-  if (last && last.classList.contains("assistant") && last.classList.contains("caret")) {
-    last.classList.remove("caret"); last.dataset.finalized = "1";
-    state.history.push({ role: "assistant", content: last.textContent });
-  }
-  state.chatId = d.chat_id || state.chatId;
-  loadHealth();
-});
-function appendMsg(role, content) {
-  const div = document.createElement("div");
-  div.className = `msg ${role === "user" ? "user" : role === "error" ? "error" : "assistant"}`;
-  div.textContent = content;
-  $("msgs").appendChild(div);
-  $("msgs").scrollTop = $("msgs").scrollHeight;
-  return div;
-}
-
-/* ---------- deep analysis ---------- */
-async function runDeepAnalysis(question) {
-  if (state.daRunning || !question.trim()) return;
-  state.daRunning = true;
-  $("daRunBtn").disabled = true;
-  const body = $("daBody");
-  body.innerHTML = `<div style="font:300 15px var(--body);color:var(--ink)">${esc(question)}</div>`;
-  try {
-    const res = await fetch(url("/api/deep-analysis"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
-    if (!res.ok || !res.body) throw new Error(res.statusText);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      // sse-starlette emits \r\n\r\n block separators; normalize to \n\n so
-    // the indexOf/split parsing below (and the CRLF-in-arg-strings tokens)
-    // aren't corrupted by stray \r characters.
-    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
-      let idx;
-      while ((idx = buffer.indexOf("\n\n")) !== -1) { handleDABlock(buffer.slice(0, idx)); buffer = buffer.slice(idx + 2); }
+    /* ---------- chat sending ---------- */
+    async function sendMessage(text, forceTools) {
+      if (state.streaming || !text.trim()) return;
+      showChatView();
+      const hint = $("msgs").querySelector(".idle-hint");
+      if (hint) hint.remove();
+      appendMsg("user", text);
+      const messages = [...state.history, { role: "user", content: text }];
+      state.history.push({ role: "user", content: text });
+      const enabled = forceTools || enabledTools();
+      state.streaming = true;
+      $("topOrb").classList.add("thinking");
+      $("standbyLabel").textContent = "THINKING";
+      if (window.KEN3D) window.KEN3D.setThinking(true);
+      try {
+        await streamChat(messages, enabled);
+        const last = $("msgs").lastElementChild;
+        if (last && last.classList.contains("assistant") && last.dataset.finalized) {
+          state.history.push({ role: "assistant", content: last.textContent });
+        }
+      } catch (e) {
+        // Roll back the user message so history stays consistent with what failed.
+        state.history.pop();
+        appendMsg("error", `Request failed: ${e.message}`);
+      } finally {
+        state.streaming = false;
+        $("topOrb").classList.remove("thinking");
+        $("standbyLabel").textContent = "STANDBY";
+        if (window.KEN3D) window.KEN3D.setThinking(false);
+        loadChats();
+      }
     }
-  } catch (e) {
-    body.insertAdjacentHTML("beforeend", `<div class="msg error">${esc(e.message)}</div>`);
-  } finally {
-    state.daRunning = false;
-    $("daRunBtn").disabled = false;
-  }
-}
-function handleDABlock(block) {
-  let event = "message", data = "";
-  for (const line of block.split("\n")) {
-    if (line.startsWith(":")) continue;
-    if (line.startsWith("event:")) event = line.slice(6).trim();
-    else if (line.startsWith("data:")) data += line.slice(5).trim();
-  }
-  if (!data) return;
-  let obj; try { obj = JSON.parse(data); } catch (e) { return; }
-  const body = $("daBody");
-  if (event === "stage") {
-    body.insertAdjacentHTML("beforeend", `<div class="da-stage ${obj.status === "running" ? "running" : ""}"><span class="dot"></span>${esc(obj.stage)} · ${esc(obj.status)}${obj.ms ? ` (${obj.ms}ms)` : ""}${obj.note ? " — " + esc(obj.note) : ""}</div>`);
-  } else if (event === "done") {
-    body.insertAdjacentHTML("beforeend",
-      `<div class="da-findings">${esc(obj.findings)}</div>` +
-      (obj.cached ? `<div class="da-stage"><span class="dot"></span>cached result</div>` : "") +
-      `<div class="da-guard">${Object.entries(obj.guardrail || {}).map(([k,v]) => `<span>${esc(k)}: <b>${esc(String(v))}</b></span>`).join("")}</div>`);
-  } else if (event === "error") {
-    body.insertAdjacentHTML("beforeend", `<div class="msg error">${esc(obj.message)}</div>`);
-  }
-  body.scrollTop = body.scrollHeight;
-}
-
-/* ---------- toast ---------- */
-let _toastTimer = null;
-function toast(msg) {
-  document.querySelectorAll(".toast").forEach(t => t.remove());
-  const el = document.createElement("div");
-  el.className = "toast";
-  el.textContent = msg;
-  document.body.appendChild(el);
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.remove(), 3200);
-}
-
-/* ---------- sub-tab helper (shared by Brain and Tasks panels) ---------- */
-function wireSubtabs(tabsId, map, onSwitch) {
-  $(tabsId).querySelectorAll("span").forEach(tab => tab.onclick = () => {
-    $(tabsId).querySelectorAll("span").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
-    for (const [key, viewId] of Object.entries(map)) {
-      $(viewId).classList.toggle("active", key === tab.dataset.sub);
+    async function streamChat(messages, enabledToolsList) {
+      const res = await fetch(url("/api/chat"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, enabled_tools: enabledToolsList, chat_id: state.chatId || null }),
+      });
+      if (!res.ok || !res.body) throw new Error(res.statusText);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        // sse-starlette emits \r\n\r\n block separators; normalize to \n\n so
+        // the indexOf/split parsing below (and the CRLF-in-arg-strings tokens)
+        // aren't corrupted by stray \r characters.
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          handleSSEBlock(buffer.slice(0, idx));
+          buffer = buffer.slice(idx + 2);
+        }
+      }
     }
-    if (onSwitch) onSwitch(tab.dataset.sub);
-  });
-}
+    function handleSSEBlock(block) {
+      let event = "message", data = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith(":")) continue;
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (!data) return;
+      let obj;
+      try { obj = JSON.parse(data); } catch (e) { return; }
+      dispatch(event, obj);
+    }
+    const handlers = {};
+    function dispatch(event, obj) { (handlers[event] || []).forEach(fn => fn(obj)); }
+    function on(event, fn) { (handlers[event] ||= []).push(fn); }
 
-/* ---------- brain / vault ---------- */
-const brain = { notes: [], names: new Set(), current: null, gist: "" };
+    on("token", (d) => {
+      const msgs = $("msgs");
+      let last = msgs.lastElementChild;
+      if (!last || !last.classList.contains("assistant") || last.dataset.finalized) {
+        last = appendMsg("assistant", "");
+        last.dataset.finalized = "";
+      }
+      last.textContent += d.delta || "";
+      last.classList.add("caret");
+      msgs.scrollTop = msgs.scrollHeight;
+    });
+    on("tool_start", (d) => {
+      const msgs = $("msgs");
+      let row = msgs.lastElementChild;
+      if (!row || !row.classList.contains("tool-row") || row.dataset.locked) {
+        row = document.createElement("div");
+        row.className = "tool-row";
+        msgs.appendChild(row);
+      }
+      const chip = document.createElement("div");
+      chip.className = "tool-chip";
+      chip.dataset.tool = d.name;
+      chip.innerHTML = `<span class="dot"></span><span>${esc(d.name)}</span><span class="meta">${esc(JSON.stringify(d.args || {}))}</span>`;
+      row.appendChild(chip);
+      msgs.scrollTop = msgs.scrollHeight;
+    });
+    on("tool_end", (d) => {
+      if (!d.name) return;
+      const chips = $("msgs").querySelectorAll(`.tool-chip[data-tool="${CSS.escape(d.name)}"]`);
+      const chip = chips[chips.length - 1];
+      if (!chip) return;
+      chip.classList.add(d.ok ? "done" : "err");
+      const meta = chip.querySelector(".meta");
+      if (meta) meta.textContent = `${d.ok ? "✓" : "✗"} ${d.ms}ms${d.summary ? " · " + d.summary : ""}`;
+      const row = chip.closest(".tool-row");
+      if (row) row.dataset.locked = "";
+    });
+    on("error", (d) => {
+      const msgs = $("msgs");
+      const last = msgs.lastElementChild;
+      if (last && last.classList.contains("assistant") && last.classList.contains("caret")) {
+        last.classList.remove("caret"); last.dataset.finalized = "1";
+      }
+      appendMsg("error", d.message || "Unknown error");
+    });
+    on("done", (d) => {
+      const msgs = $("msgs");
+      const last = msgs.lastElementChild;
+      if (last && last.classList.contains("assistant") && last.classList.contains("caret")) {
+        last.classList.remove("caret"); last.dataset.finalized = "1";
+      }
+      state.chatId = d.chat_id || state.chatId;
+      loadHealth();
+    });
+    function appendMsg(role, content) {
+      const div = document.createElement("div");
+      div.className = `msg ${role === "user" ? "user" : role === "error" ? "error" : "assistant"}`;
+      div.textContent = content;
+      $("msgs").appendChild(div);
+      $("msgs").scrollTop = $("msgs").scrollHeight;
+      return div;
+    }
 
-async function loadVault() {
-  try {
-    const d = await api("/api/vault/notes");
-    brain.notes = d.notes;
-    brain.names = new Set(d.notes.map(n => n.name));
-    $("brainSub").textContent = `${d.count} NOTES · ${d.vault_dir}`;
-    renderVaultList(d.notes);
-    const g = await api("/api/vault/git");
-    $("vaultGit").innerHTML = g.ok
-      ? `<span>branch <b>${esc(g.branch)}</b></span><span>dirty <b>${g.dirty}</b></span><span>${esc(g.last_commit || "")}</span>`
-      : `<span>git: ${esc(g.error || "unavailable")}</span>`;
-  } catch (e) { toast("Vault: " + e.message); }
-}
-function renderVaultList(notes) {
-  $("vaultList").innerHTML = notes.length ? notes.map(n => `
+    /* ---------- deep analysis ---------- */
+    async function runDeepAnalysis(question) {
+      if (state.daRunning || !question.trim()) return;
+      state.daRunning = true;
+      $("daRunBtn").disabled = true;
+      const body = $("daBody");
+      body.innerHTML = `<div style="font:300 15px var(--body);color:var(--ink)">${esc(question)}</div>`;
+      try {
+        const res = await fetch(url("/api/deep-analysis"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }) });
+        if (!res.ok || !res.body) throw new Error(res.statusText);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          // sse-starlette emits \r\n\r\n block separators; normalize to \n\n so
+          // the indexOf/split parsing below (and the CRLF-in-arg-strings tokens)
+          // aren't corrupted by stray \r characters.
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+          let idx;
+          while ((idx = buffer.indexOf("\n\n")) !== -1) { handleDABlock(buffer.slice(0, idx)); buffer = buffer.slice(idx + 2); }
+        }
+      } catch (e) {
+        body.insertAdjacentHTML("beforeend", `<div class="msg error">${esc(e.message)}</div>`);
+      } finally {
+        state.daRunning = false;
+        $("daRunBtn").disabled = false;
+      }
+    }
+    function handleDABlock(block) {
+      let event = "message", data = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith(":")) continue;
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (!data) return;
+      let obj; try { obj = JSON.parse(data); } catch (e) { return; }
+      const body = $("daBody");
+      if (event === "stage") {
+        body.insertAdjacentHTML("beforeend", `<div class="da-stage ${obj.status === "running" ? "running" : ""}"><span class="dot"></span>${esc(obj.stage)} · ${esc(obj.status)}${obj.ms ? ` (${obj.ms}ms)` : ""}${obj.note ? " — " + esc(obj.note) : ""}</div>`);
+      } else if (event === "done") {
+        body.insertAdjacentHTML("beforeend",
+          `<div class="da-findings">${esc(obj.findings)}</div>` +
+          (obj.cached ? `<div class="da-stage"><span class="dot"></span>cached result</div>` : "") +
+          `<div class="da-guard">${Object.entries(obj.guardrail || {}).map(([k, v]) => `<span>${esc(k)}: <b>${esc(String(v))}</b></span>`).join("")}</div>`);
+      } else if (event === "error") {
+        body.insertAdjacentHTML("beforeend", `<div class="msg error">${esc(obj.message)}</div>`);
+      }
+      body.scrollTop = body.scrollHeight;
+    }
+
+    /* ---------- toast ---------- */
+    let _toastTimer = null;
+    function toast(msg) {
+      document.querySelectorAll(".toast").forEach(t => t.remove());
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.textContent = msg;
+      document.body.appendChild(el);
+      clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => el.remove(), 3200);
+    }
+
+    /* ---------- sub-tab helper (shared by Brain and Tasks panels) ---------- */
+    function wireSubtabs(tabsId, map, onSwitch) {
+      $(tabsId).querySelectorAll("span").forEach(tab => tab.onclick = () => {
+        $(tabsId).querySelectorAll("span").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        for (const [key, viewId] of Object.entries(map)) {
+          $(viewId).classList.toggle("active", key === tab.dataset.sub);
+        }
+        if (onSwitch) onSwitch(tab.dataset.sub);
+      });
+    }
+
+    /* ---------- brain / vault ---------- */
+    const brain = { notes: [], names: new Set(), current: null, gist: "" };
+
+    async function loadVault() {
+      try {
+        const d = await api("/api/vault/notes");
+        brain.notes = d.notes;
+        brain.names = new Set(d.notes.map(n => n.name));
+        state.vaultCount = d.count;
+        refreshStats();
+        $("brainSub").textContent = `${d.count} NOTES · ${d.vault_dir}`;
+        renderVaultList(d.notes);
+        const g = await api("/api/vault/git");
+        $("vaultGit").innerHTML = g.ok
+          ? `<span>branch <b>${esc(g.branch)}</b></span><span>dirty <b>${g.dirty}</b></span><span>${esc(g.last_commit || "")}</span>`
+          : `<span>git: ${esc(g.error || "unavailable")}</span>`;
+      } catch (e) { toast("Vault: " + e.message); }
+    }
+    function renderVaultList(notes) {
+      $("vaultList").innerHTML = notes.length ? notes.map(n => `
     <div class="vault-note ${n.rel === brain.current ? "active" : ""}" data-rel="${esc(n.rel)}">
       <div class="nm">${esc(n.name)}</div>
       <div class="fld">${esc(n.folder || "root")} · ${n.lines}L</div>
     </div>`).join("") : `<div class="empty-note">No notes found.</div>`;
-  $("vaultList").querySelectorAll(".vault-note").forEach(el => el.onclick = () => openNote(el.dataset.rel));
-}
-async function openNote(rel) {
-  brain.current = rel;
-  renderVaultList(brain.notes);
-  try {
-    const d = await api(`/api/vault/note?rel=${encodeURIComponent(rel)}`);
-    // Render [[wiki links]] as clickable chips; unresolved ones flagged
-    // (the vault's Conventions call these "hollow nodes").
-    const html = esc(d.body).replace(/\[\[([^\]|#]+?)(#[^\]|]*)?(\|[^\]]*)?\]\]/g, (m, name) => {
-      // Collapse internal whitespace: a link wrapped across a line break would
-      // otherwise never match its note and render as a false "missing" link.
-      const clean = name.replace(/\s+/g, " ").trim();
-      const target = brain.notes.find(n => n.name === clean);
-      return target
-        ? `<span class="wikilink" data-goto="${esc(target.rel)}">${esc(clean)}</span>`
-        : `<span class="wikilink missing" title="No note with this name yet">${esc(clean)}</span>`;
+      $("vaultList").querySelectorAll(".vault-note").forEach(el => el.onclick = () => openNote(el.dataset.rel));
+    }
+    async function openNote(rel) {
+      brain.current = rel;
+      renderVaultList(brain.notes);
+      try {
+        const d = await api(`/api/vault/note?rel=${encodeURIComponent(rel)}`);
+        // Render [[wiki links]] as clickable chips; unresolved ones flagged
+        // (the vault's Conventions call these "hollow nodes").
+        const html = esc(d.body).replace(/\[\[([^\]|#]+?)(#[^\]|]*)?(\|[^\]]*)?\]\]/g, (m, name) => {
+          // Collapse internal whitespace: a link wrapped across a line break would
+          // otherwise never match its note and render as a false "missing" link.
+          const clean = name.replace(/\s+/g, " ").trim();
+          const target = brain.notes.find(n => n.name === clean);
+          return target
+            ? `<span class="wikilink" data-goto="${esc(target.rel)}">${esc(clean)}</span>`
+            : `<span class="wikilink missing" title="No note with this name yet">${esc(clean)}</span>`;
+        });
+        $("vaultReader").innerHTML = `<pre>${html}</pre>`;
+        $("vaultReader").querySelectorAll("[data-goto]").forEach(a => a.onclick = () => openNote(a.dataset.goto));
+        $("vaultReader").scrollTop = 0;
+      } catch (e) { $("vaultReader").innerHTML = `<div class="msg error">${esc(e.message)}</div>`; }
+    }
+    let _vaultSearchTimer = null;
+    $("vaultSearch").addEventListener("input", () => {
+      clearTimeout(_vaultSearchTimer);
+      _vaultSearchTimer = setTimeout(async () => {
+        const q = $("vaultSearch").value.trim();
+        if (!q) return renderVaultList(brain.notes);
+        try {
+          const d = await api(`/api/vault/search?q=${encodeURIComponent(q)}`);
+          const hits = d.results.map(r => brain.notes.find(n => n.rel === r.rel)).filter(Boolean);
+          renderVaultList(hits);
+          if (!hits.length) $("vaultList").innerHTML = `<div class="empty-note">No matches for "${esc(q)}".</div>`;
+        } catch (e) { toast("Search: " + e.message); }
+      }, 220);
     });
-    $("vaultReader").innerHTML = `<pre>${html}</pre>`;
-    $("vaultReader").querySelectorAll("[data-goto]").forEach(a => a.onclick = () => openNote(a.dataset.goto));
-    $("vaultReader").scrollTop = 0;
-  } catch (e) { $("vaultReader").innerHTML = `<div class="msg error">${esc(e.message)}</div>`; }
-}
-let _vaultSearchTimer = null;
-$("vaultSearch").addEventListener("input", () => {
-  clearTimeout(_vaultSearchTimer);
-  _vaultSearchTimer = setTimeout(async () => {
-    const q = $("vaultSearch").value.trim();
-    if (!q) return renderVaultList(brain.notes);
-    try {
-      const d = await api(`/api/vault/search?q=${encodeURIComponent(q)}`);
-      const hits = d.results.map(r => brain.notes.find(n => n.rel === r.rel)).filter(Boolean);
-      renderVaultList(hits);
-      if (!hits.length) $("vaultList").innerHTML = `<div class="empty-note">No matches for "${esc(q)}".</div>`;
-    } catch (e) { toast("Search: " + e.message); }
-  }, 220);
-});
-$("vaultSyncBtn").onclick = async () => {
-  $("vaultSyncBtn").disabled = true;
-  try { toast((await api("/api/vault/sync", { method: "POST" })).message); }
-  catch (e) { toast("Sync failed: " + e.message); }
-  finally { $("vaultSyncBtn").disabled = false; }
-};
+    $("vaultSyncBtn").onclick = async () => {
+      $("vaultSyncBtn").disabled = true;
+      try { toast((await api("/api/vault/sync", { method: "POST" })).message); }
+      catch (e) { toast("Sync failed: " + e.message); }
+      finally { $("vaultSyncBtn").disabled = false; }
+    };
 
-/* ---------- context pack (gist) ---------- */
-async function buildGist(inject = false) {
-  $("gistBuildBtn").disabled = true;
-  $("gistBox").textContent = "Building…";
-  try {
-    const d = await api("/api/vault/gist", { method: "POST", body: JSON.stringify({ inject }) });
-    brain.gist = d.gist;
-    $("gistBox").textContent = d.gist;
-    $("gistState").textContent = `${d.chars} chars${d.injected ? " · INJECTED" : ""}`;
-    if (inject) toast("Context pack injected into every system prompt.");
-  } catch (e) { $("gistBox").textContent = ""; toast("Gist: " + e.message); }
-  finally { $("gistBuildBtn").disabled = false; }
-}
-$("gistBuildBtn").onclick = () => buildGist(false);
-$("gistInjectBtn").onclick = () => buildGist(true);
-$("gistClearBtn").onclick = async () => {
-  try { await api("/api/vault/gist", { method: "DELETE" }); $("gistState").textContent = "not injected"; toast("Stopped injecting the context pack."); }
-  catch (e) { toast(e.message); }
-};
-$("gistCopyBtn").onclick = async () => {
-  if (!brain.gist) return toast("Build the pack first.");
-  try { await navigator.clipboard.writeText(brain.gist); toast("Copied to clipboard."); }
-  catch (e) { toast("Clipboard blocked — select the text and copy manually."); }
-};
-$("gistDownloadBtn").onclick = () => {
-  if (!brain.gist) return toast("Build the pack first.");
-  const url = URL.createObjectURL(new Blob([brain.gist], { type: "text/markdown" }));
-  const a = document.createElement("a");
-  a.href = url; a.download = `context-pack-${new Date().toISOString().slice(0,10)}.md`;
-  a.click(); URL.revokeObjectURL(url);
-};
+    /* ---------- context pack (gist) ---------- */
+    async function buildGist(inject = false) {
+      $("gistBuildBtn").disabled = true;
+      $("gistBox").textContent = "Building…";
+      try {
+        const d = await api("/api/vault/gist", { method: "POST", body: JSON.stringify({ inject }) });
+        brain.gist = d.gist;
+        $("gistBox").textContent = d.gist;
+        $("gistState").textContent = `${d.chars} chars${d.injected ? " · INJECTED" : ""}`;
+        if (inject) toast("Context pack injected into every system prompt.");
+      } catch (e) { $("gistBox").textContent = ""; toast("Gist: " + e.message); }
+      finally { $("gistBuildBtn").disabled = false; }
+    }
+    $("gistBuildBtn").onclick = () => buildGist(false);
+    $("gistInjectBtn").onclick = () => buildGist(true);
+    $("gistClearBtn").onclick = async () => {
+      try { await api("/api/vault/gist", { method: "DELETE" }); $("gistState").textContent = "not injected"; toast("Stopped injecting the context pack."); }
+      catch (e) { toast(e.message); }
+    };
+    $("gistCopyBtn").onclick = async () => {
+      if (!brain.gist) return toast("Build the pack first.");
+      try { await navigator.clipboard.writeText(brain.gist); toast("Copied to clipboard."); }
+      catch (e) { toast("Clipboard blocked — select the text and copy manually."); }
+    };
+    $("gistDownloadBtn").onclick = () => {
+      if (!brain.gist) return toast("Build the pack first.");
+      const url = URL.createObjectURL(new Blob([brain.gist], { type: "text/markdown" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `context-pack-${new Date().toISOString().slice(0, 10)}.md`;
+      a.click(); URL.revokeObjectURL(url);
+    };
 
-/* ---------- link graph (canvas, no external lib) ---------- */
-let graphData = null, graphRaf = null;
-async function loadGraph() {
-  try {
-    graphData = await api("/api/vault/graph");
-    $("graphStat").textContent = `${graphData.nodes.length} notes · ${graphData.links.length} links`;
-    layoutGraph();
-  } catch (e) { toast("Graph: " + e.message); }
-}
-function layoutGraph() {
-  const cv = $("graphCanvas");
-  const rect = cv.getBoundingClientRect();
-  cv.width = rect.width * devicePixelRatio; cv.height = rect.height * devicePixelRatio;
-  const W = rect.width, H = rect.height;
-  const idx = new Map(graphData.nodes.map((n, i) => [n.id, i]));
-  // Seed on a circle, then relax with simple spring/repulsion forces.
-  const P = graphData.nodes.map((n, i) => {
-    const a = (i / graphData.nodes.length) * Math.PI * 2;
-    return { x: W/2 + Math.cos(a) * Math.min(W,H) * 0.32, y: H/2 + Math.sin(a) * Math.min(W,H) * 0.32, vx: 0, vy: 0 };
-  });
-  const edges = graphData.links.map(l => [idx.get(l.source), idx.get(l.target)]).filter(([a,b]) => a != null && b != null);
-  for (let step = 0; step < 260; step++) {
-    for (let i = 0; i < P.length; i++) {
-      for (let j = i + 1; j < P.length; j++) {
-        let dx = P[j].x - P[i].x, dy = P[j].y - P[i].y;
-        let d2 = dx*dx + dy*dy || 0.01, d = Math.sqrt(d2);
-        const rep = 1400 / d2;
-        const ux = dx/d, uy = dy/d;
-        P[i].vx -= ux*rep; P[i].vy -= uy*rep;
-        P[j].vx += ux*rep; P[j].vy += uy*rep;
+    /* ---------- link graph (canvas, no external lib) ---------- */
+    let graphData = null, graphRaf = null;
+    async function loadGraph() {
+      try {
+        graphData = await api("/api/vault/graph");
+        $("graphStat").textContent = `${graphData.nodes.length} notes · ${graphData.links.length} links`;
+        layoutGraph();
+      } catch (e) { toast("Graph: " + e.message); }
+    }
+    function layoutGraph() {
+      const cv = $("graphCanvas");
+      const rect = cv.getBoundingClientRect();
+      cv.width = rect.width * devicePixelRatio; cv.height = rect.height * devicePixelRatio;
+      const W = rect.width, H = rect.height;
+      const idx = new Map(graphData.nodes.map((n, i) => [n.id, i]));
+      // Seed on a circle, then relax with simple spring/repulsion forces.
+      const P = graphData.nodes.map((n, i) => {
+        const a = (i / graphData.nodes.length) * Math.PI * 2;
+        return { x: W / 2 + Math.cos(a) * Math.min(W, H) * 0.32, y: H / 2 + Math.sin(a) * Math.min(W, H) * 0.32, vx: 0, vy: 0 };
+      });
+      const edges = graphData.links.map(l => [idx.get(l.source), idx.get(l.target)]).filter(([a, b]) => a != null && b != null);
+      for (let step = 0; step < 260; step++) {
+        for (let i = 0; i < P.length; i++) {
+          for (let j = i + 1; j < P.length; j++) {
+            let dx = P[j].x - P[i].x, dy = P[j].y - P[i].y;
+            let d2 = dx * dx + dy * dy || 0.01, d = Math.sqrt(d2);
+            const rep = 1400 / d2;
+            const ux = dx / d, uy = dy / d;
+            P[i].vx -= ux * rep; P[i].vy -= uy * rep;
+            P[j].vx += ux * rep; P[j].vy += uy * rep;
+          }
+        }
+        for (const [a, b] of edges) {
+          let dx = P[b].x - P[a].x, dy = P[b].y - P[a].y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+          const f = (d - 90) * 0.012;
+          const ux = dx / d, uy = dy / d;
+          P[a].vx += ux * f; P[a].vy += uy * f;
+          P[b].vx -= ux * f; P[b].vy -= uy * f;
+        }
+        for (const p of P) {
+          p.x += (p.vx *= 0.82); p.y += (p.vy *= 0.82);
+          p.x = Math.max(30, Math.min(W - 30, p.x));
+          p.y = Math.max(24, Math.min(H - 24, p.y));
+        }
       }
+      drawGraph(P, edges, W, H);
+      cv.onclick = (e) => {
+        const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+        let best = null, bestD = 18;
+        P.forEach((p, i) => { const d = Math.hypot(p.x - mx, p.y - my); if (d < bestD) { bestD = d; best = i; } });
+        if (best != null) {
+          const node = graphData.nodes[best];
+          $("brainTabs").querySelector('[data-sub="vault"]').click();
+          openNote(node.id);
+        }
+      };
     }
-    for (const [a, b] of edges) {
-      let dx = P[b].x - P[a].x, dy = P[b].y - P[a].y;
-      const d = Math.sqrt(dx*dx + dy*dy) || 0.01;
-      const f = (d - 90) * 0.012;
-      const ux = dx/d, uy = dy/d;
-      P[a].vx += ux*f; P[a].vy += uy*f;
-      P[b].vx -= ux*f; P[b].vy -= uy*f;
+    function drawGraph(P, edges, W, H) {
+      const cv = $("graphCanvas"), ctx = cv.getContext("2d");
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      ctx.strokeStyle = "rgba(76,201,240,.22)"; ctx.lineWidth = 1;
+      for (const [a, b] of edges) { ctx.beginPath(); ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); ctx.stroke(); }
+      graphData.nodes.forEach((n, i) => {
+        const deg = edges.filter(([a, b]) => a === i || b === i).length;
+        const r = 4 + Math.min(7, deg * 1.1);
+        ctx.beginPath(); ctx.arc(P[i].x, P[i].y, r, 0, Math.PI * 2);
+        ctx.fillStyle = n.color || "#4CC9F0"; ctx.fill();
+        ctx.font = "300 10px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "rgba(242,233,238,.62)"; ctx.textAlign = "center";
+        ctx.fillText(n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name, P[i].x, P[i].y + r + 11);
+      });
     }
-    for (const p of P) {
-      p.x += (p.vx *= 0.82); p.y += (p.vy *= 0.82);
-      p.x = Math.max(30, Math.min(W - 30, p.x));
-      p.y = Math.max(24, Math.min(H - 24, p.y));
-    }
-  }
-  drawGraph(P, edges, W, H);
-  cv.onclick = (e) => {
-    const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-    let best = null, bestD = 18;
-    P.forEach((p, i) => { const d = Math.hypot(p.x - mx, p.y - my); if (d < bestD) { bestD = d; best = i; } });
-    if (best != null) {
-      const node = graphData.nodes[best];
-      $("brainTabs").querySelector('[data-sub="vault"]').click();
-      openNote(node.id);
-    }
-  };
-}
-function drawGraph(P, edges, W, H) {
-  const cv = $("graphCanvas"), ctx = cv.getContext("2d");
-  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-  ctx.clearRect(0, 0, W, H);
-  ctx.strokeStyle = "rgba(76,201,240,.22)"; ctx.lineWidth = 1;
-  for (const [a, b] of edges) { ctx.beginPath(); ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); ctx.stroke(); }
-  graphData.nodes.forEach((n, i) => {
-    const deg = edges.filter(([a,b]) => a === i || b === i).length;
-    const r = 4 + Math.min(7, deg * 1.1);
-    ctx.beginPath(); ctx.arc(P[i].x, P[i].y, r, 0, Math.PI*2);
-    ctx.fillStyle = n.color || "#4CC9F0"; ctx.fill();
-    ctx.font = "300 10px 'JetBrains Mono', monospace";
-    ctx.fillStyle = "rgba(242,233,238,.62)"; ctx.textAlign = "center";
-    ctx.fillText(n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name, P[i].x, P[i].y + r + 11);
-  });
-}
-$("graphReloadBtn").onclick = loadGraph;
+    $("graphReloadBtn").onclick = loadGraph;
 
-/* ---------- tasks ---------- */
-async function loadTasks() {
-  try { renderTasks(await api("/api/tasks")); }
-  catch (e) { toast("Tasks: " + e.message); }
-}
-function renderTasks(tasks) {
-  $("subTodo").innerHTML = tasks.length ? tasks.map(t => `
+    /* ---------- tasks ---------- */
+    async function loadTasks() {
+      try {
+        const tasks = await api("/api/tasks");
+        state.tasksCount = tasks.filter(t => !t.done).length;
+        refreshStats();
+        renderTasks(tasks);
+      }
+      catch (e) { toast("Tasks: " + e.message); }
+    }
+    function renderTasks(tasks) {
+      $("subTodo").innerHTML = tasks.length ? tasks.map(t => `
     <div class="row-item">
-      <input type="checkbox" data-task="${t.id}" ${t.done ? "checked" : ""}>
+      <input type="checkbox" data-task="${esc(t.id)}" ${t.done ? "checked" : ""}>
       <div class="grow"><div class="main ${t.done ? "done" : ""}">${esc(t.text)}</div></div>
-      <span class="del" data-deltask="${t.id}">✕</span>
+      <span class="del" data-deltask="${esc(t.id)}">✕</span>
     </div>`).join("") : `<div class="empty-note">No tasks yet.</div>`;
-  $("subTodo").querySelectorAll("[data-task]").forEach(cb => cb.onchange = async () => {
-    renderTasks((await api(`/api/tasks/${cb.dataset.task}`, { method: "PATCH", body: JSON.stringify({ done: cb.checked }) })).tasks);
-  });
-  $("subTodo").querySelectorAll("[data-deltask]").forEach(d => d.onclick = async () => {
-    renderTasks((await api(`/api/tasks/${d.dataset.deltask}`, { method: "DELETE" })).tasks);
-  });
-}
-async function addTask() {
-  const text = $("taskInput").value.trim();
-  if (!text) return;
-  $("taskInput").value = "";
-  try { renderTasks((await api("/api/tasks", { method: "POST", body: JSON.stringify({ text }) })).tasks); }
-  catch (e) { toast(e.message); }
-}
-$("taskAddBtn").onclick = addTask;
-$("taskInput").addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
+      $("subTodo").querySelectorAll("[data-task]").forEach(cb => cb.onchange = async () => {
+        renderTasks((await api(`/api/tasks/${cb.dataset.task}`, { method: "PATCH", body: JSON.stringify({ done: cb.checked }) })).tasks);
+      });
+      $("subTodo").querySelectorAll("[data-deltask]").forEach(d => d.onclick = async () => {
+        renderTasks((await api(`/api/tasks/${d.dataset.deltask}`, { method: "DELETE" })).tasks);
+      });
+    }
+    async function addTask() {
+      const text = $("taskInput").value.trim();
+      if (!text) return;
+      $("taskInput").value = "";
+      try { renderTasks((await api("/api/tasks", { method: "POST", body: JSON.stringify({ text }) })).tasks); }
+      catch (e) { toast(e.message); }
+    }
+    $("taskAddBtn").onclick = addTask;
+    $("taskInput").addEventListener("keydown", e => { if (e.key === "Enter") addTask(); });
 
-/* ---------- reminders ---------- */
-async function loadReminders() {
-  try { renderReminders(await api("/api/reminders")); }
-  catch (e) { toast("Reminders: " + e.message); }
-}
-function renderReminders(d) {
-  const pending = (d.reminders || []).filter(r => !r.fired);
-  $("subRem").innerHTML = (pending.length ? pending.map(r => `
+    /* ---------- reminders ---------- */
+    async function loadReminders() {
+      try { renderReminders(await api("/api/reminders")); }
+      catch (e) { toast("Reminders: " + e.message); }
+    }
+    function renderReminders(d) {
+      const pending = (d.reminders || []).filter(r => !r.fired);
+      $("subRem").innerHTML = (pending.length ? pending.map(r => `
     <div class="row-item">
       <div class="grow"><div class="main">${esc(r.text)}</div><div class="sub2">due ${esc(r.due_at)}</div></div>
-      <span class="del" data-delrem="${r.id}">✕</span>
+      <span class="del" data-delrem="${esc(r.id)}">✕</span>
     </div>`).join("") : `<div class="empty-note">No pending reminders.</div>`)
-    + `<div class="empty-note" style="margin-top:8px">⚠️ Reminders only fire while something is polling them — run <code>python assistant/reminder_daemon.py --install</code> for 24/7 toasts.</div>`;
-  $("subRem").querySelectorAll("[data-delrem]").forEach(x => x.onclick = async () => {
-    renderReminders(await api(`/api/reminders/${x.dataset.delrem}`, { method: "DELETE" }));
-  });
-}
-$("remAddBtn").onclick = async () => {
-  const text = $("remInput").value.trim(), when = $("remWhen").value;
-  if (!text || !when) return toast("Need both a reminder and a time.");
-  try {
-    // <input type=datetime-local> gives "YYYY-MM-DDTHH:MM"; reminders.py wants a space.
-    const r = await api("/api/reminders", { method: "POST", body: JSON.stringify({ text, due_at: when.replace("T", " ") }) });
-    $("remInput").value = "";
-    renderReminders(r);
-  } catch (e) { toast(e.message); }
-};
+        + `<div class="empty-note" style="margin-top:8px">⚠️ Reminders only fire while something is polling them — run <code>python assistant/reminder_daemon.py --install</code> for 24/7 toasts.</div>`;
+      $("subRem").querySelectorAll("[data-delrem]").forEach(x => x.onclick = async () => {
+        renderReminders(await api(`/api/reminders/${x.dataset.delrem}`, { method: "DELETE" }));
+      });
+    }
+    $("remAddBtn").onclick = async () => {
+      const text = $("remInput").value.trim(), when = $("remWhen").value;
+      if (!text || !when) return toast("Need both a reminder and a time.");
+      try {
+        // <input type=datetime-local> gives "YYYY-MM-DDTHH:MM"; reminders.py wants a space.
+        const r = await api("/api/reminders", { method: "POST", body: JSON.stringify({ text, due_at: when.replace("T", " ") }) });
+        $("remInput").value = "";
+        renderReminders(r);
+      } catch (e) { toast(e.message); }
+    };
 
-/* ---------- backups ---------- */
-async function loadBackups() {
-  try {
-    const d = await api("/api/backups");
-    $("backupInfo").textContent = `${d.backups.length} snapshots · ${(d.size_bytes/1048576).toFixed(1)} MB · ${d.location}`;
-    $("backupList").innerHTML = d.backups.length
-      ? d.backups.map(b => `<div class="row-item"><div class="grow"><div class="main">${esc(b)}</div></div></div>`).join("")
-      : `<div class="empty-note">No backups yet.</div>`;
-  } catch (e) { toast("Backups: " + e.message); }
-}
-$("backupNowBtn").onclick = async () => {
-  $("backupNowBtn").disabled = true;
-  try { toast((await api("/api/backups", { method: "POST" })).message); await loadBackups(); }
-  catch (e) { toast(e.message); }
-  finally { $("backupNowBtn").disabled = false; }
-};
+    /* ---------- backups ---------- */
+    async function loadBackups() {
+      try {
+        const d = await api("/api/backups");
+        $("backupInfo").textContent = `${d.backups.length} snapshots · ${(d.size_bytes / 1048576).toFixed(1)} MB · ${d.location}`;
+        $("backupList").innerHTML = d.backups.length
+          ? d.backups.map(b => `<div class="row-item"><div class="grow"><div class="main">${esc(b)}</div></div></div>`).join("")
+          : `<div class="empty-note">No backups yet.</div>`;
+      } catch (e) { toast("Backups: " + e.message); }
+    }
+    $("backupNowBtn").onclick = async () => {
+      $("backupNowBtn").disabled = true;
+      try { toast((await api("/api/backups", { method: "POST" })).message); await loadBackups(); }
+      catch (e) { toast(e.message); }
+      finally { $("backupNowBtn").disabled = false; }
+    };
 
-/* ---------- documents ---------- */
-async function loadDocs() {
-  try {
-    const d = await api("/api/documents");
-    $("docsSub").textContent = `${d.documents.length} UPLOADED · ${d.vault_notes} VAULT · ${d.knowledge} KNOWLEDGE`;
-    $("docsBody").innerHTML = d.documents.length ? d.documents.map(name => `
+    /* ---------- documents ---------- */
+    async function loadDocs() {
+      try {
+        const d = await api("/api/documents");
+        state.docsCount = d.documents.length;
+        refreshStats();
+        $("docsSub").textContent = `${d.documents.length} UPLOADED · ${d.vault_notes} VAULT · ${d.knowledge} KNOWLEDGE`;
+        $("docsBody").innerHTML = d.documents.length ? d.documents.map(name => `
       <div class="row-item">
         <div class="grow"><div class="main">${esc(name)}</div></div>
         <span class="del" data-deldoc="${esc(name)}">✕</span>
       </div>`).join("") : `<div class="empty-note">No uploaded documents. Vault notes are managed from the Brain panel.</div>`;
-    $("docsBody").querySelectorAll("[data-deldoc]").forEach(x => x.onclick = async () => {
-      if (!confirm(`Remove "${x.dataset.deldoc}" from the RAG store?`)) return;
-      await api(`/api/documents/${encodeURIComponent(x.dataset.deldoc)}`, { method: "DELETE" });
-      loadDocs();
-    });
-  } catch (e) { toast("Docs: " + e.message); }
-}
-$("docUploadBtn").onclick = async () => {
-  const files = $("docFile").files;
-  if (!files.length) return toast("Pick a file first.");
-  $("docUploadBtn").disabled = true;
-  try {
-    for (const f of files) {
-      const fd = new FormData(); fd.append("file", f);
-      const res = await fetch(url("/api/documents"), { method: "POST", body: fd });
-      if (!res.ok) throw new Error(`${f.name}: ${res.status}`);
-      toast((await res.json()).message);
+        $("docsBody").querySelectorAll("[data-deldoc]").forEach(x => x.onclick = async () => {
+          if (!confirm(`Remove "${x.dataset.deldoc}" from the RAG store?`)) return;
+          await api(`/api/documents/${encodeURIComponent(x.dataset.deldoc)}`, { method: "DELETE" });
+          loadDocs();
+        });
+      } catch (e) { toast("Docs: " + e.message); }
     }
-    $("docFile").value = "";
-    loadDocs();
-  } catch (e) { toast("Upload: " + e.message); }
-  finally { $("docUploadBtn").disabled = false; }
-};
-$("knowledgeSyncBtn").onclick = async () => {
-  $("knowledgeSyncBtn").disabled = true;
-  try { toast((await api("/api/knowledge/sync", { method: "POST" })).message); loadDocs(); }
-  catch (e) { toast(e.message); }
-  finally { $("knowledgeSyncBtn").disabled = false; }
-};
-
-/* ---------- fleet admin ---------- */
-document.querySelectorAll("[data-admin]").forEach(btn => btn.onclick = async () => {
-  const action = btn.dataset.admin;
-  $("fleetOut").textContent = "Running…";
-  try {
-    const d = await api("/api/admin", { method: "POST", body: JSON.stringify({ action, source: btn.dataset.src || "crew-log", lines: 60 }) });
-    $("fleetOut").textContent = d.output || "(no output)";
-  } catch (e) { $("fleetOut").textContent = "Error: " + e.message; }
-});
-
-/* ---------- voice ---------- */
-let mediaRecorder = null, audioChunks = [];
-async function toggleRecording() {
-  const btn = $("recBtn");
-  if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
-    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-    mediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      btn.classList.remove("recording");
-      btn.textContent = "🎙";
-      const blob = new Blob(audioChunks, { type: "audio/webm" });
-      const fd = new FormData(); fd.append("file", blob, "recording.webm");
-      toast("Transcribing…");
+    $("docUploadBtn").onclick = async () => {
+      const files = $("docFile").files;
+      if (!files.length) return toast("Pick a file first.");
+      $("docUploadBtn").disabled = true;
       try {
-        const res = await fetch(url("/api/voice/transcribe"), { method: "POST", body: fd });
-        const d = await res.json();
-        if (!res.ok) throw new Error(d.detail || res.statusText);
-        if (d.text) { $("input").value = d.text; $("input").focus(); toast("Transcribed."); }
-        else toast("Nothing recognised.");
-      } catch (e) { toast("Voice: " + e.message); }
+        for (const f of files) {
+          const fd = new FormData(); fd.append("file", f);
+          const res = await fetch(url("/api/documents"), { method: "POST", body: fd });
+          if (!res.ok) throw new Error(`${f.name}: ${res.status}`);
+          toast((await res.json()).message);
+        }
+        $("docFile").value = "";
+        loadDocs();
+      } catch (e) { toast("Upload: " + e.message); }
+      finally { $("docUploadBtn").disabled = false; }
     };
-    mediaRecorder.start();
-    btn.classList.add("recording");
-    btn.textContent = "⏹";
-    toast("Recording — click again to stop.");
-  } catch (e) { toast("Mic unavailable: " + e.message); }
-}
+    $("knowledgeSyncBtn").onclick = async () => {
+      $("knowledgeSyncBtn").disabled = true;
+      try { toast((await api("/api/knowledge/sync", { method: "POST" })).message); loadDocs(); }
+      catch (e) { toast(e.message); }
+      finally { $("knowledgeSyncBtn").disabled = false; }
+    };
 
-/* ---------- access / funnel (owner only) ---------- */
-const access = { isOwner: false, public: false };
+    /* ---------- fleet admin ---------- */
+    document.querySelectorAll("[data-admin]").forEach(btn => btn.onclick = async () => {
+      const action = btn.dataset.admin;
+      $("fleetOut").textContent = "Running…";
+      try {
+        const d = await api("/api/admin", { method: "POST", body: JSON.stringify({ action, source: btn.dataset.src || "crew-log", lines: 60 }) });
+        $("fleetOut").textContent = d.output || "(no output)";
+      } catch (e) { $("fleetOut").textContent = "Error: " + e.message; }
+    });
 
-async function loadAccess() {
-  try {
-    const me = await api("/api/whoami");
-    access.isOwner = me.role === "owner";
-  } catch (e) { access.isOwner = false; }
-  if (!access.isOwner) {           // guests never see the sharing controls
-    $("accessBox").style.display = "none";
-    $("publicWarn").classList.remove("on");
-    return;
-  }
-  $("accessBox").style.display = "block";
-  try {
-    const f = await api("/api/funnel");
-    access.public = !!f.public;
-    $("accessBox").classList.toggle("public", f.public);
-    $("publicWarn").classList.toggle("on", f.public);
-    $("accessState").textContent = f.public
-      ? "PUBLIC — reachable from the internet"
-      : (f.served ? "TAILNET ONLY — your devices" : "LOCAL ONLY — this machine");
-    $("accessUrl").textContent = f.url || "";
-    $("accessNote").textContent = f.public
-      ? "Anyone can reach this URL; only a valid token gets in. Turn it off when you're done testing."
-      : "Publish it to hand a link to someone outside your tailnet.";
-    const btn = $("funnelBtn");
-    btn.style.display = "";
-    btn.textContent = f.public ? "Turn OFF public access" : "Go public (funnel)";
-    btn.classList.toggle("ghost", f.public);
-  } catch (e) {
-    $("accessState").textContent = "Tailscale status unavailable";
-    $("accessNote").textContent = e.message;
-  }
-  loadGuests();
-}
+    /* ---------- voice ---------- */
+    let mediaRecorder = null, audioChunks = [];
+    async function toggleRecording() {
+      const btn = $("recBtn");
+      if (mediaRecorder && mediaRecorder.state === "recording") { mediaRecorder.stop(); return; }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          btn.classList.remove("recording");
+          btn.textContent = "🎙";
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          const fd = new FormData(); fd.append("file", blob, "recording.webm");
+          toast("Transcribing…");
+          try {
+            const res = await fetch(url("/api/voice/transcribe"), { method: "POST", body: fd });
+            const d = await res.json();
+            if (!res.ok) throw new Error(d.detail || res.statusText);
+            if (d.text) { $("input").value = d.text; $("input").focus(); toast("Transcribed."); }
+            else toast("Nothing recognised.");
+          } catch (e) { toast("Voice: " + e.message); }
+        };
+        mediaRecorder.start();
+        btn.classList.add("recording");
+        btn.textContent = "⏹";
+        toast("Recording — click again to stop.");
+      } catch (e) { toast("Mic unavailable: " + e.message); }
+    }
 
-async function loadGuests() {
-  try {
-    const d = await api("/api/access");
-    $("accessGuests").innerHTML = d.guests.length ? d.guests.map(g => `
+    /* ---------- access / funnel (owner only) ---------- */
+    const access = { isOwner: false, public: false };
+
+    async function loadAccess() {
+      try {
+        const me = await api("/api/whoami");
+        access.isOwner = me.role === "owner";
+      } catch (e) { access.isOwner = false; }
+      if (!access.isOwner) {           // guests never see the sharing controls
+        $("accessBox").style.display = "none";
+        $("publicWarn").classList.remove("on");
+        return;
+      }
+      $("accessBox").style.display = "block";
+      try {
+        const f = await api("/api/funnel");
+        access.public = !!f.public;
+        $("accessBox").classList.toggle("public", f.public);
+        $("publicWarn").classList.toggle("on", f.public);
+        $("accessState").textContent = f.public
+          ? "PUBLIC — reachable from the internet"
+          : (f.served ? "TAILNET ONLY — your devices" : "LOCAL ONLY — this machine");
+        $("accessUrl").textContent = f.url || "";
+        $("accessNote").textContent = f.public
+          ? "Anyone can reach this URL; only a valid token gets in. Turn it off when you're done testing."
+          : "Publish it to hand a link to someone outside your tailnet.";
+        const btn = $("funnelBtn");
+        btn.style.display = "";
+        btn.textContent = f.public ? "Turn OFF public access" : "Go public (funnel)";
+        btn.classList.toggle("ghost", f.public);
+      } catch (e) {
+        $("accessState").textContent = "Tailscale status unavailable";
+        $("accessNote").textContent = e.message;
+      }
+      loadGuests();
+    }
+
+    async function loadGuests() {
+      try {
+        const d = await api("/api/access");
+        $("accessGuests").innerHTML = d.guests.length ? d.guests.map(g => `
       <div class="guest-row">
         <span class="gname">${esc(g.name)}</span>
         <span>${g.expires_in_hours == null ? "never expires" : g.expires_in_hours + "h left"}</span>
         <span class="revoke" data-revoke="${esc(g.id)}">revoke</span>
       </div>`).join("") : `<div class="guest-row"><span class="gname" style="color:var(--muted2)">No active tester links.</span></div>`;
-    $("accessGuests").querySelectorAll("[data-revoke]").forEach(x => x.onclick = async () => {
-      await api(`/api/access/${x.dataset.revoke}`, { method: "DELETE" });
-      toast("Tester link revoked.");
-      loadGuests();
-    });
-  } catch (e) { /* non-owner */ }
-}
+        $("accessGuests").querySelectorAll("[data-revoke]").forEach(x => x.onclick = async () => {
+          await api(`/api/access/${x.dataset.revoke}`, { method: "DELETE" });
+          toast("Tester link revoked.");
+          loadGuests();
+        });
+      } catch (e) { /* non-owner */ }
+    }
 
-$("funnelBtn").onclick = async () => {
-  const goingPublic = !access.public;
-  if (goingPublic && !confirm(
-      "Publish KEN to the public internet?\n\nAnyone who finds the URL can reach it — " +
-      "only a valid token gets in. Turn it off when testing is done.")) return;
-  $("funnelBtn").disabled = true;
-  $("funnelBtn").textContent = goingPublic ? "Publishing…" : "Turning off…";
-  try {
-    await api("/api/funnel", { method: "POST", body: JSON.stringify({ public: goingPublic }) });
-    toast(goingPublic ? "KEN is now public." : "Public access is OFF.");
-    await loadAccess();
-  } catch (e) { toast("Funnel: " + e.message); await loadAccess(); }
-  finally { $("funnelBtn").disabled = false; }
-};
-
-$("inviteBtn").onclick = async () => {
-  const name = $("guestName").value.trim() || "tester";
-  const hours = parseInt($("guestHours").value, 10);
-  try {
-    const d = await api("/api/access", { method: "POST", body: JSON.stringify({ name, hours: isNaN(hours) ? 24 : hours }) });
-    const base = location.origin + location.pathname.replace(/\/$/, "");
-    const link = `${base}/?token=${d.token}`;
-    $("guestName").value = "";
-    try { await navigator.clipboard.writeText(link); toast(`Link for ${d.name} copied to clipboard.`); }
-    catch (e) { prompt(`Link for ${d.name} — copy it now, it is not shown again:`, link); }
-    loadGuests();
-  } catch (e) { toast("Invite: " + e.message); }
-};
-
-$("publicWarn").onclick = () => { openPanel("settingsScrim"); loadAccess(); };
-
-/* ---------- wiring ---------- */
-wireSubtabs("brainTabs", { vault: "subVault", gist: "subGist", graph: "subGraph" }, (sub) => {
-  $("vaultSearchRow").style.display = sub === "vault" ? "flex" : "none";
-  if (sub === "graph" && !graphData) loadGraph();
-});
-wireSubtabs("tasksTabs", { todo: "subTodo", rem: "subRem", bk: "subBk" }, (sub) => {
-  $("taskAddRow").style.display = sub === "todo" ? "flex" : "none";
-  $("remAddRow").style.display = sub === "rem" ? "flex" : "none";
-  if (sub === "rem") loadReminders();
-  if (sub === "bk") loadBackups();
-});
-
-$("newChatBtn").onclick = newChat;
-$("chatsBtn").onclick = () => { loadChats(); openPanel("chatsScrim"); };
-$("brainBtn").onclick = () => { loadVault(); openPanel("brainScrim"); };
-$("tasksBtn").onclick = () => { loadTasks(); openPanel("tasksScrim"); };
-$("docsBtn").onclick = () => { loadDocs(); openPanel("docsScrim"); };
-$("fleetBtn").onclick = () => { openPanel("fleetScrim"); document.querySelector('[data-admin="status"]').click(); };
-$("memBtn").onclick = () => { loadMemory(); openPanel("memScrim"); };
-$("settingsBtn").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
-$("daBtn").onclick = () => openPanel("daScrim");
-$("daRunBtn").onclick = () => runDeepAnalysis($("daQuestion").value);
-$("recBtn").onclick = toggleRecording;
-$("qaDeep").onclick = () => { openPanel("daScrim"); if (state.history.length) $("daQuestion").value = state.history[state.history.length-1].content; };
-$("qaRemember").onclick = () => sendMessage("Remember the key point from what I just said.");
-$("qaClear").onclick = () => { $("msgs").innerHTML = ""; };
-$("input").addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const v = $("input").value; $("input").value = ""; sendMessage(v); }
-});
-document.addEventListener("keydown", e => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("input").focus(); }
-});
-
-// Stale-cache defence: reload the page when the server signals a new build.
-(() => {
-  try {
-    const reloadDelayMs = 400;
-    const initialBackoffMs = 2000;
-    const maxBackoffMs = 30000;
-
-    let eventSource = null;
-    let backoffMs = initialBackoffMs;
-    let currentBuildId = null;
-    let reloadPending = false;
-
-    const onVisibilityChange = () => {
-      if (reloadPending && !document.hidden) {
-        reloadPending = false;
-        document.removeEventListener('visibilitychange', onVisibilityChange);
-        toast('Updated - reloading...');
-        setTimeout(() => window.location.reload(), reloadDelayMs);
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    const onBuildEvent = (event) => {
-      let message;
+    $("funnelBtn").onclick = async () => {
+      const goingPublic = !access.public;
+      if (goingPublic && !confirm(
+        "Publish KEN to the public internet?\n\nAnyone who finds the URL can reach it — " +
+        "only a valid token gets in. Turn it off when testing is done.")) return;
+      $("funnelBtn").disabled = true;
+      $("funnelBtn").textContent = goingPublic ? "Publishing…" : "Turning off…";
       try {
-        message = JSON.parse(event.data);
-      } catch (e) {
-        return;
-      }
-
-      const newBuildId = message && message.build;
-      if (newBuildId == null) {
-        return;
-      }
-
-      if (currentBuildId === null) {
-        currentBuildId = newBuildId;
-        return;
-      }
-
-      if (newBuildId !== currentBuildId) {
-        if (document.hidden) {
-          reloadPending = true;
-        } else {
-          toast('Updated - reloading...');
-          setTimeout(() => window.location.reload(), reloadDelayMs);
-        }
-      }
+        await api("/api/funnel", { method: "POST", body: JSON.stringify({ public: goingPublic }) });
+        toast(goingPublic ? "KEN is now public." : "Public access is OFF.");
+        await loadAccess();
+      } catch (e) { toast("Funnel: " + e.message); await loadAccess(); }
+      finally { $("funnelBtn").disabled = false; }
     };
 
-    const connect = () => {
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-
-      const es = new EventSource(url("/api/livereload"));
-      eventSource = es;
-
-      es.addEventListener('build', onBuildEvent);
-
-      es.onopen = () => {
-        backoffMs = initialBackoffMs;
-      };
-
-      es.onerror = () => {
-        es.close();
-        if (eventSource === es) {
-          eventSource = null;
-        }
-        setTimeout(connect, backoffMs);
-        backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
-      };
+    $("inviteBtn").onclick = async () => {
+      const name = $("guestName").value.trim() || "tester";
+      const hours = parseInt($("guestHours").value, 10);
+      try {
+        const d = await api("/api/access", { method: "POST", body: JSON.stringify({ name, hours: isNaN(hours) ? 24 : hours }) });
+        const base = location.origin + location.pathname.replace(/\/$/, "");
+        const link = `${base}/?token=${d.token}`;
+        $("guestName").value = "";
+        try { await navigator.clipboard.writeText(link); toast(`Link for ${d.name} copied to clipboard.`); }
+        catch (e) { prompt(`Link for ${d.name} — copy it now, it is not shown again:`, link); }
+        loadGuests();
+      } catch (e) { toast("Invite: " + e.message); }
     };
 
-    connect();
-  } catch (e) {
-    // Live-reload must never break the app; silently ignore failures.
-  }
-})();
+    $("publicWarn").onclick = () => { openPanel("settingsScrim"); loadAccess(); };
 
-/* ---------- startup beacon ----------
-   Reports how far the module-level script got. If the browser never sends
-   this, the script died before this line; if it arrives with wired:false,
-   the handlers never attached. Either answer localises the failure without
-   needing a console. */
-report({
-  kind: "boot",
-  ua: navigator.userAgent,
-  href: location.href,
-  base: BASE,
-  wired: !!($("brainBtn") && $("brainBtn").onclick),
-  hasFetch: typeof fetch === "function",
-  hasCookie: navigator.cookieEnabled,
-  viewport: `${window.innerWidth}x${window.innerHeight}`,
-  dpr: window.devicePixelRatio,
+    /* ---------- feature cards & suggestion chips ---------- */
+    document.querySelectorAll(".feature-card").forEach(card => {
+      card.onclick = () => {
+        const openId = card.dataset.open;
+        if (openId === "daScrim") {
+          openPanel("daScrim");
+        } else if (openId) {
+          // Trigger the corresponding nav button, which also loads data
+          const btnMap = {
+            "chatsScrim": "chatsBtn", "brainScrim": "brainBtn", "memScrim": "memBtn",
+            "tasksScrim": "tasksBtn", "docsScrim": "docsBtn", "fleetScrim": "fleetBtn",
+            "settingsScrim": "settingsBtn"
+          };
+          const btn = $(btnMap[openId]);
+          if (btn) btn.click();
+        }
+      };
+    });
+document.querySelectorAll(".suggest-chip").forEach(chip => {
+  chip.onclick = () => {
+    if (state.streaming) return toast("Wait for the current response to finish.");
+    sendMessage(chip.dataset.prompt);
+  };
 });
 
-/* ---------- init ---------- */
-async function init() {
-  // settleAll, not Promise.all: one failing loader must not abort the others
-  // or leave the app half-initialised. Failures are reported, not swallowed.
-  const steps = [["tools", loadTools], ["chats", loadChats],
-                 ["memory", loadMemory], ["health", loadHealth],
-                 ["access", loadAccess]];
-  for (const [name, fn] of steps) {
-    try { await fn(); }
-    catch (e) { fatal(`Failed to load ${name}: ${e.message}`); }
-  }
-  setInterval(() => loadHealth().catch(() => {}), 15000);
-  setInterval(() => loadAccess().catch(() => {}), 60000);
-}
-init();
-</script>
+    /* ---------- wiring ---------- */
+    wireSubtabs("brainTabs", { vault: "subVault", gist: "subGist", graph: "subGraph" }, (sub) => {
+      $("vaultSearchRow").style.display = sub === "vault" ? "flex" : "none";
+      if (sub === "graph" && !graphData) loadGraph();
+    });
+    wireSubtabs("tasksTabs", { todo: "subTodo", rem: "subRem", bk: "subBk" }, (sub) => {
+      $("taskAddRow").style.display = sub === "todo" ? "flex" : "none";
+      $("remAddRow").style.display = sub === "rem" ? "flex" : "none";
+      if (sub === "rem") loadReminders();
+      if (sub === "bk") loadBackups();
+    });
+
+    $("newChatBtn").onclick = newChat;
+    $("chatsBtn").onclick = () => { loadChats(); openPanel("chatsScrim"); };
+    $("brainBtn").onclick = () => { loadVault(); openPanel("brainScrim"); };
+    $("tasksBtn").onclick = () => { loadTasks(); openPanel("tasksScrim"); };
+    $("docsBtn").onclick = () => { loadDocs(); openPanel("docsScrim"); };
+    $("fleetBtn").onclick = () => { openPanel("fleetScrim"); document.querySelector('[data-admin="status"]').click(); };
+    $("memBtn").onclick = () => { loadMemory(); openPanel("memScrim"); };
+    $("settingsBtn").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
+    $("daBtn").onclick = () => openPanel("daScrim");
+    $("daRunBtn").onclick = () => runDeepAnalysis($("daQuestion").value);
+    $("recBtn").onclick = toggleRecording;
+    $("qaDeep").onclick = () => {
+      openPanel("daScrim");
+      const lastUser = [...state.history].reverse().find(m => m.role === "user");
+      if (lastUser) $("daQuestion").value = lastUser.content;
+    };
+    $("qaRemember").onclick = () => sendMessage("Remember the key point from what I just said.");
+    $("qaClear").onclick = () => {
+      if (state.streaming) return toast("Wait for the current response to finish.");
+      $("msgs").innerHTML = "";
+    };
+    $("input").addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (state.streaming) return; // don't lose the typed text
+        const v = $("input").value;
+        $("input").value = "";
+        sendMessage(v);
+      }
+    });
+    document.addEventListener("keydown", e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("input").focus(); }
+    });
+
+    // Stale-cache defence: reload the page when the server signals a new build.
+    (() => {
+      try {
+        const reloadDelayMs = 400;
+        const initialBackoffMs = 2000;
+        const maxBackoffMs = 30000;
+
+        let eventSource = null;
+        let backoffMs = initialBackoffMs;
+        let currentBuildId = null;
+        let reloadPending = false;
+
+        const onVisibilityChange = () => {
+          if (reloadPending && !document.hidden) {
+            reloadPending = false;
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            toast('Updated - reloading...');
+            setTimeout(() => window.location.reload(), reloadDelayMs);
+          }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        const onBuildEvent = (event) => {
+          let message;
+          try {
+            message = JSON.parse(event.data);
+          } catch (e) {
+            return;
+          }
+
+          const newBuildId = message && message.build;
+          if (newBuildId == null) {
+            return;
+          }
+
+          if (currentBuildId === null) {
+            currentBuildId = newBuildId;
+            return;
+          }
+
+          if (newBuildId !== currentBuildId) {
+            if (document.hidden) {
+              reloadPending = true;
+            } else {
+              toast('Updated - reloading...');
+              setTimeout(() => window.location.reload(), reloadDelayMs);
+            }
+          }
+        };
+
+        const connect = () => {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+
+          const es = new EventSource(url("/api/livereload"));
+          eventSource = es;
+
+          es.addEventListener('build', onBuildEvent);
+
+          es.onopen = () => {
+            backoffMs = initialBackoffMs;
+          };
+
+          es.onerror = () => {
+            es.close();
+            if (eventSource === es) {
+              eventSource = null;
+            }
+            setTimeout(connect, backoffMs);
+            backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
+          };
+        };
+
+        connect();
+      } catch (e) {
+        // Live-reload must never break the app; silently ignore failures.
+      }
+    })();
+
+    /* ---------- startup beacon ----------
+       Reports how far the module-level script got. If the browser never sends
+       this, the script died before this line; if it arrives with wired:false,
+       the handlers never attached. Either answer localises the failure without
+       needing a console. */
+    report({
+      kind: "boot",
+      ua: navigator.userAgent,
+      href: location.href,
+      base: BASE,
+      wired: !!($("brainBtn") && $("brainBtn").onclick),
+      hasFetch: typeof fetch === "function",
+      hasCookie: navigator.cookieEnabled,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      dpr: window.devicePixelRatio,
+    });
+
+    /* ---------- GPU 3D background (THREE.js / WebGL) ---------- */
+    // Renders the idle hero orb as a real 3D mesh on the GPU, with a drifting
+    // particle field behind it. Graceful degradation: if three.min.js is
+    // missing or WebGL is unavailable, the page keeps the CSS orb untouched.
+    (function () {
+      if (typeof THREE === "undefined") { document.body.dataset.ken3d = "no-three"; return; }
+      let ctx = null;
+      try {
+        ctx = document.createElement("canvas").getContext("webgl", { failIfMajorPerformanceCaveat: false }) ||
+              document.createElement("canvas").getContext("experimental-webgl");
+      } catch (e) { ctx = null; }
+      if (!ctx) { document.body.dataset.ken3d = "no-webgl"; return; }
+      document.body.dataset.ken3d = "ok";
+
+      // 3D canvas lives inside a wrap that also carries the fullscreen exit
+      // button — both fullscreen together, and the browser hides all other
+      // page content while the wrap is fullscreen.
+      const idleView = document.getElementById("idleView");
+      if (!idleView) return;
+      const wrap = document.createElement("div");
+      wrap.id = "ken3dWrap";
+      wrap.style.cssText = "position:absolute;inset:0;z-index:0;pointer-events:none;";
+      idleView.insertBefore(wrap, idleView.firstChild);
+      const canvas = document.createElement("canvas");
+      canvas.id = "ken3d";
+      canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;";
+      wrap.appendChild(canvas);
+      const fsExit = document.createElement("button");
+      fsExit.id = "fsExit";
+      fsExit.textContent = "✕";
+      fsExit.title = "Exit fullscreen";
+      wrap.appendChild(fsExit);
+
+      // The CSS orb is the fallback; once the real one renders, hide it.
+      const hero = document.getElementById("idleOrb");
+      if (hero) hero.style.display = "none";
+
+      let renderer;
+      try {
+        renderer = new THREE.WebGLRenderer({
+          canvas, antialias: true, alpha: true,
+          powerPreference: "high-performance",   // ask for the discrete GPU
+        });
+      } catch (e) {
+        canvas.remove();
+        if (hero) hero.style.display = "";
+        return;
+      }
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(1, 1); // resized properly by resize() (idle view or fullscreen)
+
+      // ---- canvas-texture helper: soft radial gradient for glow sprites ----
+      function radialTex(stops, size) {
+        size = size || 256;
+        const c = document.createElement("canvas"); c.width = c.height = size;
+        const g = c.getContext("2d");
+        const grd = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+        for (const s of stops) grd.addColorStop(s[0], s[1]);
+        g.fillStyle = grd; g.fillRect(0, 0, size, size);
+        const t = new THREE.CanvasTexture(c);
+        return t;
+      }
+      const makeSprite = (tex, color, opacity, scale) => {
+        const m = new THREE.SpriteMaterial({
+          map: tex, color: color, transparent: true, opacity: opacity,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+        const s = new THREE.Sprite(m);
+        s.scale.set(scale, scale, 1);
+        return s;
+      };
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+      // Pulled well back and up: the scene is a small accent behind the
+      // greeting, completely clear of the feature cards below it.
+      camera.position.z = 10;
+      camera.position.y = -1.6;
+
+      // Nebula depth layers: huge soft additive blobs drifting behind
+      // everything (the "premium" look from award-site particle heroes).
+      const nebulas = [];
+      const NEB = [
+        [0.07, "rgba(70,150,235,0.42)", "rgba(30,60,130,0.14)", 30, 0.0],
+        [0.06, "rgba(245,120,190,0.36)", "rgba(120,40,90,0.12)", 26, 2.1],
+        [0.05, "rgba(120,90,230,0.34)", "rgba(50,30,110,0.10)", 34, 4.2],
+      ];
+      for (const [op, c0, c1, sc, ph] of NEB) {
+        const n = makeSprite(radialTex([[0, c0], [0.55, c1], [1, "rgba(0,0,0,0)"]]), 0xffffff, op, sc);
+        n.position.set((Math.random() - 0.5) * 14, (Math.random() - 0.5) * 6, -10 - Math.random() * 8);
+        n.userData.phase = ph;
+        scene.add(n); nebulas.push(n);
+      }
+
+      // Fake-bloom halo behind the orb (additive sprite = cheap glow, no
+      // postprocessing pipeline needed in the single-file build).
+      const halo = makeSprite(
+        radialTex([[0, "rgba(170,235,255,0.55)"], [0.4, "rgba(70,150,220,0.16)"], [1, "rgba(0,0,0,0)"]]),
+        0x4CC9F0, 0.16, 3.6);
+      halo.position.set(0, 0, -0.4);
+      scene.add(halo);
+
+      // Fresnel rim-glow orb: dark body with a glowing edge (the sci-fi orb
+      // technique from the three.js roadmap rim-lighting article). Solid
+      // smooth mesh + additive fresnel = reads "glowing sphere", not
+      // "wireframe ball".
+      const orbGeo = new THREE.IcosahedronGeometry(0.7, 2);
+      const orbMat = new THREE.ShaderMaterial({
+        uniforms: { uColor: { value: new THREE.Color(0x4CC9F0) }, uIntensity: { value: 1.5 } },
+        vertexShader: [
+          "varying vec3 vNormal; varying vec3 vView;",
+          "void main(){",
+          "  vNormal = normalize(normalMatrix * normal);",
+          "  vec4 mv = modelViewMatrix * vec4(position, 1.0);",
+          "  vView = normalize(-mv.xyz);",
+          "  gl_Position = projectionMatrix * mv;",
+          "}",
+        ].join("\n"),
+        fragmentShader: [
+          "uniform vec3 uColor; uniform float uIntensity;",
+          "varying vec3 vNormal; varying vec3 vView;",
+          "void main(){",
+          "  float rim = 1.0 - max(dot(normalize(vNormal), normalize(vView)), 0.0);",
+          "  rim = pow(rim, 2.2) * uIntensity;",
+          "  float a = min(0.12 + rim, 1.0);",
+          "  gl_FragColor = vec4(uColor * (0.05 + rim * 1.2), a);",
+          "}",
+        ].join("\n"),
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      const orb = new THREE.Mesh(orbGeo, orbMat);
+
+      // Faint wireframe shell on top for the "game engine" look.
+      const wireMat = new THREE.MeshBasicMaterial({
+        color: 0x4CC9F0, wireframe: true, transparent: true, opacity: 0.13,
+        depthWrite: false,
+      });
+      const wire = new THREE.Mesh(new THREE.IcosahedronGeometry(0.72, 1), wireMat);
+      scene.add(orb); scene.add(wire);
+
+      // Orbit rings (game-style gyroscope rings), additive & faint.
+      const rings = [];
+      [0x4CC9F0, 0xf5a3c7, 0x9fd8ff].forEach((c, i) => {
+        const r = new THREE.Mesh(
+          new THREE.TorusGeometry(1.05 + i * 0.28, 0.011, 8, 72),
+          new THREE.MeshBasicMaterial({
+            color: c, transparent: true, opacity: 0.1,
+            blending: THREE.AdditiveBlending, depthWrite: false,
+          })
+        );
+        r.rotation.x = Math.PI / 2.15 + i * 0.42;
+        r.rotation.y = i * 0.55;
+        scene.add(r); rings.push(r);
+      });
+
+      // Twinkling starfield: round soft particles with per-star phase/speed,
+      // alpha oscillating in the vertex shader (the codrops particles
+      // technique — cheap and looks far better than square static points).
+      const STAR_N = 800;
+      const starGeo = new THREE.BufferGeometry();
+      const sPos = new Float32Array(STAR_N * 3), sPh = new Float32Array(STAR_N),
+            sSp = new Float32Array(STAR_N), sSz = new Float32Array(STAR_N);
+      for (let i = 0; i < STAR_N; i++) {
+        sPos[i * 3] = (Math.random() - 0.5) * 36;
+        sPos[i * 3 + 1] = (Math.random() - 0.5) * 24;
+        sPos[i * 3 + 2] = (Math.random() - 0.5) * 30 - 2;
+        sPh[i] = Math.random() * 6.283;
+        sSp[i] = 0.4 + Math.random() * 1.6;
+        sSz[i] = 0.8 + Math.random() * 2.4;
+      }
+      starGeo.setAttribute("position", new THREE.BufferAttribute(sPos, 3));
+      starGeo.setAttribute("aPhase", new THREE.BufferAttribute(sPh, 1));
+      starGeo.setAttribute("aSpeed", new THREE.BufferAttribute(sSp, 1));
+      starGeo.setAttribute("aSize", new THREE.BufferAttribute(sSz, 1));
+      const starMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uColor: { value: new THREE.Color(0x9fd8ff) },
+        },
+        vertexShader: [
+          "attribute float aPhase; attribute float aSpeed; attribute float aSize;",
+          "uniform float uTime;",
+          "varying float vA;",
+          "void main(){",
+          "  vA = 0.3 + 0.7 * abs(sin(uTime * aSpeed + aPhase));",
+          "  vec4 mv = modelViewMatrix * vec4(position, 1.0);",
+          "  gl_PointSize = aSize * (26.0 / -mv.z);",
+          "  gl_Position = projectionMatrix * mv;",
+          "}",
+        ].join("\n"),
+        fragmentShader: [
+          "uniform vec3 uColor; varying float vA;",
+          "void main(){",
+          "  vec2 uv = gl_PointCoord - 0.5;",
+          "  float d = length(uv);",
+          "  float a = smoothstep(0.5, 0.04, d) * vA;",
+          "  if (a < 0.015) discard;",
+          "  gl_FragColor = vec4(uColor, a);",
+          "}",
+        ].join("\n"),
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      });
+      const stars = new THREE.Points(starGeo, starMat);
+      scene.add(stars);
+
+      // Mouse / touch parallax.
+      let tx = 0, ty = 0, mx = 0, my = 0;
+      const aim = (x, y) => {
+        tx = (x / window.innerWidth - 0.5) * 1.3;
+        ty = (y / window.innerHeight - 0.5) * 0.85;
+      };
+      window.addEventListener("pointermove", (e) => aim(e.clientX, e.clientY), { passive: true });
+      window.addEventListener("touchmove", (e) => {
+        const t = e.touches[0];
+        if (t) aim(t.clientX, t.clientY);
+      }, { passive: true });
+
+      function resize() {
+        const fs = !!document.fullscreenElement;
+        const w = fs ? window.innerWidth : (idleView.clientWidth || window.innerWidth);
+        const h = fs ? window.innerHeight : (idleView.clientHeight || window.innerHeight);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+      window.addEventListener("resize", resize);
+      resize(); // initial size from the idle view
+
+      let thinking = false;
+      window.KEN3D = { setThinking: (v) => { thinking = !!v; } };
+
+      let raf = 0, lastT = 0, t = 0;
+      function tick(now) {
+        raf = requestAnimationFrame(tick);
+        // idle view hidden (chat/settings open) -> skip rendering, keep the
+        // loop cheap instead of burning GPU on an invisible scene.
+        if (idleView.style.display === "none") { lastT = now; return; }
+        const dt = Math.min(lastT ? (now - lastT) / 1000 : 0.016, 0.05);
+        lastT = now; t += dt;
+
+        mx += (tx - mx) * 0.045;
+        my += (ty - my) * 0.045;
+
+        const spd = thinking ? 3.4 : 0.55;
+        orb.rotation.x += dt * spd * 0.6;
+        orb.rotation.y += dt * spd;
+        wire.rotation.x += dt * spd * 0.4;
+        wire.rotation.z += dt * spd * 0.5;
+        rings.forEach((r, i) => { r.rotation.z += dt * (0.12 + i * 0.05) * (thinking ? 3 : 1); });
+
+        const fs = !!document.fullscreenElement;
+        const pulse = 1 + Math.sin(t * (thinking ? 9 : 2.2)) * (thinking ? 0.09 : 0.028);
+        const fsScale = fs ? 1.9 : 1;
+        orb.scale.setScalar(pulse * fsScale);
+        wire.scale.setScalar(pulse * 1.03 * fsScale);
+        halo.scale.setScalar(3.6 * fsScale * (1 + Math.sin(t * (thinking ? 7 : 1.8)) * (thinking ? 0.18 : 0.05)));
+        halo.material.opacity = thinking ? 0.3 : 0.16;
+        halo.material.color.setHex(thinking ? 0xf5a3c7 : 0x4CC9F0);
+        orbMat.uniforms.uColor.value.setHex(thinking ? 0xf5a3c7 : 0x4CC9F0);
+        orbMat.uniforms.uIntensity.value = thinking ? 2.4 : 1.5;
+        wireMat.color.setHex(thinking ? 0xf5a3c7 : 0x4CC9F0);
+
+        starMat.uniforms.uTime.value = t;
+        for (const n of nebulas) {
+          n.position.x += Math.sin(t * 0.05 + n.userData.phase) * dt * 0.4;
+          n.position.y += Math.cos(t * 0.04 + n.userData.phase) * dt * 0.3;
+        }
+        // Smooth-lerp between the idle camera (parallax) and the fullscreen
+        // showcase camera, so entering/exiting fullscreen animates instead of
+        // snapping.
+        const cX = fs ? 0 : mx * 1.25;
+        const cY = fs ? 0 : -1.6 - my * 0.85;
+        const cZ = fs ? 5.4 : 10;
+        camera.position.x += (cX - camera.position.x) * Math.min(1, dt * 5);
+        camera.position.y += (cY - camera.position.y) * Math.min(1, dt * 5);
+        camera.position.z += (cZ - camera.position.z) * Math.min(1, dt * 5);
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
+      }
+      raf = requestAnimationFrame(tick);
+
+      // Stop burning GPU when the tab is hidden.
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { cancelAnimationFrame(raf); raf = 0; }
+        else if (!raf) { lastT = 0; raf = requestAnimationFrame(tick); }
+      });
+
+      /* ---------- minimize-to-widget / fullscreen showcase ---------- */
+      const widget = document.getElementById("kenWidget");
+      function minimize() {
+        idleView.style.display = "none";
+        if (widget) widget.style.display = "flex";
+      }
+      function maximize() {
+        if (widget) widget.style.display = "none";
+        idleView.style.display = "flex";
+      }
+      const minimizeBtn = document.getElementById("minimizeBtn");
+      if (minimizeBtn) minimizeBtn.onclick = minimize;
+      if (widget) widget.onclick = maximize;
+
+      // Fullscreen needs the element-level API; hide the button where it
+      // isn't available (older iOS Safari) rather than show a dead button.
+      const fsBtnEl = document.getElementById("fsBtn");
+      const canFS = !!(wrap.requestFullscreen || wrap.webkitRequestFullscreen);
+      if (fsBtnEl && !canFS) fsBtnEl.style.display = "none";
+      function enterFS() {
+        const fn = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
+        if (fn) { try { fn.call(wrap); } catch (e) { } }
+      }
+      function exitFS() {
+        const fn = document.exitFullscreen || document.webkitExitFullscreen;
+        if (fn) { try { fn.call(document); } catch (e) { } }
+      }
+      if (fsBtnEl) fsBtnEl.onclick = enterFS;
+      if (fsExit) fsExit.onclick = exitFS;
+    })();
+
+    /* ---------- init ---------- */
+    async function init() {
+      updateGreeting();
+      // settleAll, not Promise.all: one failing loader must not abort the others
+      // or leave the app half-initialised. Failures are reported, not swallowed.
+      const steps = [["tools", loadTools], ["chats", loadChats],
+      ["memory", loadMemory], ["health", loadHealth],
+      ["access", loadAccess], ["docs", loadDocs],
+      ["vault", loadVault], ["tasks", loadTasks]];
+      for (const [name, fn] of steps) {
+        try { await fn(); }
+        catch (e) { fatal(`Failed to load ${name}: ${e.message}`); }
+      }
+      setInterval(() => loadHealth().catch(() => { }), 15000);
+      setInterval(() => loadAccess().catch(() => { }), 60000);
+    }
+    init();
+  </script>
 </body>
+
 </html>

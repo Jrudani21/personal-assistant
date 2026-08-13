@@ -5,3 +5,9 @@ __pycache__/
 *.pyc
 .venv/
 graphify-out/
+
+# dev junk
+.deepcode/
+logs/
+Hermes-Setup.exe
+_retool_ken_theme.py
