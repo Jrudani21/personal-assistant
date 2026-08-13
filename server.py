@@ -83,6 +83,30 @@ DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.co
 MODEL = os.environ.get("KEN_MODEL", "deepseek-chat")
 PROVIDER = "deepseek"
 
+# Free cloud fallback (Bluesminds relay, $0) — sits between DeepSeek and
+# local Ollama. Key read from KEN_BLUESMINDS_API_KEY (Hermes .env) or
+# BLUESMINDS_API_KEY (500-AI-Agents repo .env). llama-3.1-70b verified 2026-08.
+BLUESMINDS_KEY = os.environ.get("BLUESMINDS_API_KEY") or ""
+if not BLUESMINDS_KEY:
+    try:
+        _env = {}
+        for p in ("C:/Users/Janak's PC/AppData/Local/hermes/.env",
+                  "E:/Local/projects/500-AI-Agents-Projects/.env"):
+            try:
+                with open(p, encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip() and not line.strip().startswith("#") and "=" in line:
+                            k, v = line.strip().split("=", 1)
+                            _env[k] = v
+            except OSError:
+                pass
+        BLUESMINDS_KEY = _env.get("BLUESMINDS_API_KEY") or _env.get(
+            "KEN_BLUESMINDS_API_KEY", "")
+    except Exception:
+        BLUESMINDS_KEY = ""
+BLUESMINDS_BASE_URL = "https://api.bluesminds.com/v1"
+BLUESMINDS_MODEL = os.environ.get("KEN_BLUESMINDS_MODEL", "meta/llama-3.1-70b-instruct")
+
 # Free local fallback: used automatically when DeepSeek is unusable from the
 # start (no key, network down, 401, 429, ...). Override with KEN_FALLBACK_MODEL.
 FALLBACK_MODEL = os.environ.get("KEN_FALLBACK_MODEL", "qwen3:8b")
@@ -90,6 +114,113 @@ OLLAMA_HOST = "http://localhost:11434"
 OLLAMA_TIMEOUT_S = 2
 
 _deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL) if DEEPSEEK_API_KEY else None
+
+
+def _read_env_file(*paths: str) -> dict:
+    """Parse key=value lines from .env files (no dotenv dependency)."""
+    out: dict[str, str] = {}
+    for p in paths:
+        try:
+            with open(p, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        out[k] = v
+        except OSError:
+            pass
+    return out
+
+
+_bluesminds_client = OpenAI(api_key=BLUESMINDS_KEY, base_url=BLUESMINDS_BASE_URL) if BLUESMINDS_KEY else None
+
+# Groq + OpenRouter free tiers — keys live in personal-assistant/.env.
+_KEN_ENV = _read_env_file(str(Path(__file__).resolve().parent / ".env"))
+GROQ_KEY = os.environ.get("GROQ_API_KEY") or _KEN_ENV.get("GROQ_API_KEY", "")
+OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY") or _KEN_ENV.get("OPENROUTER_API_KEY", "")
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_MODEL = os.environ.get("KEN_GROQ_MODEL", "llama-3.3-70b-versatile")
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_MODEL = os.environ.get("KEN_OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+_groq_client = OpenAI(api_key=GROQ_KEY, base_url=GROQ_BASE_URL) if GROQ_KEY else None
+_openrouter_client = OpenAI(api_key=OPENROUTER_KEY, base_url=OPENROUTER_BASE_URL) if OPENROUTER_KEY else None
+
+# ---------------------------------------------------------------------------
+# Hermes A2A bridge: route chat through the Hermes agent (same machine,
+# gateway A2A endpoint on :9900) so KEN has access to ALL Hermes chats,
+# sessions, memory, and tools. Falls back to DeepSeek/Ollama when the
+# gateway is down. Enable/disable with KEN_HERMES_A2A=1/0 (default: on when
+# a token is found).
+# ---------------------------------------------------------------------------
+HERMES_A2A_URL = os.environ.get("HERMES_A2A_URL", "http://127.0.0.1:9900").rstrip("/")
+_HERMES_ENV_FILE = Path(os.environ.get("HERMES_HOME", r"C:\Users\Janak's PC\AppData\Local\hermes")) / ".env"
+
+
+def _hermes_a2a_token() -> str:
+    """Locate the A2A bearer token: env var first, then the Hermes .env file."""
+    tok = os.environ.get("A2A_BEARER_TOKEN", "").strip()
+    if tok:
+        return tok
+    try:
+        for line in _HERMES_ENV_FILE.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if line.startswith("A2A_BEARER_TOKEN="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return ""
+
+
+HERMES_A2A_TOKEN = _hermes_a2a_token()
+HERMES_A2A_ENABLED = os.environ.get(
+    "KEN_HERMES_A2A", "1" if HERMES_A2A_TOKEN else "0"
+).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _hermes_a2a_send(text: str, chat_id: str, timeout: int = 320) -> str:
+    """Send one user message to the Hermes agent over A2A; return reply text.
+
+    ``contextId`` is pinned to the KEN chat so Hermes keeps a per-chat
+    conversation (its own memory/tools/sessions stay in scope).
+    """
+    params: dict = {
+        "message": {"role": "ROLE_USER", "parts": [{"text": text}]},
+        "contextId": f"ken:{chat_id}" if chat_id else None,
+    }
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "message/send", "params": params}
+    resp = requests.post(
+        HERMES_A2A_URL + "/",
+        json=payload,
+        headers={"Authorization": f"Bearer {HERMES_A2A_TOKEN}"},
+        timeout=timeout,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    result = data.get("result") or {}
+    status = result.get("status") or {}
+    if status.get("state") == "TASK_STATE_COMPLETED":
+        parts = (status.get("message") or {}).get("parts") or []
+        return "".join(p.get("text", "") for p in parts)
+    parts = (status.get("message") or {}).get("parts") or []
+    err = "".join(p.get("text", "") for p in parts) or f"state={status.get('state')}"
+    raise RuntimeError(f"Hermes A2A: {err}")
+
+
+def _hermes_stream(history: list[dict], chat_id: str):
+    """Generator: full Hermes A2A reply as chunks (SSE-friendly). On failure
+    yields the 'Error talking to...' wrapper so the provider chain falls
+    through to DeepSeek/Ollama exactly like a dead primary."""
+    user_text = next(
+        (m.get("content", "") for m in reversed(history or []) if m.get("role") == "user"),
+        "",
+    )
+    try:
+        reply = _hermes_a2a_send(user_text, chat_id)
+    except Exception as e:
+        yield f"Error talking to Hermes: {e}"
+        return
+    for i in range(0, len(reply), 96):
+        yield reply[i:i + 96]
 
 # ---------------------------------------------------------------------------
 # Tool permission model  (KEN_BUILD_SPEC section 3)
@@ -537,19 +668,25 @@ def _signin_page(error: str = "") -> str:
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KEN - sign in</title><style>
 :root{{color-scheme:dark}}
+*{{box-sizing:border-box}}
 body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
- background:#0a0409;color:#F2E9EE;font:400 15px/1.5 system-ui,-apple-system,sans-serif;padding:24px}}
-.card{{width:100%;max-width:360px;background:#12060E;border:1px solid rgba(76,201,240,.16);
- border-radius:16px;padding:26px}}
+ background:#05050a;color:#f2f2f5;font:400 15px/1.5 system-ui,-apple-system,sans-serif;padding:24px}}
+.card{{width:100%;max-width:min(360px,100%);background:#0a0a12;border:1px solid rgba(255,49,49,.18);
+ border-radius:16px;padding:26px;box-shadow:0 0 24px rgba(255,49,49,.12)}}
 h1{{margin:0 0 6px;font-size:20px;letter-spacing:.14em}}
-p{{margin:0 0 18px;color:rgba(242,233,238,.55);font-size:13px}}
-input{{width:100%;box-sizing:border-box;padding:13px 14px;font-size:16px;border-radius:9px;
- background:rgba(242,233,238,.04);border:1px solid rgba(242,233,238,.12);color:#F2E9EE;outline:none}}
-input:focus{{border-color:#4CC9F0}}
+p{{margin:0 0 18px;color:rgba(242,242,245,.55);font-size:13px}}
+input{{width:100%;padding:13px 14px;font-size:16px;border-radius:9px;
+ background:rgba(242,242,245,.05);border:1px solid rgba(242,242,245,.14);color:#f2f2f5;outline:none}}
+input:focus{{border-color:#ff3131}}
 button{{width:100%;margin-top:12px;padding:13px;font-size:15px;font-weight:600;border:0;
- border-radius:9px;background:#4CC9F0;color:#0a0409}}
-.toggle{{text-align:center;margin-top:14px;font-size:12px;color:rgba(242,233,238,.4)}}
-.toggle a{{color:#4CC9F0;cursor:pointer;text-decoration:none}}
+ border-radius:9px;background:#ff3131;color:#05050a;cursor:pointer}}
+button:active{{background:#e02a2a}}
+.toggle{{text-align:center;margin-top:14px;font-size:12px;color:rgba(242,242,245,.45)}}
+.toggle a{{color:#ff3131;cursor:pointer;text-decoration:none}}
+@media (max-width:480px){{
+ body{{padding:14px}}
+ .card{{padding:20px}}
+}}
 </style></head><body>
 <form class="card" method="post" action="" id="pwForm">
   <h1>KEN</h1>
@@ -1050,6 +1187,81 @@ def _deepseek_stream_chat(model: str, history: list[dict]):
 
 
 # ---------------------------------------------------------------------------
+# Free cloud fallbacks (Bluesminds / Groq / OpenRouter) — OpenAI-compatible
+# ---------------------------------------------------------------------------
+def _openai_compat_stream_chat(client, model: str, history: list[dict],
+                               label: str, use_tools: bool = False):
+    """Streaming tool-loop for any OpenAI-compatible provider (free tiers).
+
+    Mirrors _deepseek_stream_chat but tolerates no tool support (free llama
+    models often lack function calling) by falling back to plain completion.
+    Errors yield error-text, which the runner's _looks_like_llm_error check
+    converts into a fallthrough to the next candidate.
+    """
+    messages = [{"role": "system", "content": llm._system_prompt()}] + history
+    if not client:
+        yield f"\n\n_Error: no client for {label}_"
+        return
+
+    for _round in range(llm.MAX_TOOL_ROUNDS):
+        try:
+            kwargs = {}
+            if use_tools and tools.SCHEMAS:
+                kwargs["tools"] = tools.SCHEMAS
+            stream = client.chat.completions.create(
+                model=model, messages=messages, stream=True, **kwargs)
+        except Exception as e:
+            yield f"\n\n_Error talking to {label}: {e}_"
+            return
+
+        content = ""
+        calls: dict[int, dict] = {}
+        try:
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    content += delta.content
+                    yield delta.content
+                for tc in (delta.tool_calls or []):
+                    slot = calls.setdefault(tc.index, {"id": None, "name": "", "arguments": ""})
+                    if tc.id:
+                        slot["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        slot["name"] += tc.function.name
+                    if tc.function and tc.function.arguments:
+                        slot["arguments"] += tc.function.arguments
+        except Exception as e:
+            yield f"\n\n_Error talking to {label}: {e}_"
+            return
+
+        if not calls:
+            return
+
+        ordered = [calls[i] for i in sorted(calls)]
+        messages.append({
+            "role": "assistant",
+            "content": content or None,
+            "tool_calls": [
+                {"id": c["id"], "type": "function",
+                 "function": {"name": c["name"], "arguments": c["arguments"]}}
+                for c in ordered
+            ],
+        })
+        for c in ordered:
+            name = c["name"]
+            try:
+                args = json.loads(c["arguments"] or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            fn = tools.REGISTRY.get(name)
+            result = fn(**args) if fn else f"Unknown tool: {name}"
+            observations.append(name, args, result)
+            messages.append({"role": "tool", "tool_call_id": c["id"], "content": str(result)})
+
+    yield "\n\n_Reached max tool-call rounds without a final answer._"
+
+
+# ---------------------------------------------------------------------------
 # /api/health
 # ---------------------------------------------------------------------------
 @app.get("/api/health")
@@ -1161,19 +1373,36 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
         #    content or tool call has streamed, the turn stays committed to
         #    that provider — a mid-stream error surfaces to the client as-is.
         used_model: str | None = None
-        candidates = [model]
+        # Provider chain: Hermes A2A (if enabled) -> DeepSeek -> local Ollama.
+        # Once any real content has streamed, the turn stays committed to that
+        # provider — a mid-stream error surfaces to the client as-is.
+        candidates: list[tuple[str, object]] = []
+        if HERMES_A2A_ENABLED:
+            candidates.append(("hermes-a2a", _hermes_stream(history, chat.get("id", ""))))
+        candidates.append((model, _deepseek_stream_chat(model, history)))
+        # Free cloud tiers (all probe-verified 2026-08-13): Bluesminds ->
+        # Groq -> OpenRouter, then local Ollama last. Each yields error-text on
+        # failure, which the runner converts into fallthrough to the next.
+        if _bluesminds_client:
+            candidates.append((BLUESMINDS_MODEL,
+                               _openai_compat_stream_chat(_bluesminds_client, BLUESMINDS_MODEL,
+                                                          history, "Bluesminds")))
+        if _groq_client:
+            candidates.append((GROQ_MODEL,
+                               _openai_compat_stream_chat(_groq_client, GROQ_MODEL,
+                                                          history, "Groq")))
+        if _openrouter_client:
+            candidates.append((OPENROUTER_MODEL,
+                               _openai_compat_stream_chat(_openrouter_client, OPENROUTER_MODEL,
+                                                          history, "OpenRouter")))
         if FALLBACK_MODEL:
-            candidates.append(FALLBACK_MODEL)
-        for attempt, candidate in enumerate(candidates):
+            candidates.append((FALLBACK_MODEL, llm.stream_chat(FALLBACK_MODEL, history, on_tool_call=None)))
+        for attempt, (candidate, gen) in enumerate(candidates):
             buf: list[str] = []
             started = False
-            gen = (
-                _deepseek_stream_chat(candidate, history) if attempt == 0
-                else llm.stream_chat(candidate, history, on_tool_call=None)
-            )
             for piece in gen:
                 if attempt == 0 and not started and _looks_like_llm_error("".join(buf) + piece):
-                    break  # primary unusable from the start -> try fallback
+                    break  # primary unusable from the start -> try next provider
                 started = True
                 buf.append(piece)
                 full_reply.append(piece)
@@ -1182,7 +1411,7 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
                 used_model = candidate
                 break
         if used_model is None:
-            used_model = candidates[-1]  # every candidate failed; reply carries the last error
+            used_model = candidates[-1][0]  # every candidate failed; reply carries the last error
 
         # 4) Persist the turn (user message + final assistant reply).
         reply_text = "".join(full_reply).strip()
@@ -1215,7 +1444,7 @@ async def _sse_chat(req: ChatRequest, role: str = "owner") -> AsyncGenerator[dic
         yield _sse("error", {"message": "last message must have role 'user'."})
         return
 
-    if not _deepseek_client and not _ollama_up():
+    if not HERMES_A2A_ENABLED and not _deepseek_client and not _ollama_up():
         yield _sse("error", {"message": "Neither DeepSeek nor local Ollama is reachable."})
         return
 
