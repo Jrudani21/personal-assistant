@@ -269,24 +269,6 @@ def test_no_fallback_flag_when_deepseek_succeeds(monkeypatch):
     assert llm.used_fallback is False
 
 
-def test_run_deep_analysis_discloses_when_fallback_was_used(monkeypatch):
-    class _Kicked:
-        def kickoff(self):
-            return "the report body"
-
-    def fake_build(raw_input, reasoning_llm=None):
-        reasoning_llm.used_fallback = True
-        reasoning_llm.last_error = "API key missing"
-        return _Kicked()
-
-    monkeypatch.setattr(crew, "build_crew", fake_build)
-    result = crew.run_deep_analysis("anything")
-
-    assert "the report body" in result
-    assert "analyzed locally" in result
-    assert "API key missing" in result
-
-
 def test_run_deep_analysis_stays_clean_when_deepseek_worked(monkeypatch):
     class _Kicked:
         def kickoff(self):

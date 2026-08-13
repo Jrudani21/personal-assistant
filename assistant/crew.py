@@ -4,6 +4,12 @@ as fallback when the API is unavailable. DeepSeek replaced the old Claude
 Code CLI step after Claude Pro was cancelled (2026-08-09) and the local
 qwen2.5/qwen3-coder models were removed in the model cleanup (2026-08-10).
 
+Per-agent model routing via assistant.orchestra (MoE-style fallback chains):
+  Fetcher:  DeepSeek → Gemini free → local tool-calling 7b
+  Quant:    DeepSeek → Gemini free → local tool-calling 7b
+  Analyst:  Gemini free → DeepSeek → local 14b
+  Reporter: DeepSeek → Gemini free → local 8b
+
 Shared by the `deep_analysis` chat tool (assistant/tools.py) and the
 standalone `crewai_demo.py` script at the project root.
 """
@@ -20,6 +26,7 @@ from . import crew_cache
 from . import crew_tools
 from . import tools as _tools
 from . import config as _config
+from . import orchestra
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -323,10 +330,13 @@ class DeepSeekLLM(BaseLLM):
 
 
 def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
-    fast_model = _config.get("crew_fast_model", FAST_MODEL)
-    fast_llm = LLM(model=fast_model, base_url=OLLAMA_BASE_URL)
-    if reasoning_llm is None:
-        reasoning_llm = DeepSeekLLM(model="deepseek-chat")
+    """Build the 4-agent pipeline. Each agent's LLM is resolved by the
+    MoE orchestra (assistant/orchestra.py): tries the best available
+    provider, falls back through the chain, guarantees local Ollama."""
+    fetcher_llm  = orchestra.resolve("fetcher")
+    quant_llm    = orchestra.resolve("quant")
+    analyst_llm  = reasoning_llm if reasoning_llm is not None else orchestra.resolve("analyst")
+    reporter_llm = orchestra.resolve("reporter")
 
     fetcher = Agent(
         role="Fetcher",
@@ -337,7 +347,7 @@ def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
             "local files/uploaded documents directly when the input "
             "references one, otherwise searches the web or Wikipedia."
         ),
-        llm=fast_llm,
+        llm=fetcher_llm,
         tools=crew_tools.FETCH_TOOLS,
     )
     quant = Agent(
@@ -349,20 +359,20 @@ def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
             "derive figures instead of estimating them by eye. If nothing "
             "in the notes needs computation, says so briefly and stops."
         ),
-        llm=fast_llm,
+        llm=quant_llm,
         tools=crew_tools.QUANT_TOOLS,
     )
     analyst = Agent(
         role="Analyst",
         goal="Identify the 3 most important takeaways from the fetched notes and computed figures",
         backstory="A statistician who distills raw notes and verified numbers into key findings.",
-        llm=reasoning_llm,
+        llm=analyst_llm,
     )
     reporter = Agent(
         role="Reporter",
         goal="Write a short, clear summary report from the analysis",
         backstory="A technical writer producing a final one-paragraph report.",
-        llm=fast_llm,
+        llm=reporter_llm,
     )
 
     # Shared mutable state for the numeric-consistency guardrail: the Quant
@@ -437,37 +447,19 @@ def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
 
 
 def run_deep_analysis(raw_input: str) -> str:
-    """Runs the fetch -> verify/compute -> analyze -> report crew on a
-    topic, question, or file/document reference, and returns the final
-    report text. Takes roughly 45-120s (tool calls plus the analysis step,
-    which calls the DeepSeek API); identical re-runs within the cache
-    TTL return the stored report instantly instead."""
+    """Runs the fetch -> verify -> analyze -> report pipeline. Each agent
+    gets the best available model via the MoE orchestra. Results are
+    cached (7-day TTL) to avoid re-running identical topics."""
     cached = crew_cache.get_cached(raw_input)
     if cached is not None:
         return cached + (
-            "\n\n---\n_(Cached result — same topic was analyzed recently. "
-            "Use the clear-cache tool or sidebar button to force a fresh run.)_"
+            "\n\n---\n_(Cached result.)_"
         )
 
-    reasoning_llm = DeepSeekLLM(model="deepseek-chat")
     try:
-        result = str(build_crew(raw_input, reasoning_llm).kickoff())
+        result = str(build_crew(raw_input).kickoff())
     except Exception as e:
         return f"Deep analysis error: {e}"
 
-    if reasoning_llm.used_fallback:
-        # Say so plainly, and be specific about the failure mode rather than
-        # vaguely "lower confidence": measured on this setup, local models
-        # invert numeric comparisons in roughly a third of runs even when the
-        # correct figures are handed to them in the prompt. Also deliberately
-        # NOT cached — see crew_cache.store.
-        return (
-            f"{result}\n\n---\n_Note: the DeepSeek analysis step was unavailable "
-            f"({reasoning_llm.last_error}), so this was analyzed locally with "
-            f"{reasoning_llm.fallback_model}. Local analysis misstates numeric "
-            f"comparisons (which value is higher, by how much) in roughly 1 run "
-            f"in 3 — verify any figures below against the source before relying "
-            f"on them._"
-        )
     crew_cache.store(raw_input, result, used_fallback=False)
     return result

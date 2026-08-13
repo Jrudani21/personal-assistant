@@ -17,7 +17,7 @@ import re
 import subprocess
 from pathlib import Path
 
-DEFAULT_VAULT = Path(os.environ.get("OBSIDIAN_VAULT", str(Path.home() / "brain")))
+DEFAULT_VAULT = Path(os.environ.get("OBSIDIAN_VAULT", r"E:\Local\brain"))
 SKIP_DIRS = {".obsidian", ".trash", ".git", "templates"}
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]|#]+?)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]")
@@ -70,7 +70,11 @@ def read_note(rel: str) -> str | None:
     """Read a note by its vault-relative path. Path-traversal safe."""
     vdir = vault_dir().resolve()
     p = (vdir / rel).resolve()
-    if not str(p).startswith(str(vdir)) or not p.is_file():
+    # `p in vdir.parents` would also match a path that merely *shares a
+    # prefix* with the vault dir (C:\brain_notes vs C:\brain). Use the
+    # parents membership check so a ``..`` traversal into a sibling
+    # directory resolves to a path OUTSIDE the vault and is rejected.
+    if vdir not in p.parents or not p.is_file():
         return None
     try:
         return p.read_text(encoding="utf-8")

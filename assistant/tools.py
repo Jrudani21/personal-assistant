@@ -176,14 +176,14 @@ def query_sql(query: str) -> str:
     """Run a read-only SQL query against the assistant's local SQLite database
     (private-gpt research: text-to-SQL). SELECT/PRAGMA/EXPLAIN/WITH only;
     writes are refused. Results capped at 50 rows."""
-    q = (query or "").strip()
+    q = (query or "").strip().rstrip(";").strip()
     lowered = q.lower()
     if not q:
         return "Error: empty query."
     if not (lowered.startswith("select") or lowered.startswith("pragma")
             or lowered.startswith("explain") or lowered.startswith("with")):
         return "Error: only SELECT / PRAGMA / EXPLAIN / WITH queries are allowed."
-    if ";" in q.rstrip().rstrip(";") or q.count(";") > 1:
+    if ";" in q:
         return "Error: multiple statements are not allowed."
 
     db = _sqlite_db()
