@@ -110,8 +110,8 @@ def is_due(bot: dict, state: dict, now: datetime, config: dict | None = None) ->
     # run on schedule no matter the price — a missed tick costs more than tokens.
     if bot.get("time_sensitive"):
         return _sched_due(bot, state, now)
-    # LLM-heavy bots (research/watch/coordinator): NEVER run in the expensive window.
-    if bot.get("type") in ("research", "watch", "coordinator") and price_window(now) == "expensive":
+    # LLM-heavy bots (research/watch/coordinator/agent): NEVER run in the expensive window.
+    if bot.get("type") in ("research", "watch", "coordinator", "agent") and price_window(now) == "expensive":
         return False
     return _sched_due(bot, state, now)
 
@@ -188,6 +188,16 @@ def work_order(bot: dict, force: bool = False) -> str:
             f"  3. SYNTHESIZE: lead reads all files, writes {out}{bid}/report.md with "
             f"per-claim citations (grounded-citations).\n"
             f"  4. SAVE: append a link in brain/notes or the daily note. Mark state done."
+        )
+    if btype == "agent":
+        # 500-AI-Agents-Projects script agent: run the generic wrapper against
+        # the DeepSeek-swapped agent in the sibling repo.
+        agent_dir = bot.get("agent_dir", "")
+        agent_args = bot.get("agent_args", "")
+        cmd = f"python qa/run_500agent.py {agent_dir} {agent_args}".strip()
+        return (
+            f"AGENT_BOT {bid}: run `{cmd}` (500-AI-Agents repo, DeepSeek-v4-flash). "
+            f"Output to data/agents/{agent_dir}.log. Rules: BOT_RULES §2 (LLM billed via DeepSeek)."
         )
     return f"BOT {bid}: unknown type {btype}"
 

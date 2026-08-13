@@ -11,3 +11,7 @@ graphify-out/
 logs/
 Hermes-Setup.exe
 _retool_ken_theme.py
+
+# secrets — never commit
+.env
+assets/whatsapp_qr.png
