@@ -252,14 +252,16 @@ def main() -> int:
                                   if b.get("id") == f.get("coordinator")), None)
                     break
             if coord and coord.get("can_approve") and bot.get("approval_level") == "routine":
-                state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
+                if not args.dry_run:
+                    state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
                 print(f"COORD_APPROVED {bot['id']}: {coord['id']} pre-approved routine "
                       f"'{bot.get('approval_note', '')}' — running.")
                 continue
             print(f"PENDING_APPROVAL {bot['id']}: {bot.get('name', bot['id'])}"
                   f" — {bot.get('approval_note', 'admin action requested')}."
                   f" Approve? (deliver this to the owner's phone, wait for reply)")
-            state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
+            if not args.dry_run:
+                state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
             continue
         print(work_order(bot, force=bool(args.force)))
         if not args.dry_run:

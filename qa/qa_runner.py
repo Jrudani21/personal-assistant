@@ -68,9 +68,11 @@ def run_playwright() -> dict:
     env["KEN_QA_USER"] = USER
     env["KEN_QA_PASS"] = PASS
     env["KEN_BASE_URL"] = BASE
+    # --output is the ARTIFACTS dir, not the JSON file. Use
+    # PLAYWRIGHT_JSON_OUTPUT_NAME so the json reporter writes to out_file.
+    env["PLAYWRIGHT_JSON_OUTPUT_NAME"] = str(out_file)
     proc = subprocess.run(
-        ["npx.cmd", "playwright", "test", "--reporter=json",
-         f"--output={out_file}"],
+        ["npx.cmd", "playwright", "test", "--reporter=json"],
         cwd=str(QA), env=env, capture_output=True, text=True, timeout=600,
     )
     try:
