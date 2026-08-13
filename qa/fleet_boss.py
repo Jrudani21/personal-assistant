@@ -53,11 +53,14 @@ def freshness_ok(bot: dict, state: dict, now: datetime) -> tuple[bool, str]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--fleet", default="", help="review only one fleet (qa/research/ops)")
     args = ap.parse_args()
 
     data = load_json(BOTS, {"fleets": [], "bots": []})
     bots = data.get("bots", [])
     fleets = data.get("fleets", [])
+    if args.fleet:
+        fleets = [f for f in fleets if f["id"] == args.fleet]
     state = load_json(STATE, {})
     now = datetime.now()
 

@@ -135,9 +135,11 @@ def work_order(bot: dict, force: bool = False) -> str:
         return (f"QA_BOT {bid}: run `python {bot['runner']}` "
                 f"against {bot.get('target', 'sandbox')}. Rules: BOT_RULES.md §2 (no LLM).")
     if btype == "coordinator":
-        return (f"COORDINATOR_BOT {bid}: run `python {bot.get('runner', 'qa/fleet_boss.py')}` "
-                f"— fleet oversight. If it reports issues, escalate per BOT_RULES §3 "
-                f"(deliver the fleet report to the owner; do NOT auto-fix).")
+        fleet = bot.get("fleet", "")
+        farg = f" --fleet {fleet}" if fleet else ""
+        return (f"COORDINATOR_BOT {bid}: run `python {bot.get('runner', 'qa/fleet_boss.py')}{farg}` "
+                f"— fleet oversight for the {fleet or 'whole'} fleet. If it reports issues, escalate per "
+                f"BOT_RULES §3 (deliver the fleet report to the owner; do NOT auto-fix).")
     if btype in ("research", "watch"):
         topic = bot.get("topic", "")
         depth = bot.get("depth", "medium")
