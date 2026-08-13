@@ -18,34 +18,43 @@ from crewai.llm import LLM
 
 DS_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 GM_KEY = os.environ.get("GOOGLE_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+OR_KEY = os.environ.get("OPENROUTER_API_KEY", "")   # free tier drop-in (Fable 5 expiry backup)
 
 DS_URL = "https://api.deepseek.com"
 GM_URL = "https://generativelanguage.googleapis.com/v1beta/openai"
+OR_URL = "https://openrouter.ai/api/v1"
 OL_URL = "http://localhost:11434"
 
 # ── Fallback chains per agent role ──────────────────────────────────────
 # Each entry: (condition, model, base_url)
 # condition: truthy = try this entry. Last entry is always True (guaranteed local).
+# Order: DeepSeek (primary) → OpenRouter free (if key) → Gemini free (if key)
+# → local Ollama. OpenRouter free is the Fable-5-expiry safety net — add the
+# key when you want it live (see brain/notes/Fable 5 alternatives.md).
 # "openai/" prefix is added for non-Ollama URLs so CrewAI treats them as API calls.
 
 CHAINS = {
     "fetcher": [
         (DS_KEY, "deepseek-chat",                            DS_URL),
+        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (True,    "ollama/deepseek-r1-tool-calling:7b",      OL_URL),
     ],
     "quant": [
         (DS_KEY, "deepseek-chat",                            DS_URL),
+        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (True,    "ollama/deepseek-r1-tool-calling:7b",      OL_URL),
     ],
     "analyst": [
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (DS_KEY, "deepseek-chat",                            DS_URL),
+        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
         (True,    "ollama/deepseek-r1:14b",                  OL_URL),
     ],
     "reporter": [
         (DS_KEY, "deepseek-chat",                            DS_URL),
+        (OR_KEY, "deepseek/deepseek-r1:free",                OR_URL),
         (GM_KEY, "gemini-3-flash-preview",                   GM_URL),
         (True,    "ollama/deepseek-r1:8b",                   OL_URL),
     ],
