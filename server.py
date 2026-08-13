@@ -1676,7 +1676,9 @@ async def status_overview(request: Request) -> dict:
 
     # bots
     bots = read_json("bots_state.json", {})
-    bots_cfg = read_json("bots.json", {"bots": []}).get("bots", [])
+    bots_cfg = read_json("bots.json", {"bots": [], "fleets": []})
+    bot_list = bots_cfg.get("bots", [])
+    fleet_list = bots_cfg.get("fleets", [])
 
     # providers
     prov_state = read_json("provider_health_state.json", {})
@@ -1715,10 +1717,14 @@ async def status_overview(request: Request) -> dict:
         pass
 
     return {
+        "fleets": [{"id": f.get("id"), "name": f.get("name"),
+                    "coordinator": f.get("coordinator"),
+                    "members": f.get("members", [])} for f in fleet_list],
         "bots": [{"id": b.get("id"), "name": b.get("name"), "type": b.get("type"),
-                  "schedule": b.get("schedule"), "enabled": b.get("enabled", True),
+                  "fleet": b.get("fleet"), "schedule": b.get("schedule"),
+                  "enabled": b.get("enabled", True),
                   "last_run": (bots.get(b.get("id")) or {}).get("last_run")}
-                 for b in bots_cfg],
+                 for b in bot_list],
         "providers": prov_state,
         "provider_last": prov_last[0] if prov_last else None,
         "qa": {"last_fp": qa_state.get("last_fp"), "last_ts": qa_state.get("last_ts"),

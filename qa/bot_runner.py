@@ -79,8 +79,8 @@ def is_due(bot: dict, state: dict, now: datetime) -> bool:
     # run on schedule no matter the price — a missed tick costs more than tokens.
     if bot.get("time_sensitive"):
         return _sched_due(bot, state, now)
-    # LLM-heavy bots (research/watch): NEVER run in the expensive window.
-    if price_window(now) == "expensive":
+    # LLM-heavy bots (research/watch/coordinator): NEVER run in the expensive window.
+    if bot.get("type") in ("research", "watch", "coordinator") and price_window(now) == "expensive":
         return False
     return _sched_due(bot, state, now)
 
@@ -134,6 +134,10 @@ def work_order(bot: dict, force: bool = False) -> str:
     if btype == "qa":
         return (f"QA_BOT {bid}: run `python {bot['runner']}` "
                 f"against {bot.get('target', 'sandbox')}. Rules: BOT_RULES.md §2 (no LLM).")
+    if btype == "coordinator":
+        return (f"COORDINATOR_BOT {bid}: run `python {bot.get('runner', 'qa/fleet_boss.py')}` "
+                f"— fleet oversight. If it reports issues, escalate per BOT_RULES §3 "
+                f"(deliver the fleet report to the owner; do NOT auto-fix).")
     if btype in ("research", "watch"):
         topic = bot.get("topic", "")
         depth = bot.get("depth", "medium")

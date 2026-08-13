@@ -3379,10 +3379,15 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
           html += row("health check", t(d.provider_last.ts));
         }
 
-        html += `<div class="sub" style="margin:12px 0 6px;color:var(--accent)">Bots</div>`;
-        for (const b of d.bots || []) {
-          const state = b.enabled ? "on" : "off";
-          html += row(`${b.name} (${state})`, t(b.last_run));
+        html += `<div class="sub" style="margin:12px 0 6px;color:var(--accent)">Fleet</div>`;
+        const fleets = d.fleets || [];
+        const bots = d.bots || [];
+        for (const f of fleets) {
+          const members = bots.filter(b => b.fleet === f.id);
+          html += `<div style="margin:6px 0 2px;font:600 12px var(--body);color:var(--ink)">${esc(f.name)} <span style="color:var(--muted2);font-weight:300">(${esc(f.coordinator || "—")} leads)</span></div>`;
+          for (const b of members) {
+            html += row(`${esc(b.name)} <span style="color:var(--muted2)">(${esc(b.schedule)})</span>`, t(b.last_run));
+          }
         }
 
         html += `<div class="sub" style="margin:12px 0 6px;color:var(--accent)">QA</div>`;
