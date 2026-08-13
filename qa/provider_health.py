@@ -79,6 +79,11 @@ def _ping(provider: str) -> tuple[bool, str]:
     def _one_attempt():
         req = urllib.request.Request(url, data=body, headers={
             "Authorization": f"Bearer {key}", "Content-Type": "application/json",
+            # Groq is behind Cloudflare: it 403/error-1010s default urllib/requests
+            # User-Agents. A browser UA is required for the probe to succeed.
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/126.0.0.0 Safari/537.36"),
         })
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
