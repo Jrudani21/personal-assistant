@@ -68,8 +68,8 @@ def run_playwright() -> dict:
     env["KEN_QA_USER"] = USER
     env["KEN_QA_PASS"] = PASS
     env["KEN_BASE_URL"] = BASE
-    subprocess.run(
-        ["npx", "playwright", "test", "--reporter=json",
+    proc = subprocess.run(
+        ["npx.cmd", "playwright", "test", "--reporter=json",
          f"--output={out_file}"],
         cwd=str(QA), env=env, capture_output=True, text=True, timeout=600,
     )

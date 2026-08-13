@@ -45,7 +45,7 @@ def run_playwright() -> tuple[bool, str]:
         env["KEN_QA_USER"] = USER
         env["KEN_QA_PASS"] = PASS
     proc = subprocess.run(
-        ["npx", "playwright", "test", "--reporter=list"],
+        ["npx.cmd", "playwright", "test", "--reporter=list"],
         cwd=str(QA), env=env, capture_output=True, text=True, timeout=600,
     )
     out = (proc.stdout or "") + (proc.stderr or "")

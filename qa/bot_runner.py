@@ -199,6 +199,15 @@ def main() -> int:
         return 0
 
     for bot in due:
+        # Approval gate: bots flagged needs_approval never auto-run. They emit
+        # a PENDING_APPROVAL work order so the agent can deliver it to the
+        # owner's phone (Telegram/WhatsApp once wired) and wait for yes/no.
+        if bot.get("needs_approval") and not args.force:
+            print(f"PENDING_APPROVAL {bot['id']}: {bot.get('name', bot['id'])}"
+                  f" — {bot.get('approval_note', 'admin action requested')}."
+                  f" Approve? (deliver this to the owner's phone, wait for reply)")
+            state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
+            continue
         print(work_order(bot, force=bool(args.force)))
         if not args.dry_run:
             state.setdefault(bot["id"], {})["last_run"] = now.isoformat()

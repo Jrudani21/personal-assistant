@@ -58,6 +58,17 @@ bot detects failure ──► logs to data/qa_buglog.jsonl (free, deterministic)
 - Anything destructive (real-money orders, live deletes, funnel changes)
   requires a human confirm — bots never do these.
 
+## 5b. Phone approval gate (owner-in-the-loop)
+
+Bots flagged `needs_approval: true` in `data/bots.json` NEVER auto-run:
+- The scheduler emits `PENDING_APPROVAL <id>: <reason>`.
+- The agent delivers that request to the owner's phone (Telegram/WhatsApp
+  once a channel is wired) and WAITS for an explicit yes/no reply.
+- Approved → the bot runs. Denied → it's skipped and logged to
+  `data/approvals.jsonl`. No reply → stays pending, never runs.
+- This is the mechanism for any bot touching money, live data, or the funnel.
+  (Example flag: `"needs_approval": true, "approval_note": "..."`.)
+
 ## 6. Reporting
 
 - Every bot run appends one line to data/qa_buglog.jsonl (structured).
