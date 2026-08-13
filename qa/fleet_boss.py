@@ -66,12 +66,30 @@ def main() -> int:
     state = load_json(STATE, {})
     now = datetime.now()
 
+    # Heartbeat: this run IS the coordinator bot — stamp it.
+    coord_id = (fleets[0].get("coordinator") if len(fleets) == 1 else "ops-boss")
+    try:
+        from fleet_common import beat
+        beat(coord_id)
+    except Exception:
+        pass
+
     fleet_report = []
     issues = []
     # Heartbeat check: any bot with a standby_for counterpart whose heartbeat
     # is stale (or missing) gets flagged — the standby takes over (big-company
     # failover: one hot spare per fleet on heartbeat loss).
+    # Guard: only flag TAKEOVER when the heartbeat system has producers —
+    # if NO bot has ever beaten, primaries would all look dead on first run.
     from fleet_common import is_stale
+    from fleet_common import STATE_FILE as _STATE_FILE
+    _any_beat = False
+    try:
+        _s = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+        _any_beat = any(v.get("last_heartbeat") for v in _s.values())
+    except Exception:
+        _any_beat = False
+    heartbeat_live = _any_beat
     for fleet in fleets:
         members = [b for b in bots if b["id"] in fleet.get("members", [])]
         rows = []
@@ -90,8 +108,9 @@ def main() -> int:
                 issues.append(f"{b['id']}: over budget {runs}/{max_runs}")
             if not b.get("enabled", True):
                 flags.append("disabled")
-            # Heartbeat loss -> standby takeover signal
-            if b.get("standby_for"):
+            # Heartbeat loss -> standby takeover signal (only when the
+            # heartbeat system actually has producers — avoids first-run noise).
+            if b.get("standby_for") and heartbeat_live:
                 primary = b["standby_for"]
                 if is_stale(primary, max_idle_hours=3.0):
                     flags.append("TAKEOVER")

@@ -89,6 +89,12 @@ def _ping(provider: str) -> tuple[bool, str]:
 
 def main() -> int:
     now = datetime.now(timezone.utc)
+    # Heartbeat: this runner IS the health-watch bot.
+    try:
+        from fleet_common import beat
+        beat("health-watch")
+    except Exception:
+        pass
     state = {}
     if STATE.exists():
         try:

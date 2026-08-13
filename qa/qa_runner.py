@@ -155,6 +155,14 @@ def main() -> int:
     ap.add_argument("--probe-only", action="store_true")
     args = ap.parse_args()
 
+    # Heartbeat: this runner IS the qa-tester bot — stamp it so the standby
+    # (qa-tester-standby) knows the primary is alive and stays idle.
+    try:
+        from fleet_common import beat
+        beat("qa-tester")
+    except Exception:
+        pass
+
     if not ensure_sandbox():
         log("QA bot: SANDBOX FAILED TO START")
         return 1
