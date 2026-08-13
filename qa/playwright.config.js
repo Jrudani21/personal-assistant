@@ -11,7 +11,9 @@ module.exports = defineConfig({
   testDir: "./tests",
   timeout: 60_000,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Single worker: the 3D scene + slow sandbox (CrewAI imports) make 4-way
+  // parallel runs flaky on this machine (intermittent teardown timeouts).
+  workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: BASE,
