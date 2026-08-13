@@ -29,6 +29,14 @@ def load_bots() -> list[dict]:
         return []
 
 
+def load_config() -> dict:
+    """Full bots.json (fleets + bots) for coordinator lookups."""
+    try:
+        return json.loads(BOTS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {"fleets": [], "bots": []}
+
+
 # ── DeepSeek pricing windows (UTC-5 = local) ─────────────────────────────
 # From DeepSeek V4 launch (Jul 2026) + classic off-peak discounts:
 #   EXPENSIVE (peak surcharge ~2x): 20:00-23:00 & 01:00-05:00 local
@@ -181,6 +189,7 @@ def main() -> int:
 
     now = datetime.now()
     state = load_state()
+    bots_cfg = load_config()
 
     # Peak-price reminder: even if no bot is due, tell the scheduler agent
     # why heavy work is parked (it may want to warn the user / log it).
@@ -208,7 +217,22 @@ def main() -> int:
         # Approval gate: bots flagged needs_approval never auto-run. They emit
         # a PENDING_APPROVAL work order so the agent can deliver it to the
         # owner's phone (Telegram/WhatsApp once wired) and wait for yes/no.
+        # If the bot's fleet coordinator has can_approve, the coordinator may
+        # pre-approve ROUTINE requests (low-risk, within budget); anything
+        # unusual still goes to the human.
         if bot.get("needs_approval") and not args.force:
+            coord = None
+            fleet_id = bot.get("fleet", "")
+            for f in bots_cfg.get("fleets", []):
+                if f.get("id") == fleet_id:
+                    coord = next((b for b in bots_cfg.get("bots", [])
+                                  if b.get("id") == f.get("coordinator")), None)
+                    break
+            if coord and coord.get("can_approve") and bot.get("approval_level") == "routine":
+                state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
+                print(f"COORD_APPROVED {bot['id']}: {coord['id']} pre-approved routine "
+                      f"'{bot.get('approval_note', '')}' — running.")
+                continue
             print(f"PENDING_APPROVAL {bot['id']}: {bot.get('name', bot['id'])}"
                   f" — {bot.get('approval_note', 'admin action requested')}."
                   f" Approve? (deliver this to the owner's phone, wait for reply)")
