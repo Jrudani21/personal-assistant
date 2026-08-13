@@ -40,19 +40,18 @@ def start(port: int) -> None:
         shutil.copytree(ROOT, code, ignore=shutil.ignore_patterns(
             "data", ".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "logs", ".deepcode",
         ))
-    # Fresh data dir with a known owner
+    # Fresh data dir. Do NOT pre-write .ken_users.json — the server's
+    # _init_users() creates the owner from KEN_USERNAME/KEN_PASSWORD env,
+    # and a conflicting pre-seeded file would leave the session role wrong
+    # (login says owner, /api/users 403s).
     data = SANDBOX_ROOT / f"data-{port}"
     data.mkdir(exist_ok=True)
-    users = data / ".ken_users.json"
-    if not users.exists():
-        import hashlib, secrets
-        salt = secrets.token_bytes(16)
-        h = hashlib.scrypt(b"sandbox-pass", salt=salt, n=2**14, r=8, p=1)
-        users.write_text(json.dumps({
-            "janak": {"pw": salt.hex() + "$" + h.hex(), "role": "owner", "created_at": time.time()}
-        }, indent=2), encoding="utf-8")
     env = dict(os.environ)
-    env["KEN_TOKEN"] = ""            # disable token auth for tests
+    # KEEP token auth ENABLED (don't set KEN_TOKEN=""): with auth disabled the
+    # middleware never sets request.state.principal, so owner-only endpoints
+    # (/api/users) 403 even for a logged-in owner. Loopback throttle exemption
+    # already stops test runs from locking out. Tests log in with real creds.
+    env.pop("KEN_TOKEN", None)
     env["KEN_USERNAME"] = "janak"
     env["KEN_PASSWORD"] = "sandbox-pass"
     env["KEN_PORT"] = str(port)
