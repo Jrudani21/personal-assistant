@@ -361,6 +361,59 @@
       text-shadow: 0 2px 18px rgba(0, 0, 0, .6);
     }
 
+    /* ---------- WORK MODE (auto Mon-Fri 9-17, toggleable) ----------
+       Focused surface: orb fully OFF (canvas hidden, CSS orb blurred out),
+       cards/suggestions hidden, stats + status prominent. body.workmode. */
+    body.workmode #ken3dWrap {
+      display: none !important;   /* kill the 3D scene entirely */
+    }
+    body.workmode .idle-hero .orb.lg {
+      opacity: 0;
+      transform: scale(.4);
+      filter: blur(6px);
+      visibility: hidden;        /* no faint glow either */
+    }
+    body.workmode .idle-hero .orb.lg::before {
+      display: none;             /* halo gone */
+    }
+    body.workmode .feature-grid,
+    body.workmode .suggest-row,
+    body.workmode .idle-actions #fsBtn {
+      display: none !important;
+    }
+    body.workmode .stats-strip {
+      margin-top: 4px;
+    }
+    body.workmode .standby {
+      letter-spacing: .42em;
+      color: rgba(76, 201, 240, .95);
+    }
+    body.workmode .greeting {
+      font-size: 26px;
+    }
+    body.workmode .subline {
+      max-width: 480px;
+    }
+    body.workmode .idle-view {
+      background:
+        radial-gradient(120% 90% at 50% 55%, #15091a 0%, #0e0510 45%, #0a0409 100%);
+    }
+    #modeBtn {
+      font: 400 11px var(--mono);
+      letter-spacing: .12em;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 999px;
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: color .15s ease, border-color .15s ease;
+    }
+    #modeBtn:hover {
+      color: var(--accent);
+      border-color: rgba(76, 201, 240, .5);
+    }
+
     /* ---------- top bar ---------- */
     header.topbar {
       display: flex;
@@ -1926,6 +1979,7 @@
           <div class="subline" id="subline">Your local AI assistant — tools, memory, and deep analysis run for real
             behind this.</div>
           <div class="idle-actions">
+            <button id="modeBtn" title="Toggle work/fun mode">💼 Work</button>
             <button id="minimizeBtn" title="Minimize to a small widget">— Minimize</button>
             <button id="fsBtn" title="Fullscreen showcase">⛶ Fullscreen</button>
           </div>
@@ -2428,8 +2482,42 @@
       else if (h < 17) timeGreet = "Good afternoon";
       else if (h < 21) timeGreet = "Good evening";
       else timeGreet = "Good night";
-      $("greeting").innerHTML = `${timeGreet}, <span class="accent">Janak</span>. What&#39;s on your mind?`;
+      const work = document.body.classList.contains("workmode");
+      if (work) {
+        const focus = ["Ready when you are.", "Let's get things done.", "Focused and on it.",
+          "What's the task?", "Ship it."][h % 5];
+        $("greeting").innerHTML = `${timeGreet}, <span class="accent">Janak</span>. ${focus}`;
+        $("standbyLabel").textContent = "FOCUS";
+        $("subline").innerHTML = "Work mode — distractions off. Chat, tools, and deep analysis stay one keystroke away.";
+      } else {
+        $("greeting").innerHTML = `${timeGreet}, <span class="accent">Janak</span>. What&#39;s on your mind?`;
+        $("standbyLabel").textContent = "STANDBY";
+        $("subline").innerHTML = "Your local AI assistant — tools, memory, and deep analysis run for real behind this.";
+      }
     }
+
+    /* ---------- work mode (auto Mon-Fri 9-17, manual override) ---------- */
+    const WORK_DAYS = [1, 2, 3, 4, 5];          // Mon-Fri
+    const WORK_START = 9, WORK_END = 17;        // 9am-5pm
+    function inWorkHours() {
+      const d = new Date();
+      return WORK_DAYS.includes(d.getDay()) && d.getHours() >= WORK_START && d.getHours() < WORK_END;
+    }
+    function applyMode() {
+      const override = localStorage.getItem("ken_mode"); // "work" | "fun" | null
+      const work = override ? override === "work" : inWorkHours();
+      document.body.classList.toggle("workmode", work);
+      const btn = $("modeBtn");
+      if (btn) btn.innerHTML = work ? "🎨 Play" : "💼 Work";
+      updateGreeting();
+    }
+    $("modeBtn").onclick = () => {
+      const cur = document.body.classList.contains("workmode");
+      localStorage.setItem("ken_mode", cur ? "fun" : "work");
+      applyMode();
+    };
+    applyMode();
+    setInterval(applyMode, 60 * 1000); // re-evaluate every minute (hour rollover)
 
     /* ---------- tools ---------- */
     async function loadTools() {
