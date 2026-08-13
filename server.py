@@ -1647,6 +1647,81 @@ async def admin_status() -> dict:
     return {"status": await asyncio.to_thread(admin_mod.admin_status)}
 
 
+@app.get("/api/status")
+async def status_overview() -> dict:
+    """Monitor panel: bots, providers, QA, crons, sandbox — one aggregate."""
+    import json as _json
+    from pathlib import Path as _Path
+    data_dir = _Path(__file__).resolve().parent / "data"
+
+    def read_json(name: str, default):
+        try:
+            return _json.loads((data_dir / name).read_text(encoding="utf-8"))
+        except Exception:
+            return default
+
+    def tail_jsonl(name: str, n: int = 3):
+        try:
+            lines = (data_dir / name).read_text(encoding="utf-8").splitlines()
+            return [_json.loads(l) for l in lines[-n:] if l.strip()]
+        except Exception:
+            return []
+
+    # bots
+    bots = read_json("bots_state.json", {})
+    bots_cfg = read_json("bots.json", {"bots": []}).get("bots", [])
+
+    # providers
+    prov_state = read_json("provider_health_state.json", {})
+    prov_last = tail_jsonl("provider_health.jsonl", 1)
+
+    # QA
+    qa_state = read_json("qa_state.json", {})
+    qa_last = tail_jsonl("qa_buglog.jsonl", 3)
+
+    # sandbox
+    import urllib.request
+    sandbox_up = False
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8766/api/health", timeout=3) as r:
+            sandbox_up = r.status == 200
+    except Exception:
+        sandbox_up = False
+
+    # hermes cron jobs (same machine)
+    cron_jobs = []
+    cron_file = _Path(r"C:\Users\Janak's PC\AppData\Local\hermes\cron\jobs.json")
+    try:
+        raw = _json.loads(cron_file.read_text(encoding="utf-8"))
+        items = raw if isinstance(raw, list) else raw.get("jobs", raw)
+        if isinstance(items, dict):
+            items = items.values()
+        for j in items:
+            cron_jobs.append({
+                "name": j.get("name") or j.get("job_id") or "?",
+                "schedule": (j.get("schedule") or {}).get("display") or j.get("display") or j.get("schedule"),
+                "last_run": j.get("last_run_at"),
+                "status": j.get("last_status"),
+                "enabled": j.get("enabled", True),
+            })
+    except Exception:
+        pass
+
+    return {
+        "bots": [{"id": b.get("id"), "name": b.get("name"), "type": b.get("type"),
+                  "schedule": b.get("schedule"), "enabled": b.get("enabled", True),
+                  "last_run": (bots.get(b.get("id")) or {}).get("last_run")}
+                 for b in bots_cfg],
+        "providers": prov_state,
+        "provider_last": prov_last[0] if prov_last else None,
+        "qa": {"last_fp": qa_state.get("last_fp"), "last_ts": qa_state.get("last_ts"),
+               "recent": qa_last},
+        "sandbox": {"up": sandbox_up, "port": 8766},
+        "crons": cron_jobs,
+        "server": {"model": "deepseek", "auth_enabled": AUTH_ENABLED},
+    }
+
+
 @app.post("/api/admin")
 async def admin_action(body: AdminRequest) -> dict:
     params = {"action": body.action, "name": body.name,

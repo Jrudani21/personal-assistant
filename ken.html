@@ -1880,6 +1880,7 @@
       <button class="sb-item" id="sbFleet"><span class="sb-ico">🛠</span>Fleet</button>
       <button class="sb-item" id="sbUsers" style="display:none"><span class="sb-ico">👥</span>Users</button>
       <button class="sb-item" id="sbSettings"><span class="sb-ico">⚙</span>Settings</button>
+      <button class="sb-item" id="sbStatus"><span class="sb-ico">📡</span>Status</button>
       <div class="sb-group">SESSIONS</div>
       <div class="sb-chatlist" id="sbChatList"></div>
       <button class="sb-item" id="sbLogout" style="margin-top:auto"><span class="sb-ico">⎋</span>Log out</button>
@@ -2062,6 +2063,21 @@
   </div>
 
   <!-- Settings / tools overlay -->
+  <div class="scrim" id="statusScrim">
+    <div class="panel">
+      <header>
+        <div>
+          <div class="title">Status</div>
+          <div class="sub" id="statusSub">bots · providers · QA · crons · sandbox</div>
+        </div>
+        <span class="esc" data-close="statusScrim">ESC</span>
+      </header>
+      <div class="body" id="statusBody">
+        <div style="color:var(--muted);font-size:12px">loading…</div>
+      </div>
+    </div>
+  </div>
+
   <div class="scrim" id="settingsScrim">
     <div class="panel">
       <header>
@@ -3246,10 +3262,58 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
     sb("sbFleet").onclick = () => { openPanel("fleetScrim"); document.querySelector('[data-admin="status"]').click(); };
     sb("sbUsers").onclick = () => { openPanel("usersScrim"); loadUsers(); };
     sb("sbSettings").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
+    sb("sbStatus").onclick = () => { loadStatus(); openPanel("statusScrim"); };
     sb("sbLogout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.href = location.pathname; };
     // Show Users in the sidebar only for the owner.
     api("/api/whoami").then(d => { if (d.role === "owner") sb("sbUsers").style.display = ""; }).catch(() => {});
     // Render the chat list into the sidebar (same data as the Chats panel).
+    async function loadStatus() {
+      try {
+        const d = await api("/api/status");
+        const el = $("statusBody");
+        const dot = (ok) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ok ? "var(--ok,#4CC9F0)" : "var(--err,#f5a3c7)"};margin-right:6px"></span>`;
+        const row = (label, val) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border2);font:400 12.5px var(--body)"><span style="color:var(--muted)">${esc(label)}</span><span style="text-align:right">${val}</span></div>`;
+        const t = (v) => v ? String(v).replace("T", " ").slice(0, 16) : "—";
+
+        let html = "";
+        html += `<div class="sub" style="margin:8px 0 6px;color:var(--accent)">LLM providers</div>`;
+        const provs = d.providers || {};
+        for (const [name, st] of Object.entries(provs)) {
+          html += row(name, dot(st.ok) + (st.ok ? "up" : "down"));
+        }
+        if (d.provider_last && d.provider_last.results) {
+          html += row("health check", t(d.provider_last.ts));
+        }
+
+        html += `<div class="sub" style="margin:12px 0 6px;color:var(--accent)">Bots</div>`;
+        for (const b of d.bots || []) {
+          const state = b.enabled ? "on" : "off";
+          html += row(`${b.name} (${state})`, t(b.last_run));
+        }
+
+        html += `<div class="sub" style="margin:12px 0 6px;color:var(--accent)">QA</div>`;
+        const qa = d.qa || {};
+        const last = (qa.recent || [])[qa.recent.length - 1];
+        html += row("last status", last ? `${last.status} (${last.playwright_passed}/${last.playwright_passed + last.playwright_failed})` : "no runs yet");
+        html += row("last run", t(qa.last_ts));
+
+        html += `<div class="sub" style="margin:12px 0 6px;color:var(--accent)">Sandbox</div>`;
+        html += row(":8766", dot(d.sandbox && d.sandbox.up) + (d.sandbox && d.sandbox.up ? "up" : "down"));
+
+        html += `<div class="sub" style="margin:12px 0 6px;color:var(--accent)">Cron jobs</div>`;
+        for (const c of d.crons || []) {
+          html += row(`${c.name} · ${c.schedule || ""}`, t(c.last_run) + (c.status ? ` (${c.status})` : ""));
+        }
+
+        el.innerHTML = html;
+        $("statusSub").textContent = "updated " + new Date().toLocaleTimeString();
+      } catch (e) {
+        $("statusBody").innerHTML = `<div style="color:var(--err)">Status failed: ${esc(e.message)}</div>`;
+      }
+    }
+    // Auto-refresh while the panel is open.
+    setInterval(() => { if ($("statusScrim").classList.contains("open")) loadStatus().catch(() => {}); }, 30000);
+
     async function renderSbChats() {
       try {
         const chats = await api("/api/chats");
