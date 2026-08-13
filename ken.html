@@ -1877,10 +1877,10 @@
       <button class="sb-item" id="sbTasks"><span class="sb-ico">✓</span>Tasks</button>
       <button class="sb-item" id="sbDocs"><span class="sb-ico">📄</span>Docs</button>
       <button class="sb-item" id="sbDeep"><span class="sb-ico">🔬</span>Deep analysis</button>
-      <button class="sb-item" id="sbFleet"><span class="sb-ico">🛠</span>Fleet</button>
+      <button class="sb-item" id="sbFleet" style="display:none"><span class="sb-ico">🛠</span>Fleet</button>
       <button class="sb-item" id="sbUsers" style="display:none"><span class="sb-ico">👥</span>Users</button>
-      <button class="sb-item" id="sbSettings"><span class="sb-ico">⚙</span>Settings</button>
-      <button class="sb-item" id="sbStatus"><span class="sb-ico">📡</span>Status</button>
+      <button class="sb-item" id="sbSettings" style="display:none"><span class="sb-ico">⚙</span>Settings</button>
+      <button class="sb-item" id="sbStatus" style="display:none"><span class="sb-ico">📡</span>Status</button>
       <div class="sb-group">SESSIONS</div>
       <div class="sb-chatlist" id="sbChatList"></div>
       <button class="sb-item" id="sbLogout" style="margin-top:auto"><span class="sb-ico">⎋</span>Log out</button>
@@ -3264,8 +3264,14 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
     sb("sbSettings").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
     sb("sbStatus").onclick = () => { loadStatus(); openPanel("statusScrim"); };
     sb("sbLogout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.href = location.pathname; };
-    // Show Users in the sidebar only for the owner.
-    api("/api/whoami").then(d => { if (d.role === "owner") sb("sbUsers").style.display = ""; }).catch(() => {});
+    // Owner-only sidebar items (Fleet, Users, Settings, Status — they expose
+    // internal health / management / the funnel publish switch). Hidden for
+    // every non-owner account; the API also 403s them.
+    api("/api/whoami").then(d => {
+      if (d.role === "owner") {
+        for (const id of ["sbFleet", "sbUsers", "sbSettings", "sbStatus"]) sb(id).style.display = "";
+      }
+    }).catch(() => {});
     // Render the chat list into the sidebar (same data as the Chats panel).
     async function loadStatus() {
       try {

@@ -1648,8 +1648,15 @@ async def admin_status() -> dict:
 
 
 @app.get("/api/status")
-async def status_overview() -> dict:
-    """Monitor panel: bots, providers, QA, crons, sandbox — one aggregate."""
+async def status_overview(request: Request) -> dict:
+    """Monitor panel: bots, providers, QA, crons, sandbox — OWNER ONLY.
+
+    Exposes internal health (paths, ports, cron state) so it must never be
+    reachable by non-owner accounts on the public funnel.
+    """
+    principal = getattr(request.state, "principal", None) or {"role": "owner"}
+    if principal["role"] != "owner":
+        raise HTTPException(403, "Only the owner can view status.")
     import json as _json
     from pathlib import Path as _Path
     data_dir = _Path(__file__).resolve().parent / "data"
