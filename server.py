@@ -188,9 +188,13 @@ _TOKENS = _init_tokens()
 ACCESS_TOKEN = _TOKENS["owner"]
 AUTH_ENABLED = bool(ACCESS_TOKEN)
 
-# Exempt: the health probe app.py polls on startup, and the API docs.
-# /api/health leaks only provider name and up/down.
-_AUTH_EXEMPT = {"/api/health", "/docs", "/openapi.json", "/redoc", "/docs/oauth2-redirect"}
+# Exempt: the health probe app.py polls on startup, the API docs, and the
+# login/logout endpoints (they exist precisely to turn no-auth into a
+# session; they never grant access by themselves).
+_AUTH_EXEMPT = {
+    "/api/health", "/docs", "/openapi.json", "/redoc", "/docs/oauth2-redirect",
+    "/api/login", "/api/logout",
+}
 
 
 def _now_ts() -> float:
@@ -264,14 +268,177 @@ def revoke_guest_token(guest_id: str) -> bool:
         return True
 
 
+# --- user accounts (username + password) -----------------------------------
+# Users live in data/.ken_users.json next to the token file. Passwords are
+# stored as salted scrypt hashes (stdlib, no new deps). The built-in owner
+# account ("janak") is created on first run; further users are added by the
+# owner through the UI (POST /api/users). A logged-in user gets a random
+# session cookie that maps back to their username.
+USERS_FILE = DATA_DIR / ".ken_users.json"
+SESSION_COOKIE = "ken_session"
+SESSION_TTL_S = 60 * 60 * 24 * 7  # 7 days — re-login weekly is a fair price for a public server
+
+_session_lock = threading.Lock()
+_sessions: dict[str, dict] = {}  # token -> {"user": str, "expires": float}
+
+
+def _read_users() -> dict:
+    try:
+        return json.loads(USERS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _write_users(data: dict) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = USERS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    tmp.replace(USERS_FILE)
+
+
+def _hash_pw(password: str, salt: bytes | None = None) -> str:
+    """scrypt hash, stored as hex salt$hash. Raises ValueError on bad params."""
+    if salt is None:
+        salt = secrets.token_bytes(16)
+    try:
+        h = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1)
+    except (ValueError, TypeError):
+        # Fall back to a smaller n if the platform rejects 2**14 (very old
+        # OpenSSL); n=2**12 is still beyond casual brute force.
+        h = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**12, r=8, p=1)
+    return salt.hex() + "$" + h.hex()
+
+
+def _verify_pw(password: str, stored: str) -> bool:
+    try:
+        salt_hex, hash_hex = stored.split("$", 1)
+        salt = bytes.fromhex(salt_hex)
+        expected = bytes.fromhex(hash_hex)
+        try:
+            got = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**14, r=8, p=1)
+        except (ValueError, TypeError):
+            got = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=2**12, r=8, p=1)
+        return secrets.compare_digest(got, expected)
+    except Exception:
+        return False
+
+
+def _init_users() -> dict:
+    """Ensure the owner account exists. Username defaults to 'janak'."""
+    with _session_lock:
+        data = _read_users()
+        owner = os.environ.get("KEN_USERNAME") or "janak"
+        if owner not in data:
+            pw = os.environ.get("KEN_PASSWORD")
+            if not pw:
+                # No password configured yet: generate one and print/store it
+                # so the owner can sign in the first time.
+                pw = secrets.token_urlsafe(12)
+            data[owner] = {"pw": _hash_pw(pw), "role": "owner", "created_at": _now_ts()}
+            try:
+                _write_users(data)
+            except Exception:
+                pass
+            print(f"[KEN] created owner account '{owner}' (password printed once): {pw}")
+        return data
+
+
+_USERS = _init_users()
+
+
+def _auth_user(username: str, password: str) -> dict | None:
+    """Verify username/password; return the user record or None."""
+    if not username or not password:
+        return None
+    with _session_lock:
+        data = _read_users()
+        rec = data.get(username)
+        if not rec or not _verify_pw(password, rec.get("pw", "")):
+            return None
+        return {"role": rec.get("role", "user"), "name": username}
+
+
+def create_user(username: str, password: str, role: str = "user") -> dict | None:
+    """Add a user. Returns the record or None if the username is taken."""
+    username = (username or "").strip().lower()
+    if not username or not password or len(password) < 6:
+        return None
+    with _session_lock:
+        data = _read_users()
+        if username in data:
+            return None
+        data[username] = {"pw": _hash_pw(password), "role": role, "created_at": _now_ts()}
+        try:
+            _write_users(data)
+        except Exception:
+            pass
+        return {"role": role, "name": username}
+
+
+def delete_user(username: str) -> bool:
+    """Remove a user (owner cannot be deleted)."""
+    username = (username or "").strip().lower()
+    if username == "janak":
+        return False
+    with _session_lock:
+        data = _read_users()
+        if username not in data:
+            return False
+        del data[username]
+        try:
+            _write_users(data)
+        except Exception:
+            pass
+        return True
+
+
+def list_users() -> list[dict]:
+    with _session_lock:
+        data = _read_users()
+        return [
+            {"username": u, "role": rec.get("role", "user"), "created_at": rec.get("created_at")}
+            for u, rec in sorted(data.items())
+        ]
+
+
+def _new_session(username: str) -> str:
+    tok = secrets.token_urlsafe(32)
+    with _session_lock:
+        _sessions[tok] = {"user": username, "expires": _now_ts() + SESSION_TTL_S}
+    return tok
+
+
+def _session_user(token: str | None) -> dict | None:
+    if not token:
+        return None
+    with _session_lock:
+        s = _sessions.get(token)
+        if not s:
+            return None
+        if s["expires"] < _now_ts():
+            _sessions.pop(token, None)
+            return None
+        # Real role from the users file (owner vs user), not hardcoded.
+        rec = _read_users().get(s["user"], {})
+        return {"role": rec.get("role", "user"), "name": s["user"]}
+
+
 # --- failed-auth throttle -------------------------------------------------
 # A funnel URL is public and gets scanned within hours. The tokens are 256-bit
 # so brute force isn't the real threat; this is about not burning CPU on bot
 # traffic and making credential-stuffing noisy rather than free.
 _FAIL_WINDOW_S = 300
-_FAIL_LIMIT = 20
+_FAIL_LIMIT = 10
 _fails: dict[str, list[float]] = {}
 _fail_lock = threading.Lock()
+
+# Global request-rate guard: a per-IP sliding window over ALL requests, so a
+# scanner hammering endpoints (or a runaway bot) can't soak the funnel proxy.
+# Generous for real use (a page load fires ~15 requests); brutal for spam.
+_REQ_WINDOW_S = 60
+_REQ_LIMIT = 600
+_reqs: dict[str, list[float]] = {}
+_req_lock = threading.Lock()
 
 
 def _client_ip(request: Request) -> str:
@@ -281,7 +448,27 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "?"
 
 
+def _is_loopback(ip: str) -> bool:
+    """True for localhost connections (tests, dev). The failed-auth throttle
+    exists for the public funnel; our own machine must never lock itself out."""
+    return ip in ("127.0.0.1", "::1", "localhost", "?")
+
+
+def _req_throttled(ip: str) -> bool:
+    """True if this IP exceeded the global request rate."""
+    cutoff = _now_ts() - _REQ_WINDOW_S
+    with _req_lock:
+        hits = [t for t in _reqs.get(ip, []) if t > cutoff]
+        _reqs[ip] = hits
+        if len(hits) >= _REQ_LIMIT:
+            return True
+        _reqs[ip].append(_now_ts())
+        return False
+
+
 def _throttled(ip: str) -> bool:
+    if _is_loopback(ip):
+        return False
     cutoff = _now_ts() - _FAIL_WINDOW_S
     with _fail_lock:
         hits = [t for t in _fails.get(ip, []) if t > cutoff]
@@ -290,8 +477,41 @@ def _throttled(ip: str) -> bool:
 
 
 def _record_fail(ip: str) -> None:
+    if _is_loopback(ip):
+        return
     with _fail_lock:
         _fails.setdefault(ip, []).append(_now_ts())
+
+
+# --- API-key redaction + per-user usage cap -------------------------------
+# The DeepSeek key lives only on this server. Two protections on top:
+#   1. _redact() masks any sk-... secret that ever shows up in an error
+#      message or log line (OpenAI-style errors normally don't echo the key,
+#      but a proxy or misbehaving lib can — never ship it to a client).
+#   2. A daily request cap per non-owner user, so a shared account can't
+#      drain the owner's DeepSeek credits. Owner is exempt. Configurable via
+#      KEN_DAILY_USER_CAP (default 150 requests/day).
+_DAILY_USER_CAP = int(os.environ.get("KEN_DAILY_USER_CAP", "150"))
+_usage_day: dict[str, str] = {}
+_usage_count: dict[str, int] = {}
+_usage_lock = threading.Lock()
+
+
+def _redact(text: str) -> str:
+    if not text:
+        return text
+    return re.sub(r"sk-[A-Za-z0-9_-]{8,}", "sk-***REDACTED***", text)
+
+
+def _bump_usage(user: str) -> bool:
+    """Record one chat/deep-analysis request for `user`. False = over cap."""
+    day = time.strftime("%Y-%m-%d")
+    with _usage_lock:
+        if _usage_day.get(user) != day:
+            _usage_day[user] = day
+            _usage_count[user] = 0
+        _usage_count[user] += 1
+        return _usage_count[user] <= _DAILY_USER_CAP
 
 
 def _audit(ip: str, who: str, method: str, path: str) -> None:
@@ -305,36 +525,87 @@ def _audit(ip: str, who: str, method: str, path: str) -> None:
         pass
 
 
-def _signin_page() -> str:
-    """Minimal sign-in page shown when / is reached without a valid token.
+def _signin_page(error: str = "") -> str:
+    """Sign-in page shown when / is reached without a valid token.
 
-    Self-contained (no fetches, no external assets) so it renders even when
-    everything else is unreachable. Submits via GET ?token=… — the same path
-    the emailed/bookmarked link uses — so there is one code path to maintain.
+    Supports both flows, same form, POST for password (username/password via
+    the session cookie) and GET ?token= for the emailed/bookmarked link.
+    Self-contained (no fetches, no external assets).
     """
-    return """<!DOCTYPE html><html lang="en"><head>
+    err_html = f'<p style="color:#f5a3c7;font-size:13px">{error}</p>' if error else ""
+    return f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KEN - sign in</title><style>
-:root{color-scheme:dark}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
- background:#0a0409;color:#F2E9EE;font:400 15px/1.5 system-ui,-apple-system,sans-serif;padding:24px}
-.card{width:100%;max-width:360px;background:#12060E;border:1px solid rgba(76,201,240,.16);
- border-radius:16px;padding:26px}
-h1{margin:0 0 6px;font-size:20px;letter-spacing:.14em}
-p{margin:0 0 18px;color:rgba(242,233,238,.55);font-size:13px}
-input{width:100%;box-sizing:border-box;padding:13px 14px;font-size:16px;border-radius:9px;
- background:rgba(242,233,238,.04);border:1px solid rgba(242,233,238,.12);color:#F2E9EE;outline:none}
-input:focus{border-color:#4CC9F0}
-button{width:100%;margin-top:12px;padding:13px;font-size:15px;font-weight:600;border:0;
- border-radius:9px;background:#4CC9F0;color:#0a0409}
+:root{{color-scheme:dark}}
+body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+ background:#0a0409;color:#F2E9EE;font:400 15px/1.5 system-ui,-apple-system,sans-serif;padding:24px}}
+.card{{width:100%;max-width:360px;background:#12060E;border:1px solid rgba(76,201,240,.16);
+ border-radius:16px;padding:26px}}
+h1{{margin:0 0 6px;font-size:20px;letter-spacing:.14em}}
+p{{margin:0 0 18px;color:rgba(242,233,238,.55);font-size:13px}}
+input{{width:100%;box-sizing:border-box;padding:13px 14px;font-size:16px;border-radius:9px;
+ background:rgba(242,233,238,.04);border:1px solid rgba(242,233,238,.12);color:#F2E9EE;outline:none}}
+input:focus{{border-color:#4CC9F0}}
+button{{width:100%;margin-top:12px;padding:13px;font-size:15px;font-weight:600;border:0;
+ border-radius:9px;background:#4CC9F0;color:#0a0409}}
+.toggle{{text-align:center;margin-top:14px;font-size:12px;color:rgba(242,233,238,.4)}}
+.toggle a{{color:#4CC9F0;cursor:pointer;text-decoration:none}}
 </style></head><body>
-<form class="card" method="get" action="">
+<form class="card" method="post" action="" id="pwForm">
   <h1>KEN</h1>
-  <p>This page needs your access token. Paste it below, or open the full link that already contains it.</p>
-  <input name="token" type="password" placeholder="access token" autofocus
+  <p>Sign in with your username and password.</p>
+  {err_html}
+  <input name="username" type="text" placeholder="username" autofocus
+         autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <input name="password" type="password" placeholder="password" style="margin-top:10px"
+         autocomplete="current-password">
+  <button type="submit">Sign in</button>
+  <div class="toggle">Have a token instead? <a id="toToken">Use access token</a></div>
+</form>
+<form class="card" method="get" action="" id="tokenForm" style="display:none">
+  <h1>KEN</h1>
+  <p>Paste your access token below, or open the full link that already contains it.</p>
+  <input name="token" type="password" placeholder="access token"
          autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">
   <button type="submit">Unlock</button>
-</form></body></html>"""
+  <div class="toggle">Have a password instead? <a id="toPw">Use username &amp; password</a></div>
+</form>
+<script>
+  document.getElementById("pwForm").addEventListener("submit", function(e){{
+    e.preventDefault();
+    var u = document.querySelector("#pwForm input[name=username]").value;
+    var p = document.querySelector("#pwForm input[name=password]").value;
+    // Absolute path with the proxy prefix: the page may be served under a
+    // prefix (/ken), so build the login URL from the current pathname's
+    // directory — posting to the bare relative "" would hit the auth gate.
+    var base = location.pathname.replace(/\/+$/, "");
+    var loginUrl = base + "/api/login";
+    fetch(loginUrl, {{ method: "POST", headers: {{"Content-Type": "application/json"}},
+      body: JSON.stringify({{username: u, password: p}}) }})
+      .then(function(r){{ return r.json().then(function(j){{ return {{ok: r.ok, j: j}}; }}); }})
+      .then(function(res){{
+        if (res.ok) {{ location.reload(); }}
+        else {{
+          var err = document.createElement("p");
+          err.style.color = "#f5a3c7"; err.style.fontSize = "13px";
+          err.textContent = res.j.error || "Sign in failed.";
+          var f = document.getElementById("pwForm");
+          var old = f.querySelector(".err"); if (old) old.remove();
+          err.className = "err"; f.insertBefore(err, f.firstChild.nextSibling);
+        }}
+      }});
+  }});
+  document.getElementById("toToken").onclick = function(){{
+    document.getElementById("pwForm").style.display="none";
+    document.getElementById("tokenForm").style.display="block";
+    document.querySelector("#tokenForm input").focus();
+  }};
+  document.getElementById("toPw").onclick = function(){{
+    document.getElementById("tokenForm").style.display="none";
+    document.getElementById("pwForm").style.display="block";
+    document.querySelector("#pwForm input").focus();
+  }};
+</script></body></html>"""
 
 
 def _token_from(request: Request) -> str | None:
@@ -459,8 +730,19 @@ async def _auth_gate(request: Request, call_next):
         return await call_next(request)
 
     ip = _client_ip(request)
+    # Global request-rate guard: applied to real API paths only (login is
+    # exempt and must never be blocked by a page-load burst). A scanner gets
+    # a 429 without burning CPU on token hashing.
+    if path.startswith("/api/") and _req_throttled(ip):
+        _audit(ip, "RATE", request.method, path)
+        return JSONResponse({"detail": "Too many requests. Slow down."}, status_code=429)
+
     supplied = _token_from(request)
     principal = _principal_for(supplied)
+
+    # Session cookie (username/password login) takes precedence when present.
+    if principal is None and request.cookies.get(SESSION_COOKIE):
+        principal = _session_user(request.cookies.get(SESSION_COOKIE))
 
     # Validate BEFORE consulting the throttle, so a valid token is never
     # locked out. The throttle is keyed on client IP, and behind
@@ -968,7 +1250,18 @@ async def _sse_chat(req: ChatRequest, role: str = "owner") -> AsyncGenerator[dic
 @app.post("/api/chat")
 async def chat(request: Request, req: ChatRequest) -> EventSourceResponse:
     principal = getattr(request.state, "principal", None) or {"role": "owner"}
-    return EventSourceResponse(_sse_chat(req, principal["role"]), ping=15)
+    role = principal.get("role", "user")
+    # Per-user daily cap (owner exempt) so a shared account can't drain the
+    # owner's DeepSeek credits.
+    if role != "owner":
+        if not _bump_usage(principal.get("name", "?")):
+            raise HTTPException(
+                status_code=429,
+                detail=_redact(
+                    f"Daily request limit reached ({_DAILY_USER_CAP} today). Try again tomorrow."
+                ),
+            )
+    return EventSourceResponse(_sse_chat(req, role), ping=15)
 
 
 # ---------------------------------------------------------------------------
@@ -1013,7 +1306,7 @@ async def _sse_deep_analysis(req: DeepAnalysisRequest) -> AsyncGenerator[dict, N
                 "cached": False,
             }))
         except Exception as e:
-            q.put(("error", {"message": f"Deep analysis error: {e}"}))
+            q.put(("error", {"message": _redact(f"Deep analysis error: {e}")}))
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
@@ -1023,9 +1316,21 @@ async def _sse_deep_analysis(req: DeepAnalysisRequest) -> AsyncGenerator[dict, N
 
 
 @app.post("/api/deep-analysis")
-async def deep_analysis(req: DeepAnalysisRequest) -> EventSourceResponse:
+async def deep_analysis(req: DeepAnalysisRequest, request: Request) -> EventSourceResponse:
     if not req.question.strip():
         raise HTTPException(400, "question must not be empty")
+    principal = getattr(request.state, "principal", None) or {"role": "owner"}
+    role = principal.get("role", "user")
+    # Same daily cap as chat — deep analysis is heavier, so non-owner users
+    # share the same budget (owner exempt).
+    if role != "owner":
+        if not _bump_usage(principal.get("name", "?")):
+            raise HTTPException(
+                status_code=429,
+                detail=_redact(
+                    f"Daily request limit reached ({_DAILY_USER_CAP} today). Try again tomorrow."
+                ),
+            )
     return EventSourceResponse(_sse_deep_analysis(req), ping=15)
 
 
@@ -1593,6 +1898,92 @@ async def client_log(request: Request) -> dict:
 async def whoami(request: Request) -> dict:
     principal = getattr(request.state, "principal", None) or {"role": "owner", "name": "owner"}
     return {"role": principal["role"], "name": principal["name"], "auth_enabled": AUTH_ENABLED}
+
+
+# ---------------------------------------------------------------------------
+# Username/password login + logout. The sign-in page POSTs here; a valid
+# credential gets a 30-day HttpOnly session cookie, and the token flow keeps
+# working unchanged.
+# ---------------------------------------------------------------------------
+class LoginBody(BaseModel):
+    username: str = ""
+    password: str = ""
+
+
+@app.post("/api/login")
+async def login(body: LoginBody, request: Request) -> JSONResponse:
+    ip = _client_ip(request)
+    if _throttled(ip):
+        return JSONResponse({"error": "Too many failed attempts. Try later."}, status_code=429)
+    principal = _auth_user((body.username or "").strip().lower(), body.password or "")
+    if not principal:
+        _record_fail(ip)
+        _audit(ip, "LOGIN-FAIL", "POST", "/api/login")
+        return JSONResponse({"error": "Invalid username or password."}, status_code=401)
+    tok = _new_session(principal["name"])
+    _audit(ip, principal["name"], "LOGIN", "/api/login")
+    resp = JSONResponse({"ok": True, "user": principal["name"], "role": principal["role"]})
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    resp.set_cookie(
+        SESSION_COOKIE, tok,
+        httponly=True,
+        samesite="lax",
+        secure=(proto == "https"),
+        max_age=SESSION_TTL_S,
+        path="/",
+    )
+    return resp
+
+
+@app.post("/api/logout")
+async def logout(request: Request) -> JSONResponse:
+    tok = request.cookies.get(SESSION_COOKIE)
+    if tok:
+        with _session_lock:
+            _sessions.pop(tok, None)
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(SESSION_COOKIE, path="/")
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# User management (owner only). Create/delete users, list all accounts.
+# ---------------------------------------------------------------------------
+class UserBody(BaseModel):
+    username: str = ""
+    password: str = ""
+    role: str = "user"
+
+
+@app.get("/api/users")
+async def users_list(request: Request) -> JSONResponse:
+    principal = getattr(request.state, "principal", None)
+    if not principal or principal.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can manage users.")
+    return JSONResponse({"users": list_users()})
+
+
+@app.post("/api/users")
+async def users_create(body: UserBody, request: Request) -> JSONResponse:
+    principal = getattr(request.state, "principal", None)
+    if not principal or principal.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can manage users.")
+    rec = create_user(body.username, body.password, body.role or "user")
+    if not rec:
+        return JSONResponse({"error": "Username taken or invalid (min 2 chars, password min 6)."}, status_code=400)
+    _audit(_client_ip(request), "owner", "CREATE-USER", f"/api/users/{rec['name']}")
+    return JSONResponse({"ok": True, "user": rec})
+
+
+@app.delete("/api/users/{username}")
+async def users_delete(username: str, request: Request) -> JSONResponse:
+    principal = getattr(request.state, "principal", None)
+    if not principal or principal.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Only the owner can manage users.")
+    if not delete_user(username):
+        return JSONResponse({"error": "User not found or cannot delete owner."}, status_code=400)
+    _audit(_client_ip(request), "owner", "DELETE-USER", f"/api/users/{username}")
+    return JSONResponse({"ok": True})
 
 
 # ---------------------------------------------------------------------------

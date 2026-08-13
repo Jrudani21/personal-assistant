@@ -254,9 +254,111 @@
      minmax(0,…) lets them. */
     .layout {
       display: grid;
-      grid-template-rows: auto 1fr;
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: 1fr;
+      grid-template-columns: 250px minmax(0, 1fr);
       height: 100vh;
+      width: 100%;
+    }
+
+    /* ---------- left sidebar (widgets + chats) ---------- */
+    .sidebar {
+      grid-column: 1;
+      grid-row: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border-right: 1px solid var(--border2);
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px 10px;
+      gap: 4px;
+    }
+    .sidebar .sb-group {
+      font: 300 10px var(--mono);
+      letter-spacing: .18em;
+      color: var(--muted2);
+      padding: 12px 10px 6px;
+    }
+    .sidebar .sb-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      font: 400 13px var(--body);
+      color: var(--ink);
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      text-align: left;
+      width: 100%;
+    }
+    .sidebar .sb-item:hover {
+      background: rgba(76, 201, 240, .08);
+    }
+    .sidebar .sb-item.active {
+      background: rgba(76, 201, 240, .14);
+      color: var(--accent);
+    }
+    .sidebar .sb-item .sb-ico {
+      font-size: 15px;
+      width: 18px;
+      text-align: center;
+      flex: none;
+    }
+    .sidebar .sb-chatlist {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-top: 4px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+    .sidebar .sb-chat {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 7px;
+      font: 300 12.5px var(--body);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .sidebar .sb-chat:hover {
+      background: rgba(76, 201, 240, .08);
+      color: var(--ink);
+    }
+    .sidebar .sb-chat.active {
+      background: rgba(76, 201, 240, .12);
+      color: var(--ink);
+    }
+    .sidebar .sb-chat .t {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* main column: topbar + content */
+    .main-col {
+      grid-column: 2;
+      grid-row: 1;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    /* orb fade: the 3D scene is a subtle background now, not a hero */
+    .idle-hero .orb.lg {
+      opacity: .45;
+      transform: scale(.85);
+      filter: blur(1px);
+    }
+    .idle-view .standby,
+    .idle-view .greeting {
+      text-shadow: 0 2px 18px rgba(0, 0, 0, .6);
     }
 
     /* ---------- top bar ---------- */
@@ -269,6 +371,11 @@
       background: var(--panel);
       min-width: 0;
       /* allow the nav inside to shrink and scroll */
+    }
+
+    /* Nav moved into the sidebar; hide the topbar nav on desktop */
+    header.topbar nav {
+      display: none;
     }
 
     .wordmark {
@@ -1731,6 +1838,29 @@
       .suggest-row {
         display: none;
       }
+
+      /* mobile: sidebar becomes a slim icon rail */
+      .layout {
+        grid-template-columns: 56px minmax(0, 1fr);
+      }
+      .sidebar {
+        padding: 10px 6px;
+      }
+      .sidebar .sb-group,
+      .sidebar .sb-chat,
+      .sidebar .sb-item {
+        justify-content: center;
+        padding: 9px 4px;
+      }
+      .sidebar .sb-item .sb-ico {
+        font-size: 17px;
+      }
+      .sidebar .sb-item:not(.sb-logout) {
+        font-size: 0;
+      }
+      .sidebar .sb-chatlist {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -1738,6 +1868,24 @@
 <body>
 
   <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-group">KEN</div>
+      <button class="sb-item" id="sbNewChat"><span class="sb-ico">＋</span>New chat</button>
+      <button class="sb-item" id="sbChats"><span class="sb-ico">💬</span>Chats</button>
+      <button class="sb-item" id="sbBrain"><span class="sb-ico">🧠</span>Brain</button>
+      <button class="sb-item" id="sbMemory"><span class="sb-ico">🗂</span>Memory</button>
+      <button class="sb-item" id="sbTasks"><span class="sb-ico">✓</span>Tasks</button>
+      <button class="sb-item" id="sbDocs"><span class="sb-ico">📄</span>Docs</button>
+      <button class="sb-item" id="sbDeep"><span class="sb-ico">🔬</span>Deep analysis</button>
+      <button class="sb-item" id="sbFleet"><span class="sb-ico">🛠</span>Fleet</button>
+      <button class="sb-item" id="sbUsers" style="display:none"><span class="sb-ico">👥</span>Users</button>
+      <button class="sb-item" id="sbSettings"><span class="sb-ico">⚙</span>Settings</button>
+      <div class="sb-group">SESSIONS</div>
+      <div class="sb-chatlist" id="sbChatList"></div>
+      <button class="sb-item" id="sbLogout" style="margin-top:auto"><span class="sb-ico">⎋</span>Log out</button>
+    </aside>
+
+    <div class="main-col">
     <header class="topbar">
       <div class="orb sm" id="topOrb">
         <div class="ring1"></div>
@@ -1759,6 +1907,7 @@
         <button class="navbtn" id="docsBtn">Docs</button>
         <button class="navbtn" id="daBtn">Deep analysis</button>
         <button class="navbtn" id="fleetBtn">Fleet</button>
+        <button class="navbtn" id="usersBtn" style="display:none">Users</button>
         <button class="navbtn" id="settingsBtn">Settings</button>
       </nav>
     </header>
@@ -1874,6 +2023,7 @@
         </div>
       </div>
     </main>
+    </div><!-- /main-col -->
   </div>
 
   <!-- Memory overlay -->
@@ -2103,6 +2253,28 @@
       <div class="ring1"></div>
       <div class="ring2"></div>
       <div class="core"></div>
+    </div>
+  </div>
+
+  <!-- Users panel (owner only): create accounts, list, delete -->
+  <div class="scrim" id="usersScrim">
+    <div class="panel" style="width:min(640px,94vw)">
+      <header>
+        <div>
+          <div class="title">Users</div>
+          <div class="sub" id="usersSub">accounts with username/password login</div>
+        </div>
+        <span class="esc" data-close="usersScrim">ESC</span>
+      </header>
+      <div class="body" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <input id="newUser" placeholder="username" style="flex:1;min-width:140px;padding:10px 12px;border-radius:8px;background:rgba(242,233,238,.04);border:1px solid var(--border2);color:var(--ink)">
+          <input id="newPass" type="password" placeholder="password (min 6)" style="flex:1;min-width:140px;padding:10px 12px;border-radius:8px;background:rgba(242,233,238,.04);border:1px solid var(--border2);color:var(--ink)">
+          <button class="btn" id="addUserBtn">+ Add user</button>
+        </div>
+        <div style="color:var(--muted);font-size:12px" id="usersMsg"></div>
+        <div id="usersList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
     </div>
   </div>
 
@@ -3019,9 +3191,85 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
     $("tasksBtn").onclick = () => { loadTasks(); openPanel("tasksScrim"); };
     $("docsBtn").onclick = () => { loadDocs(); openPanel("docsScrim"); };
     $("fleetBtn").onclick = () => { openPanel("fleetScrim"); document.querySelector('[data-admin="status"]').click(); };
+    // Users panel — owner only; hidden otherwise.
+    async function loadUsers() {
+      try {
+        const d = await api("/api/users");
+        const list = $("usersList");
+        list.innerHTML = d.users.map(u => `
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border2);border-radius:9px">
+            <span style="flex:1;font:400 13px var(--mono);color:var(--ink)">${esc(u.username)}</span>
+            <span style="font:300 11px var(--mono);color:var(--muted)">${esc(u.role)}</span>
+            ${u.role !== "owner" ? `<button class="btn ghost" style="padding:5px 10px" data-deluser="${esc(u.username)}">✕</button>` : ""}
+          </div>`).join("") || `<div style="color:var(--muted);font-size:12px">No users yet.</div>`;
+        list.querySelectorAll("[data-deluser]").forEach(b => b.onclick = async () => {
+          if (!confirm("Delete user " + b.dataset.deluser + "?")) return;
+          await api("/api/users/" + b.dataset.deluser, { method: "DELETE" });
+          loadUsers();
+        });
+        $("usersSub").textContent = `${d.users.length} accounts`;
+      } catch (e) { $("usersMsg").textContent = "Only the owner can manage users."; }
+    }
+    $("usersBtn").onclick = () => { openPanel("usersScrim"); loadUsers(); };
+    $("addUserBtn").onclick = async () => {
+      const u = $("newUser").value.trim(), p = $("newPass").value;
+      if (!u || p.length < 6) { $("usersMsg").textContent = "Username required, password min 6 chars."; return; }
+      try {
+        const d = await api("/api/users", { method: "POST", body: JSON.stringify({ username: u, password: p }) });
+        $("usersMsg").textContent = d.ok ? `Added ${d.user.name}.` : (d.error || "Failed.");
+        if (d.ok) { $("newUser").value = ""; $("newPass").value = ""; loadUsers(); }
+      } catch (e) { $("usersMsg").textContent = "Error: " + e.message; }
+    };
+    // Show the Users button only for the owner; add logout to the topbar.
+    api("/api/whoami").then(d => {
+      if (d.role === "owner") $("usersBtn").style.display = "";
+    }).catch(() => {});
+    const loBtn = document.createElement("button");
+    loBtn.className = "navbtn";
+    loBtn.textContent = "Log out";
+    loBtn.title = "Sign out of KEN";
+    loBtn.onclick = async () => { await api("/api/logout", { method: "POST" }); location.href = location.pathname; };
+    $("settingsBtn").parentNode.appendChild(loBtn);
     $("memBtn").onclick = () => { loadMemory(); openPanel("memScrim"); };
     $("settingsBtn").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
     $("daBtn").onclick = () => openPanel("daScrim");
+
+    /* ---------- sidebar wiring ---------- */
+    const sb = (id) => $(id);
+    sb("sbNewChat").onclick = newChat;
+    sb("sbChats").onclick = () => { loadChats(); openPanel("chatsScrim"); };
+    sb("sbBrain").onclick = () => { loadVault(); openPanel("brainScrim"); };
+    sb("sbMemory").onclick = () => { loadMemory(); openPanel("memScrim"); };
+    sb("sbTasks").onclick = () => { loadTasks(); openPanel("tasksScrim"); };
+    sb("sbDocs").onclick = () => { loadDocs(); openPanel("docsScrim"); };
+    sb("sbDeep").onclick = () => openPanel("daScrim");
+    sb("sbFleet").onclick = () => { openPanel("fleetScrim"); document.querySelector('[data-admin="status"]').click(); };
+    sb("sbUsers").onclick = () => { openPanel("usersScrim"); loadUsers(); };
+    sb("sbSettings").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
+    sb("sbLogout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.href = location.pathname; };
+    // Show Users in the sidebar only for the owner.
+    api("/api/whoami").then(d => { if (d.role === "owner") sb("sbUsers").style.display = ""; }).catch(() => {});
+    // Render the chat list into the sidebar (same data as the Chats panel).
+    async function renderSbChats() {
+      try {
+        const chats = await api("/api/chats");
+        const list = sb("sbChatList");
+        list.innerHTML = chats.slice(0, 30).map(c => `
+          <div class="sb-chat ${c.id === state.chatId ? "active" : ""}" data-id="${esc(c.id)}">
+            <span class="t">${esc(c.title)}</span>
+          </div>`).join("") || `<div style="color:var(--muted2);font-size:11px;padding:6px 10px">No chats yet.</div>`;
+        list.querySelectorAll(".sb-chat").forEach(el => el.onclick = () => {
+          openChat(el.dataset.id);
+          renderSbChats();
+        });
+      } catch (e) { /* keep quiet */ }
+    }
+    // Refresh the sidebar chat list on load and whenever chats change.
+    const _origNewChat = newChat;
+    newChat = function() { _origNewChat(); renderSbChats(); };
+    const _origOpenChat = openChat;
+    openChat = async function(id) { await _origOpenChat(id); renderSbChats(); };
+    renderSbChats();
     $("daRunBtn").onclick = () => runDeepAnalysis($("daQuestion").value);
     $("recBtn").onclick = toggleRecording;
     $("qaDeep").onclick = () => {
