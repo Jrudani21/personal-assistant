@@ -39,9 +39,12 @@ FAST_MODEL = "ollama/deepseek-r1:7b"
 #
 # Correctly identifying which product had higher revenue per unit, given the
 # figures pre-computed in the prompt (3 runs each, crowded Analyst prompt):
-#   qwen2.5:7b        2/3        4-11s
-#   qwen3-coder:30b   0/3        4-24s   (18 GB, spills off an 8 GB card)
-#   llama3.1:8b       0/3        3-10s
+#   qwen2.5:7b        2/3        4-11s   (deleted 08-10)
+#   qwen3-coder:30b   0/3        4-24s   (18 GB, spills off an 8 GB card; deleted 08-10)
+#   llama3.1:8b       0/3        3-10s   (deleted 08-10)
+#   deepseek-r1:7b    ~2-3/5    15-40s   (re-measured 08-14: 3 correct, 1 empty→guardrail retry, 1 omission)
+#   deepseek-r1:14b   2/3       44-58s   (re-measured 08-14: 1/3 dropped comparison silently — NOT better than 7b)
+#   qwen3:8b          0/3       17-23s   (via crew's /v1 endpoint content ALWAYS empty — do not use as analyst)
 #
 # qwen3-coder is tuned for code: it was the *only* model to get the isolated
 # arithmetic right 3/3, and still inverted the comparison every time once the
