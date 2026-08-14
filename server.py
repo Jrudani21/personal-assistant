@@ -1726,6 +1726,22 @@ async def vault_graph_data() -> dict:
     return await asyncio.to_thread(_vg.build_graph)
 
 
+@app.get("/api/vault/graphiti")
+async def vault_graphiti_search(q: str = "", top_k: int = 5) -> dict:
+    """Semantic search over the Graphiti knowledge graph (assistant/graph.py).
+    Returns facts as a bullet list; empty query returns usage hint."""
+    from assistant import graph as _graph  # lazy: keeps Neo4j import out of hot path
+    if not q.strip():
+        return {"ok": True, "hint": "Pass ?q=<query>&top_k=<n> to search the knowledge graph.", "facts": []}
+    try:
+        facts = await asyncio.to_thread(_graph.graph_search, q, top_k)
+        if facts.startswith("Graph search error"):
+            return {"ok": False, "error": facts}
+        return {"ok": True, "facts": facts.splitlines()}
+    except Exception as e:  # Neo4j down etc. — don't 500 the assistant
+        return {"ok": False, "error": f"Graph search error: {e}"}
+
+
 # ---------------------------------------------------------------------------
 # /api/tasks  (assistant/todo.py)
 # ---------------------------------------------------------------------------

@@ -48,11 +48,22 @@ async def _search(query: str, top_k: int) -> list[str]:
         await graphiti.close()
 
 
+def _format(facts: list[str]) -> str:
+    if not facts:
+        return "No graph results found."
+    return "\n".join(f"- {f}" for f in facts)
+
+
+async def graph_search_async(query: str, top_k: int = 5) -> str:
+    try:
+        facts = await _search(query, top_k)
+        return _format(facts)
+    except Exception as e:
+        return f"Graph search error: {e}"
+
+
 def graph_search(query: str, top_k: int = 5) -> str:
     try:
-        facts = asyncio.run(_search(query, top_k))
-        if not facts:
-            return "No graph results found."
-        return "\n".join(f"- {f}" for f in facts)
+        return asyncio.run(graph_search_async(query, top_k))
     except Exception as e:
         return f"Graph search error: {e}"
