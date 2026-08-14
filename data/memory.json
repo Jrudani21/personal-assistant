@@ -22,17 +22,29 @@
     "updated_at": "2026-08-08T12:00:00"
   },
   "hardware": {
-    "value": "RTX 4060 (8 GB VRAM) \u00b7 i7-12700K \u00b7 32 GB RAM",
+    "value": "python environment and path issues resolved",
     "facts": [
       "GPU: RTX 4060 with 8 GB VRAM",
       "CPU: i7-12700K (12 cores, 20 threads)",
-      "RAM: 32 GB"
+      "RAM: 32 GB",
+      "hermes desktop injects py3.11 venv via PYTHONPATH causing conflict",
+      "fix applied by using env -u PYTHONPATH for repo commands"
     ],
     "concepts": [
-      "hardware",
-      "machine"
+      "environment",
+      "machine",
+      "hardware"
     ],
-    "updated_at": "2026-08-08T12:00:00"
+    "history": [
+      {
+        "value": "RTX 4060 (8 GB VRAM) \u00b7 i7-12700K \u00b7 32 GB RAM",
+        "as_of": "2026-08-08T12:00:00"
+      }
+    ],
+    "source": "daily/2026-08-12-weather-arb-debug.md",
+    "distilled_at": "2026-08-14T09:52:26.918804",
+    "updated_at": "2026-08-14T09:52:26.918804",
+    "tier": "semantic"
   },
   "os": {
     "value": "Windows",
@@ -59,16 +71,154 @@
     "updated_at": "2026-08-08T12:00:00"
   },
   "projects": {
-    "value": "personal-assistant (local AI), llm-finetune (qwen statistics model), medicare-fraud-detector",
+    "value": "weather gate scoring fix",
     "facts": [
       "Maintains personal-assistant: a fully local AI assistant",
       "Maintains llm-finetune: fine-tuning a qwen2.5 variant for statistics",
-      "Built medicare-fraud-detector"
+      "Built medicare-fraud-detector",
+      "34 repos cloned and merged into 7 family shrines",
+      "System Crew with 9 agents scheduled every 30 min",
+      "SearXNG metasearch (localhost:8888) integrated",
+      "Conductor \u2192 specialist agents with tool registry scaffolded",
+      "Agents/agent.py scaffolded but not yet tested end-to-end",
+      "maintain_memory.py + DataKeeper crew member for memory maintenance",
+      "JanakMemoryMaintenance task every 6h + logon as safety net",
+      "Full redesign with dark boot-sequence theme",
+      "Star Wars palette implemented",
+      "jrudani21.github.io live",
+      "HTTP 200 status",
+      "37KB size",
+      "Fixed dedup bug (1,126\u219289 files)",
+      "Added persistent `url-index.json`",
+      "cron bots failed due to numpy loading issue in py3.12 venv",
+      "cron scripts used parents[1] leading to incorrect import path",
+      "254/254 tests passed after numpy/scipy reinstallation",
+      "prior cache schema v2 with 9 fresh cities",
+      "ledgers have 229 paper predictions and 25 copy follows",
+      "re-run prior rebuild off-peak for missing cities",
+      "first paper scoring lands tomorrow 11:00 scan",
+      "bug patrol cron now runs with workdir=repo and auto-loads rules",
+      "UTC/logging and incident protocol added to bot_regulations.md",
+      "moved from weather-arb to polymarket shadow-whale copy-trading",
+      "goal is fully autonomous revenue bot with zero api costs",
+      "streamlit dashboard with 254/254 tests passed",
+      "dashboard includes live gate status, weather and copy ledgers, calibration plot",
+      "non-parametric prior used with kde bw_method='scott'",
+      "pseudo-replication fix with brier loss per city/date",
+      "kalshi identified as expansion target with free api and cftc compliance",
+      "demo api probed with 12 markets for kxhighny-26aug13",
+      "noaa cpc enso, nao, ao index fetchers implemented",
+      "winter temp adjustments for el nino and nao+",
+      "uhi effects in nyc, sea breeze in sf/la, monsoon in seoul/tokyo",
+      "warming acceleration in europe exceeds global trends",
+      "10y day-of-year climatology with \u00b115d window",
+      "monthly-anomaly ols warming trend with shrink-toward-zero",
+      "daily_scan now scores pending predictions vs archive actuals",
+      "gate stuck at 0 scored fixed"
     ],
     "concepts": [
-      "projects"
+      "tooling",
+      "debugging",
+      "scheduling",
+      "projects",
+      "design",
+      "statistics",
+      "strategy",
+      "data",
+      "bugs",
+      "data_management",
+      "testing",
+      "logging",
+      "deployment",
+      "tools",
+      "research"
     ],
-    "updated_at": "2026-08-08T12:00:00"
+    "history": [
+      {
+        "value": "personal-assistant (local AI), llm-finetune (qwen statistics model), medicare-fraud-detector",
+        "as_of": "2026-08-08T12:00:00"
+      },
+      {
+        "value": "DeepSeek Cave setup with 34 repos merged into 7 family shrines",
+        "as_of": "2026-08-14T09:52:05.771469"
+      },
+      {
+        "value": "System Crew and task router implemented in DeepSeek Cave",
+        "as_of": "2026-08-14T09:52:05.779592"
+      },
+      {
+        "value": "Orchestra multi-agent system scaffolded",
+        "as_of": "2026-08-14T09:52:05.804761"
+      },
+      {
+        "value": "Self-maintenance system implemented",
+        "as_of": "2026-08-14T09:52:05.816989"
+      },
+      {
+        "value": "Portfolio v6 redesigned and deployed",
+        "as_of": "2026-08-14T09:52:16.227581"
+      },
+      {
+        "value": "Portfolio live on GitHub Pages",
+        "as_of": "2026-08-14T09:52:16.235107"
+      },
+      {
+        "value": "Nightly-learn dedup bug fixed",
+        "as_of": "2026-08-14T09:52:16.255003"
+      },
+      {
+        "value": "weather-arb bot debug session resolved",
+        "as_of": "2026-08-14T09:52:26.879647"
+      },
+      {
+        "value": "test suite passed after fixes",
+        "as_of": "2026-08-14T09:52:26.899792"
+      },
+      {
+        "value": "cache and ledger state updated",
+        "as_of": "2026-08-14T09:52:26.905792"
+      },
+      {
+        "value": "next steps and scheduling",
+        "as_of": "2026-08-14T09:52:26.912792"
+      },
+      {
+        "value": "incident protocol and logging updated",
+        "as_of": "2026-08-14T09:52:26.924851"
+      },
+      {
+        "value": "project pivot to polymarket shadow-whale copy-trading",
+        "as_of": "2026-08-14T09:52:38.824834"
+      },
+      {
+        "value": "streamlit dashboard implementation",
+        "as_of": "2026-08-14T09:52:38.832046"
+      },
+      {
+        "value": "fable round-3 improvements",
+        "as_of": "2026-08-14T09:52:38.839548"
+      },
+      {
+        "value": "kalshi expansion research",
+        "as_of": "2026-08-14T09:52:38.846565"
+      },
+      {
+        "value": "climate-mode regime adjustment",
+        "as_of": "2026-08-14T09:52:38.854145"
+      },
+      {
+        "value": "env-science crew findings",
+        "as_of": "2026-08-14T09:52:38.860752"
+      },
+      {
+        "value": "climate prior implementation",
+        "as_of": "2026-08-14T09:52:38.867752"
+      }
+    ],
+    "source": "daily/2026-08-12.md",
+    "distilled_at": "2026-08-14T09:52:38.874752",
+    "updated_at": "2026-08-14T09:52:38.874752",
+    "tier": "semantic"
   },
   "second_brain": {
     "value": "Obsidian vault at C:\\Users\\Janak's PC\\brain (git-backed, private on GitHub)",
@@ -132,5 +282,167 @@
       "statistics"
     ],
     "updated_at": "2026-08-09T23:32:53.168310"
+  },
+  "assistant_backend_model": {
+    "value": "DeepSeek (model via Ollama, pending confirmation of exact variant by 'ollama ps')",
+    "facts": [
+      "Assistant backend model is a DeepSeek model running via Ollama, pending exact variant confirmation"
+    ],
+    "concepts": [
+      "model",
+      "ollama",
+      "assistant"
+    ],
+    "updated_at": "2026-08-13T10:42:05.881709"
+  },
+  "preferences": {
+    "value": "bot regulations and escalation rules established",
+    "facts": [
+      "Keep only 3 Ollama models: deepseek-r1:7b, deepseek-r1:14b, nomic-embed-text",
+      "Removed vllm (28GB), pytorch (36GB), langchain images",
+      "Removed stray graphiti-neo4j container",
+      "python on PATH resolves to hermes-agent venv, but pip installs to global Python 3.12",
+      "Set PYTHONIOENCODING=utf-8 for Windows console unicode output",
+      "RENAMED E:\\Claude \u2192 E:\\Local",
+      "Reorganized into brain/ + projects/ + tools/ + archive/",
+      "Removed Opik stack, LibreChat, LobeChat containers",
+      "Kept searxng + graphiti-neo4j",
+      "16\u219213 scheduled tasks",
+      "Staggered tasks across :00, :10, :15",
+      "10\u21927 models pruned",
+      "Saved 12.4GB",
+      "Docker culled (20GB \u2192 2.2GB)",
+      "C: drive cruft removed (~29 files/dirs)",
+      "253/253 tests green",
+      "DEFAULT_VAULT fixed in vault.py",
+      "agents.md added crew escalation rule for >2 failed fixes",
+      "bot_regulations.md created with money safety and fail-closed rules"
+    ],
+    "concepts": [
+      "tooling",
+      "automation",
+      "process",
+      "preferences",
+      "modeling",
+      "system",
+      "testing",
+      "tools"
+    ],
+    "history": [
+      {
+        "value": "Ollama model selection finalized",
+        "as_of": "2026-08-14T09:52:05.786589"
+      },
+      {
+        "value": "Docker and model cleanup completed",
+        "as_of": "2026-08-14T09:52:05.792589"
+      },
+      {
+        "value": "Python environment and interpreter setup",
+        "as_of": "2026-08-14T09:52:05.797091"
+      },
+      {
+        "value": "Directory structure reorganization",
+        "as_of": "2026-08-14T09:52:05.810268"
+      },
+      {
+        "value": "Docker cleanup and configuration",
+        "as_of": "2026-08-14T09:52:16.242224"
+      },
+      {
+        "value": "Scheduled tasks optimization",
+        "as_of": "2026-08-14T09:52:16.249005"
+      },
+      {
+        "value": "Ollama model audit and pruning",
+        "as_of": "2026-08-14T09:52:16.261510"
+      },
+      {
+        "value": "System cleanup and disk management",
+        "as_of": "2026-08-14T09:52:16.268225"
+      },
+      {
+        "value": "Personal-assistant tests and configuration",
+        "as_of": "2026-08-14T09:52:16.274733"
+      }
+    ],
+    "source": "daily/2026-08-12-weather-arb-debug.md",
+    "distilled_at": "2026-08-14T09:52:26.885781",
+    "updated_at": "2026-08-14T09:52:26.885781",
+    "tier": "semantic"
+  },
+  "tools": {
+    "value": "cron scripts rewritten as launchers",
+    "facts": [
+      "cron scripts now use repo venv python and stripped PYTHONPATH",
+      "workdir set to repo for bug patrol cron"
+    ],
+    "concepts": [
+      "tooling",
+      "automation"
+    ],
+    "history": [],
+    "source": "daily/2026-08-12-weather-arb-debug.md",
+    "distilled_at": "2026-08-14T09:52:26.891793",
+    "updated_at": "2026-08-14T09:52:26.891793",
+    "tier": "semantic"
+  },
+  "projects_career_ops": {
+    "value": "career-ops pipeline research findings",
+    "facts": [
+      "resume/ats optimization: single-column .docx format improves extraction rate",
+      "track every job application with conversion rates and follow-up dates",
+      "job boards by response rate: google jobs > linkedin",
+      "85% of jobs filled via networking/referrals",
+      "follow up 1\u20132 weeks after applying",
+      "thank-you within 24h improves response rate",
+      "cover letters should be personalized and concise",
+      "ai can refine drafts but avoid full generation",
+      "interview prep: star method, 8\u201310 story bank, role-tagged question bank",
+      "track prep per role in a backlog db"
+    ],
+    "concepts": [
+      "research",
+      "projects"
+    ],
+    "history": [],
+    "source": "daily/2026-08-13.md",
+    "distilled_at": "2026-08-14T09:52:50.289953",
+    "updated_at": "2026-08-14T09:52:50.289953",
+    "tier": "semantic"
+  },
+  "preferences_tooling": {
+    "value": "llm and caching configuration",
+    "facts": [
+      "bluesminds free tier configured with meta/llama-3.1-70b-instruct",
+      "llm caching implemented with l1, l2, and l3 layers",
+      "data collector now fetches real data from reddit, hacker news, and rss",
+      "caveman tool installed for token savings"
+    ],
+    "concepts": [
+      "tooling",
+      "preferences"
+    ],
+    "history": [],
+    "source": "daily/2026-08-13.md",
+    "distilled_at": "2026-08-14T09:52:50.304001",
+    "updated_at": "2026-08-14T09:52:50.304001",
+    "tier": "semantic"
+  },
+  "preferences_ui": {
+    "value": "ui and theme updates",
+    "facts": [
+      "ken rebranded with imperial theme and portfolio design system",
+      "responsive ui fixes for samsung devices and cdp layout audit"
+    ],
+    "concepts": [
+      "ui",
+      "preferences"
+    ],
+    "history": [],
+    "source": "daily/2026-08-13.md",
+    "distilled_at": "2026-08-14T09:52:50.310296",
+    "updated_at": "2026-08-14T09:52:50.310296",
+    "tier": "semantic"
   }
 }

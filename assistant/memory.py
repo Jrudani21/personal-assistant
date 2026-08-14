@@ -70,6 +70,67 @@ def remember(key: str, value: str, facts: list[str] | None = None,
     return f"Remembered '{key}'."
 
 
+def distill_merge(key: str, value: str, facts: list[str] | None = None,
+                  concepts: list[str] | None = None, source: str = "") -> str:
+    """ADD-ONLY merge for the distillation pipeline (Mem0-style, CoALA
+    semantic tier). Unlike `remember`, this NEVER overwrites existing facts:
+    new facts are appended, prior values are kept in a `history` list, and
+    every entry carries provenance (`source` note + `distilled_at`).
+
+    Contradictions are resolved at READ time by recency (research-backed
+    2026-08-14) — the history preserves what was true when.
+    """
+    data = _load()
+    now = datetime.datetime.now().isoformat(timespec="microseconds")
+    existing = data.get(key, {})
+    prev_value = _coerce(existing) if existing else None
+
+    # Append-only history of prior values (bounded to last 20)
+    history = list(existing.get("history", [])) if isinstance(existing, dict) else []
+    if prev_value and prev_value != value:
+        history.append({"value": prev_value, "as_of": _updated_at(existing)})
+        history = history[-20:]
+
+    merged_facts = list(_facts(existing))
+    for f in (facts or []):
+        if str(f) not in merged_facts:
+            merged_facts.append(str(f))
+    merged_concepts = list(set(_concepts(existing)) | set(concepts or []))
+
+    data[key] = {
+        "value": value,
+        "facts": merged_facts,
+        "concepts": merged_concepts,
+        "history": history,
+        "source": source,
+        "distilled_at": now,
+        "updated_at": now,
+        "tier": "semantic",  # CoALA: distillation writes the semantic tier
+    }
+    _save(data)
+    return f"Distilled '{key}' ({len(facts or [])} facts, source={source})."
+
+
+# CoALA tiers (research-backed 2026-08-14): episodic = timestamped events
+# (daily notes/session logs), semantic = durable de-duplicated facts
+# (memory.json), procedural = skills/prompts/workflows (skills/ dir).
+TIERS = ("episodic", "semantic", "procedural")
+
+
+def set_tier(key: str, tier: str) -> str:
+    """Tag an existing memory entry with its CoALA tier. No-op if missing."""
+    if tier not in TIERS:
+        return f"Unknown tier '{tier}' (use {TIERS})."
+    data = _load()
+    if key not in data:
+        return f"Nothing stored under '{key}'."
+    if isinstance(data[key], dict):
+        data[key]["tier"] = tier
+        _save(data)
+        return f"'{key}' tagged {tier}."
+    return f"'{key}' is a legacy string entry — use distill_merge to upgrade."
+
+
 def get_entry(key: str) -> dict | None:
     """Full structured entry {value, facts, concepts, updated_at}, or None."""
     data = _load()

@@ -22,10 +22,32 @@ LOG_DIR = ROOT / "data" / "agents"
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("usage: run_500agent.py <agent-dir> [agent args...]", file=sys.stderr)
+        print("usage: run_500agent.py <agent-dir> [agent args...] [--env K=V K2=V2]", file=sys.stderr)
         return 2
 
-    agent_dir = sys.argv[1]
+    # --env KEY=VALUE pairs (repeatable) are merged into the child env — used
+    # by local-tier bots to force Ollama (DEEPSEEK_API_BASE=http://localhost:11434/v1
+    # DEEPSEEK_MODEL=qwen3:8b) or override any other agent env.
+    env_overrides: dict[str, str] = {}
+    rest = []
+    i = 1
+    while i < len(sys.argv):
+        if sys.argv[i] == "--env":
+            # consume following args while they look like KEY=VALUE
+            j = i + 1
+            while j < len(sys.argv) and "=" in sys.argv[j] and not sys.argv[j].startswith("--"):
+                k, v = sys.argv[j].split("=", 1)
+                env_overrides[k] = v
+                j += 1
+            i = j
+        else:
+            rest.append(sys.argv[i])
+            i += 1
+
+    agent_dir = rest[0] if rest else None
+    if not agent_dir:
+        print("usage: run_500agent.py <agent-dir> [agent args...]", file=sys.stderr)
+        return 2
     agent_script = AGENTS_REPO / "agents" / agent_dir / "agent.py"
     if not agent_script.exists():
         print(f"AGENT_NOT_FOUND {agent_dir} ({agent_script})", file=sys.stderr)
@@ -42,12 +64,13 @@ def main() -> int:
     # (known issue: tokenizers version collision). DeepSeek key is a Windows env var.
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
+    env.update(env_overrides)
 
-    cmd = [str(VENV_PY), str(agent_script), *sys.argv[2:]]
+    cmd = [str(VENV_PY), str(agent_script), *rest[1:]]
     print(f"RUN {agent_dir}: {' '.join(cmd)}", flush=True)
 
     with open(log_path, "a", encoding="utf-8") as log:
-        log.write(f"\n=== run {agent_dir} {' '.join(sys.argv[2:])} ===\n")
+        log.write(f"\n=== run {agent_dir} {' '.join(rest[1:])} ===\n")
         proc = subprocess.run(
             cmd,
             env=env,
