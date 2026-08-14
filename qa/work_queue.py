@@ -30,6 +30,21 @@ DB = ROOT / "data" / "work_queue.sqlite"
 
 _lock = threading.Lock()
 
+try:
+    import importlib.util
+    _spec = importlib.util.spec_from_file_location(
+        "qa_logger", ROOT / "qa" / "logger.py")
+    _logger_mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_logger_mod)
+    _logger = _logger_mod
+except Exception:  # pragma: no cover
+    _logger = None
+
+
+def _log(kind: str, **payload) -> None:
+    if _logger:
+        _logger.log("work_queue", kind, **payload)
+
 # Attempts -> backoff seconds (2^attempt capped at 30m)
 MAX_ATTEMPTS = 4
 BACKOFF_BASE = 60  # 1min, 2min, 4min, 8min
@@ -76,7 +91,11 @@ def enqueue(bot_id: str, work_order: str, idem_key: str | None = None) -> str:
         conn.commit()
         row = conn.execute("SELECT id FROM queue WHERE key=?", (key,)).fetchone()
         conn.close()
-        return str(row[0]) if row else "dup"
+        if row:
+            _log("enqueued", bot_id=bot_id, order_id=row[0], idem_key=key)
+            return str(row[0])
+        _log("duplicate", bot_id=bot_id, idem_key=key)
+        return "dup"
     except Exception as e:
         return f"err:{e}"
 
@@ -140,6 +159,7 @@ def complete_latest(bot_id: str) -> int:
                      (time.time(), row[0]))
         conn.commit()
         conn.close()
+        _log("done", bot_id=bot_id, order_id=row[0])
         return row[0]
     except Exception:
         return -1
@@ -164,12 +184,14 @@ def fail_latest(bot_id: str, reason: str) -> int:
                 "UPDATE queue SET state='dead', dead_reason=?, attempts=? WHERE id=?",
                 (reason[:500], attempts, row[0]),
             )
+            _log("dead", bot_id=bot_id, order_id=row[0], reason=reason[:200])
         else:
             delay = min(BACKOFF_BASE * (2 ** (attempts - 1)), BACKOFF_CAP)
             conn.execute(
                 "UPDATE queue SET state='pending', attempts=?, next_retry=? WHERE id=?",
                 (attempts, time.time() + delay, row[0]),
             )
+            _log("retry", bot_id=bot_id, order_id=row[0], attempts=attempts, delay_s=delay)
         conn.commit()
         conn.close()
         return row[0]

@@ -393,6 +393,16 @@ def main() -> int:
         return 0
 
     for bot in due:
+        try:
+            import importlib.util
+            _spec = importlib.util.spec_from_file_location(
+                "qa_logger", ROOT / "qa" / "logger.py")
+            _mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            _mod.log("bot_runner", "due", bot_id=bot["id"], type=bot.get("type"),
+                     schedule=bot.get("schedule"), force=bool(args.force))
+        except Exception:
+            pass
         # Approval gate: bots flagged needs_approval never auto-run. They emit
         # a PENDING_APPROVAL work order so the agent can deliver it to the
         # owner's phone (Telegram/WhatsApp once wired) and wait for yes/no.
