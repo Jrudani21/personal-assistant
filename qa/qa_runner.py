@@ -48,7 +48,8 @@ def ensure_sandbox() -> bool:
     except Exception:
         pass
     subprocess.run([sys.executable, str(SANDBOX), "start", "--port", str(PORT)],
-                   cwd=str(ROOT), capture_output=True, timeout=60)
+                   cwd=str(ROOT), capture_output=True, timeout=60,
+                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     for _ in range(12):
         time.sleep(5)
         try:
@@ -74,6 +75,7 @@ def run_playwright() -> dict:
     proc = subprocess.run(
         ["npx.cmd", "playwright", "test", "--reporter=json"],
         cwd=str(QA), env=env, capture_output=True, text=True, timeout=600,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     try:
         data = json.loads(out_file.read_text(encoding="utf-8"))

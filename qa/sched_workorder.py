@@ -25,10 +25,25 @@ def main() -> int:
         out = subprocess.run(
             [sys.executable, "qa/bot_runner.py", "--dry-run"],
             cwd=str(PA_DIR), capture_output=True, text=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         ).stdout
     except Exception as e:  # pragma: no cover
         print(f"SCHED_ERROR {e}")
         return 1
+
+    # SIDE EFFECT (queue loop closure): enqueue due work orders into the
+    # persistent queue with window-stable keys. stdout of THIS call is
+    # discarded — only the --dry-run output above feeds the monitor hash,
+    # so the hash stays stable within a window (no spurious agent runs).
+    try:
+        subprocess.run(
+            [sys.executable, "qa/bot_runner.py", "--enqueue-due"],
+            cwd=str(PA_DIR), capture_output=True, text=True, timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except Exception:
+        pass  # queue is an optimization — never break the monitor
+
     for line in out.splitlines():
         # Strip the minute-level timestamp so the hash is stable within a window.
         if line.startswith("PEAK_PRICE "):

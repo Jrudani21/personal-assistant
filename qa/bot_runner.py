@@ -22,6 +22,19 @@ ROOT = Path(__file__).resolve().parent.parent
 BOTS_FILE = ROOT / "data" / "bots.json"
 STATE_FILE = ROOT / "data" / "bots_state.json"
 
+# Work queue + DLQ: work orders are enqueued (not just printed) so failures
+# retry with backoff and dead-letter instead of vanishing. Imported lazily
+# to keep bot_runner importable without the queue module.
+_queue = None
+
+
+def _get_queue():
+    global _queue
+    if _queue is None:
+        import importlib
+        _queue = importlib.import_module("work_queue")  # qa/work_queue.py
+    return _queue
+
 
 def load_bots() -> list[dict]:
     try:
@@ -115,6 +128,44 @@ def is_due(bot: dict, state: dict, now: datetime, config: dict | None = None) ->
     if bot.get("type") in ("research", "watch", "coordinator", "agent") and price_window(now) == "expensive":
         return False
     return _sched_due(bot, state, now)
+
+
+def _audit_approval(bot: dict, decision: str, reason: str = "") -> None:
+    """Append an approval decision to data/approvals.jsonl (audit trail).
+
+    Every approval/denial/override is logged with timestamp, bot, decision,
+    and reason — the fleet's audit event log (research-backed 2026-08-14).
+    Never raises.
+    """
+    try:
+        import json as _json
+        from datetime import datetime as _dt, timezone as _tz
+        entry = {
+            "ts": _dt.now(_tz.utc).isoformat(),
+            "bot": bot.get("id", "?"),
+            "decision": decision,
+            "reason": reason,
+            "approval_note": bot.get("approval_note", ""),
+        }
+        log = ROOT / "data" / "approvals.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(entry) + "\n")
+    except Exception:
+        pass
+
+
+def _window_key(bot: dict, now: datetime) -> str:
+    """Stable idempotency key per schedule window: a bot enqueued for the same
+    window (day for daily/weekly, hour for hourly) maps to ONE key, so repeat
+    monitor ticks (15min) never duplicate the order. --force runs use
+    timestamp keys (each force is distinct)."""
+    sched = bot.get("schedule", "manual")
+    if sched.startswith("hourly"):
+        return f"{bot['id']}:{now:%Y%m%d-%H}"
+    if sched.startswith(("daily:", "weekly:")):
+        return f"{bot['id']}:{now:%Y%m%d}"
+    return f"{bot['id']}:{now.isoformat()}"  # manual/force -> unique per run
 
 
 def _sched_due(bot: dict, state: dict, now: datetime) -> bool:
@@ -224,6 +275,16 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="print due bots without marking run")
     ap.add_argument("--mark-done", nargs="+", metavar="ID",
                     help="record last_run=now for completed bot id(s) and exit")
+    ap.add_argument("--queue", action="store_true",
+                    help="show work-queue + DLQ status and exit")
+    ap.add_argument("--enqueue-due", action="store_true",
+                    help="enqueue due work orders into the queue (side effect, "
+                         "no stdout) — called by sched_workorder; window-stable "
+                         "keys so repeat monitor ticks don't duplicate")
+    ap.add_argument("--queue-done", metavar="ID",
+                    help="mark the most recent active queue order for bot ID as done")
+    ap.add_argument("--queue-fail", nargs="+", metavar=("ID", "REASON"),
+                    help="fail the most recent active queue order for bot ID (retry -> DLQ)")
     args = ap.parse_args()
 
     bots = load_bots()
@@ -237,9 +298,63 @@ def main() -> int:
             print(f"[{mark}] {b['id']:<16} {b['type']:<10} schedule={b.get('schedule','manual'):<18} {b.get('name','')}")
         return 0
 
+    if args.queue:
+        try:
+            q = _get_queue()
+            print(q.summary())
+            dead = q.dlq()
+            if dead:
+                print("DLQ:")
+                for d in dead:
+                    print(f"  #{d['id']} {d['bot_id']}: {d['dead_reason']}")
+        except Exception as e:
+            print(f"QUEUE_ERROR {e}")
+        return 0
+
     now = datetime.now()
     state = load_state()
     bots_cfg = load_config()
+
+    # --enqueue-due: side-effect enqueue of due work orders (window-stable
+    # keys). Called by sched_workorder after the dry-run print; stdout stays
+    # empty so the monitor hash is unaffected. NO state mutation (no last_run).
+    if args.enqueue_due:
+        try:
+            q = _get_queue()
+            due = [b for b in bots if is_due(b, state, now, bots_cfg)]
+            n = 0
+            for b in due:
+                if b.get("needs_approval"):
+                    continue  # pending approvals are not executable work
+                wo = work_order(b, force=False)
+                key = _window_key(b, now)
+                if q.enqueue(b["id"], wo, idem_key=key) != "dup":
+                    n += 1
+            print(f"ENQUEUED {n} (queue: {q.summary()})")
+        except Exception as e:
+            print(f"ENQUEUE_ERROR {e}")
+        return 0
+
+    # --queue-done / --queue-fail: agent-friendly queue lifecycle (resolve by
+    # bot id, no numeric order ids needed).
+    if args.queue_done:
+        try:
+            q = _get_queue()
+            oid = q.complete_latest(args.queue_done)
+            print(f"QUEUE_DONE {args.queue_done} order={oid}" if oid > 0
+                  else f"QUEUE_DONE {args.queue_done} no-active-order")
+        except Exception as e:
+            print(f"QUEUE_DONE_ERROR {e}")
+        return 0
+    if args.queue_fail:
+        try:
+            q = _get_queue()
+            oid = q.fail_latest(args.queue_fail[0], " ".join(args.queue_fail[1:]) or "failed")
+            print(f"QUEUE_FAIL {args.queue_fail[0]} order={oid}" if oid > 0
+                  else f"QUEUE_FAIL {args.queue_fail[0]} no-active-order")
+        except Exception as e:
+            print(f"QUEUE_FAIL_ERROR {e}")
+        return 0
 
     # --mark-done: record TRUE completion time (the executing agent calls this
     # after a work order finishes, so last_run reflects execution, not print).
@@ -298,13 +413,38 @@ def main() -> int:
                 print(f"COORD_APPROVED {bot['id']}: {coord['id']} pre-approved routine "
                       f"'{bot.get('approval_note', '')}' — running.")
                 continue
+            # DENY-BY-DEFAULT (research-backed, 2026-08-14): a pending approval
+            # that times out resolves to DENIED, never runs, and is audited.
+            # Default 24h; per-bot override via approval_timeout_h.
+            timeout_h = float(bot.get("approval_timeout_h", 24))
+            prev = state.get(bot["id"], {}).get("pending_since")
+            if prev and (now - datetime.fromisoformat(prev)).total_seconds() / 3600 >= timeout_h:
+                state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
+                state[bot["id"]].pop("pending_since", None)
+                _audit_approval(bot, "denied", f"approval timeout ({timeout_h}h)")
+                print(f"APPROVAL_DENIED {bot['id']}: pending since {prev} — "
+                      f"auto-denied after {timeout_h}h timeout (deny-by-default).")
+                continue
             print(f"PENDING_APPROVAL {bot['id']}: {bot.get('name', bot['id'])}"
                   f" — {bot.get('approval_note', 'admin action requested')}."
-                  f" Approve? (deliver this to the owner's phone, wait for reply)")
+                  f" Approve? (deliver this to the owner's phone, wait for reply)"
+                  f" Auto-denies after {timeout_h:g}h.")
             if not args.dry_run:
-                state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
+                st = state.setdefault(bot["id"], {})
+                st["last_run"] = now.isoformat()
+                st["pending_since"] = st.get("pending_since", now.isoformat())
             continue
-        print(work_order(bot, force=bool(args.force)))
+        # Enqueue the work order into the persistent queue (idempotent by
+        # bot id + run timestamp) so the executing agent can claim it and
+        # failures retry/dead-letter instead of vanishing.
+        wo = work_order(bot, force=bool(args.force))
+        if not args.dry_run:
+            try:
+                q = _get_queue()
+                q.enqueue(bot["id"], wo, idem_key=f"{bot['id']}:{now.isoformat()}")
+            except Exception:
+                pass  # queue is an optimization — never block scheduling
+        print(wo)
         if not args.dry_run:
             state.setdefault(bot["id"], {})["last_run"] = now.isoformat()
     save_state(state)

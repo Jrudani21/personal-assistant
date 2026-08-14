@@ -8,28 +8,31 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Michroma&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Michroma&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap&family=VT323"
     rel="stylesheet">
   <style>
     :root {
-      --bg: #0a0409;
-      --panel: #12060E;
-      --panel2: #1b0a18;
-      --panel3: rgba(242, 233, 238, .04);
-      --border: rgba(76, 201, 240, .16);
-      --border2: rgba(242, 233, 238, .09);
-      --ink: #F2E9EE;
-      --muted: rgba(242, 233, 238, .5);
-      --muted2: rgba(242, 233, 238, .32);
-      --accent: #4CC9F0;
-      --accent-tint: rgba(76, 201, 240, .14);
-      --pink: #f5a3c7;
-      --pink-tint: rgba(255, 180, 220, .25);
-      --ok: #4CC9F0;
-      --err: #f5a3c7;
+      --bg: #05050a;
+      --panel: #0a0a12;
+      --panel2: #100f16;
+      --panel3: rgba(255, 49, 49, .06);
+      --border: rgba(255, 255, 255, .07);
+      --border2: rgba(255, 49, 49, .12);
+      --ink: #f2f2f5;
+      --muted: rgba(242, 242, 245, .55);
+      --muted2: rgba(242, 242, 245, .32);
+      --accent: #ff3131;
+      --accent-tint: rgba(255, 49, 49, .12);
+      --pink: #ff6b6b;
+      --pink-tint: rgba(255, 107, 107, .25);
+      --ok: #ff3131;
+      --err: #ff6b6b;
+      --violet: #59d9ff;
+      --amber: #f5c518;
+      --glow: 0 0 24px rgba(255, 49, 49, .3);
       --display: 'Michroma', system-ui, sans-serif;
       --body: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-      --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+      --mono: 'VT323', 'JetBrains Mono', ui-monospace, Consolas, monospace;
     }
 
     * {
@@ -58,6 +61,49 @@
     ::-webkit-scrollbar-thumb {
       background: var(--border2);
       border-radius: 5px;
+    }
+
+    /* ---------- imperial boot overlay (portfolio-style) ---------- */
+    #boot {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 2rem;
+      font-family: 'VT323', var(--mono), monospace;
+      font-size: clamp(0.8rem, 2vw, 1.05rem);
+      transition: opacity 0.6s ease;
+    }
+    #boot.done {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #boot .line {
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    #boot .line .ok {
+      color: var(--accent);
+    }
+    #boot .line .warn {
+      color: var(--amber);
+    }
+    #boot .line .err {
+      color: var(--err);
+    }
+    #boot .skip {
+      position: absolute;
+      bottom: 2rem;
+      right: 2rem;
+      color: var(--muted);
+      font-size: 0.7rem;
+      cursor: pointer;
+    }
+    #boot .skip:hover {
+      color: var(--ink);
     }
 
     @keyframes ken-ring1 {
@@ -168,11 +214,11 @@
 
       0%,
       100% {
-        box-shadow: 0 0 18px rgba(76, 201, 240, .35);
+        box-shadow: 0 0 18px rgba(255, 49, 49, .35);
       }
 
       50% {
-        box-shadow: 0 0 32px rgba(76, 201, 240, .6);
+        box-shadow: 0 0 32px rgba(255, 49, 49, .6);
       }
     }
 
@@ -193,13 +239,13 @@
 
     .orb .ring1 {
       inset: 0;
-      border: 1px solid rgba(76, 201, 240, .4);
+      border: 1px solid rgba(255, 49, 49, .4);
       animation: ken-ring1 9s linear infinite;
     }
 
     .orb .ring2 {
       inset: 6%;
-      border: 1px solid rgba(76, 201, 240, .26);
+      border: 1px solid rgba(255, 49, 49, .26);
       animation: ken-ring2 12s linear infinite;
     }
 
@@ -211,14 +257,14 @@
 
     .orb .core {
       inset: 24%;
-      background: radial-gradient(circle at 34% 28%, #b9f0ff 0%, #4CC9F0 34%, #1a5f7a 66%, #0d2c3a 100%);
-      box-shadow: 0 0 18px rgba(76, 201, 240, .55);
+      background: radial-gradient(circle at 34% 28%, #ff7a7a 0%, #ff3131 34%, #7a1a1a 66%, #1a0a0a 100%);
+      box-shadow: 0 0 18px rgba(255, 49, 49, .55);
       animation: ken-float 5s ease-in-out infinite;
     }
 
     .orb.thinking .core {
       animation: ken-float 1.4s ease-in-out infinite;
-      box-shadow: 0 0 26px rgba(76, 201, 240, .85);
+      box-shadow: 0 0 26px rgba(255, 49, 49, .85);
     }
 
     .orb.thinking .ring1 {
@@ -244,7 +290,7 @@
       position: absolute;
       inset: -16%;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(76, 201, 240, .24), transparent 62%);
+      background: radial-gradient(circle, rgba(255, 49, 49, .24), transparent 62%);
       animation: ken-halo 6s ease-in-out infinite;
     }
 
@@ -294,10 +340,10 @@
       width: 100%;
     }
     .sidebar .sb-item:hover {
-      background: rgba(76, 201, 240, .08);
+      background: rgba(255, 49, 49, .08);
     }
     .sidebar .sb-item.active {
-      background: rgba(76, 201, 240, .14);
+      background: rgba(255, 49, 49, .14);
       color: var(--accent);
     }
     .sidebar .sb-item .sb-ico {
@@ -326,11 +372,11 @@
       cursor: pointer;
     }
     .sidebar .sb-chat:hover {
-      background: rgba(76, 201, 240, .08);
+      background: rgba(255, 49, 49, .08);
       color: var(--ink);
     }
     .sidebar .sb-chat.active {
-      background: rgba(76, 201, 240, .12);
+      background: rgba(255, 49, 49, .12);
       color: var(--ink);
     }
     .sidebar .sb-chat .t {
@@ -386,7 +432,7 @@
     }
     body.workmode .standby {
       letter-spacing: .42em;
-      color: rgba(76, 201, 240, .95);
+      color: rgba(255, 49, 49, .95);
     }
     body.workmode .greeting {
       font-size: 26px;
@@ -411,7 +457,7 @@
     }
     #modeBtn:hover {
       color: var(--accent);
-      border-color: rgba(76, 201, 240, .5);
+      border-color: rgba(255, 49, 49, .5);
     }
 
     /* ---------- top bar ---------- */
@@ -574,7 +620,7 @@
     }
     #fsExit:hover {
       color: var(--accent);
-      border-color: rgba(76, 201, 240, .5);
+      border-color: rgba(255, 49, 49, .5);
     }
     #ken3dWrap:fullscreen #fsExit {
       display: block;
@@ -598,7 +644,7 @@
     }
     .idle-actions button:hover {
       color: var(--accent);
-      border-color: rgba(76, 201, 240, .5);
+      border-color: rgba(255, 49, 49, .5);
     }
 
     /* minimized floating widget (shown when the idle view is collapsed) */
@@ -615,13 +661,13 @@
       border-radius: 50%;
       background: var(--panel2);
       border: 1px solid var(--border2);
-      box-shadow: 0 0 22px rgba(76, 201, 240, .35);
+      box-shadow: 0 0 22px rgba(255, 49, 49, .35);
       cursor: pointer;
       transition: transform .15s ease, box-shadow .15s ease;
     }
     #kenWidget:hover {
       transform: scale(1.08);
-      box-shadow: 0 0 30px rgba(76, 201, 240, .6);
+      box-shadow: 0 0 30px rgba(255, 49, 49, .6);
     }
 
     .idle-hero {
@@ -634,7 +680,7 @@
 
     .idle-view .greeting {
       font: 400 30px/1.35 var(--body);
-      color: rgba(242, 233, 238, .9);
+      color: rgba(242, 242, 245, .9);
       text-align: center;
       max-width: 640px;
       padding: 0 20px;
@@ -648,7 +694,7 @@
     .idle-view .standby {
       font: 300 12px var(--mono);
       letter-spacing: .3em;
-      color: rgba(76, 201, 240, .8);
+      color: rgba(255, 49, 49, .8);
       animation: ken-pulse 2.5s ease-in-out infinite;
     }
 
@@ -720,7 +766,7 @@
       border-color: var(--border);
       background: var(--accent-tint);
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(76, 201, 240, .06);
+      box-shadow: 0 8px 24px rgba(255, 49, 49, .06);
     }
 
     .feature-card .fc-icon {
@@ -825,7 +871,7 @@
     .msg.assistant {
       align-self: flex-start;
       font: 300 16px/1.7 var(--body);
-      color: rgba(242, 233, 238, .9);
+      color: rgba(242, 242, 245, .9);
     }
 
     .msg.assistant .caret::after {
@@ -932,8 +978,8 @@
     }
 
     .composer:focus-within {
-      border-color: rgba(76, 201, 240, .4);
-      box-shadow: 0 0 0 1px rgba(76, 201, 240, .12), 0 8px 32px rgba(76, 201, 240, .05);
+      border-color: rgba(255, 49, 49, .4);
+      box-shadow: 0 0 0 1px rgba(255, 49, 49, .12), 0 8px 32px rgba(255, 49, 49, .05);
     }
 
     .composer textarea {
@@ -948,7 +994,7 @@
     }
 
     .composer textarea::placeholder {
-      color: rgba(242, 233, 238, .35);
+      color: rgba(242, 242, 245, .35);
     }
 
     .send-hint {
@@ -1070,7 +1116,7 @@
 
     .mem-entry .val {
       font: 300 14px/1.6 var(--body);
-      color: rgba(242, 233, 238, .85);
+      color: rgba(242, 242, 245, .85);
     }
 
     .mem-entry .tags {
@@ -1279,7 +1325,7 @@
 
     .da-findings {
       font: 300 17px/1.7 var(--body);
-      color: rgba(242, 233, 238, .9);
+      color: rgba(242, 242, 245, .9);
       white-space: pre-wrap;
       margin-top: 6px;
     }
@@ -1316,7 +1362,7 @@
 
     .row-item .main {
       font: 300 14px/1.5 var(--body);
-      color: rgba(242, 233, 238, .9);
+      color: rgba(242, 242, 245, .9);
       word-break: break-word;
     }
 
@@ -1515,7 +1561,7 @@
 
     .vault-reader pre {
       font: 300 12.5px/1.75 var(--mono);
-      color: rgba(242, 233, 238, .85);
+      color: rgba(242, 242, 245, .85);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -1534,7 +1580,7 @@
 
     .gist-box {
       font: 300 12px/1.7 var(--mono);
-      color: rgba(242, 233, 238, .82);
+      color: rgba(242, 242, 245, .82);
       background: var(--panel3);
       border: 1px solid var(--border2);
       border-radius: 8px;
@@ -1568,7 +1614,7 @@
     /* ---------- fleet ---------- */
     .fleet-out {
       font: 300 12px/1.7 var(--mono);
-      color: rgba(242, 233, 238, .85);
+      color: rgba(242, 242, 245, .85);
       background: var(--panel3);
       border: 1px solid var(--border2);
       border-radius: 8px;
@@ -1919,6 +1965,11 @@
 </head>
 
 <body>
+  <!-- Imperial boot overlay (portfolio-style) -->
+  <div id="boot">
+    <div id="boot-lines"></div>
+    <div class="skip" id="bootSkip">[ skip boot ]</div>
+  </div>
 
   <div class="layout">
     <aside class="sidebar" id="sidebar">
@@ -2338,8 +2389,8 @@
       </header>
       <div class="body" style="display:flex;flex-direction:column;gap:14px">
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <input id="newUser" placeholder="username" style="flex:1;min-width:140px;padding:10px 12px;border-radius:8px;background:rgba(242,233,238,.04);border:1px solid var(--border2);color:var(--ink)">
-          <input id="newPass" type="password" placeholder="password (min 6)" style="flex:1;min-width:140px;padding:10px 12px;border-radius:8px;background:rgba(242,233,238,.04);border:1px solid var(--border2);color:var(--ink)">
+          <input id="newUser" placeholder="username" style="flex:1;min-width:140px;padding:10px 12px;border-radius:8px;background:rgba(242, 242, 245,.04);border:1px solid var(--border2);color:var(--ink)">
+          <input id="newPass" type="password" placeholder="password (min 6)" style="flex:1;min-width:140px;padding:10px 12px;border-radius:8px;background:rgba(242, 242, 245,.04);border:1px solid var(--border2);color:var(--ink)">
           <button class="btn" id="addUserBtn">+ Add user</button>
         </div>
         <div style="color:var(--muted);font-size:12px" id="usersMsg"></div>
@@ -2360,7 +2411,7 @@
         bar = document.createElement("div");
         bar.id = "jsErrBar";
         bar.style.cssText =
-          "position:fixed;left:0;right:0;bottom:0;z-index:200;background:#f5a3c7;color:#12060E;" +
+          "position:fixed;left:0;right:0;bottom:0;z-index:200;background:#ff6b6b;color:#12060E;" +
           "font:400 12px/1.5 ui-monospace,Consolas,monospace;padding:10px 14px;max-height:45vh;" +
           "overflow:auto;white-space:pre-wrap;-webkit-user-select:text;user-select:text";
         (document.body || document.documentElement).appendChild(bar);
@@ -2990,15 +3041,15 @@
       const cv = $("graphCanvas"), ctx = cv.getContext("2d");
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
       ctx.clearRect(0, 0, W, H);
-      ctx.strokeStyle = "rgba(76,201,240,.22)"; ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(255, 49, 49,.22)"; ctx.lineWidth = 1;
       for (const [a, b] of edges) { ctx.beginPath(); ctx.moveTo(P[a].x, P[a].y); ctx.lineTo(P[b].x, P[b].y); ctx.stroke(); }
       graphData.nodes.forEach((n, i) => {
         const deg = edges.filter(([a, b]) => a === i || b === i).length;
         const r = 4 + Math.min(7, deg * 1.1);
         ctx.beginPath(); ctx.arc(P[i].x, P[i].y, r, 0, Math.PI * 2);
-        ctx.fillStyle = n.color || "#4CC9F0"; ctx.fill();
+        ctx.fillStyle = n.color || "#ff3131"; ctx.fill();
         ctx.font = "300 10px 'JetBrains Mono', monospace";
-        ctx.fillStyle = "rgba(242,233,238,.62)"; ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(242, 242, 245,.62)"; ctx.textAlign = "center";
         ctx.fillText(n.name.length > 22 ? n.name.slice(0, 21) + "…" : n.name, P[i].x, P[i].y + r + 11);
       });
     }
@@ -3365,7 +3416,7 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
       try {
         const d = await api("/api/status");
         const el = $("statusBody");
-        const dot = (ok) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ok ? "var(--ok,#4CC9F0)" : "var(--err,#f5a3c7)"};margin-right:6px"></span>`;
+        const dot = (ok) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ok ? "var(--ok,#ff3131)" : "var(--err,#ff6b6b)"};margin-right:6px"></span>`;
         const row = (label, val) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border2);font:400 12.5px var(--body)"><span style="color:var(--muted)">${esc(label)}</span><span style="text-align:right">${val}</span></div>`;
         const t = (v) => v ? String(v).replace("T", " ").slice(0, 16) : "—";
 
@@ -3654,7 +3705,7 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
       // postprocessing pipeline needed in the single-file build).
       const halo = makeSprite(
         radialTex([[0, "rgba(170,235,255,0.55)"], [0.4, "rgba(70,150,220,0.16)"], [1, "rgba(0,0,0,0)"]]),
-        0x4CC9F0, 0.16, 3.6);
+        0xff3131, 0.16, 3.6);
       halo.position.set(0, 0, -0.4);
       scene.add(halo);
 
@@ -3664,7 +3715,7 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
       // "wireframe ball".
       const orbGeo = new THREE.IcosahedronGeometry(0.7, 2);
       const orbMat = new THREE.ShaderMaterial({
-        uniforms: { uColor: { value: new THREE.Color(0x4CC9F0) }, uIntensity: { value: 1.5 } },
+        uniforms: { uColor: { value: new THREE.Color(0xff3131) }, uIntensity: { value: 1.5 } },
         vertexShader: [
           "varying vec3 vNormal; varying vec3 vView;",
           "void main(){",
@@ -3690,7 +3741,7 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
 
       // Faint wireframe shell on top for the "game engine" look.
       const wireMat = new THREE.MeshBasicMaterial({
-        color: 0x4CC9F0, wireframe: true, transparent: true, opacity: 0.13,
+        color: 0xff3131, wireframe: true, transparent: true, opacity: 0.13,
         depthWrite: false,
       });
       const wire = new THREE.Mesh(new THREE.IcosahedronGeometry(0.72, 1), wireMat);
@@ -3698,7 +3749,7 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
 
       // Orbit rings (game-style gyroscope rings), additive & faint.
       const rings = [];
-      [0x4CC9F0, 0xf5a3c7, 0x9fd8ff].forEach((c, i) => {
+      [0xff3131, 0xff6b6b, 0xff6b6b].forEach((c, i) => {
         const r = new THREE.Mesh(
           new THREE.TorusGeometry(1.05 + i * 0.28, 0.011, 8, 72),
           new THREE.MeshBasicMaterial({
@@ -3733,7 +3784,7 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
       const starMat = new THREE.ShaderMaterial({
         uniforms: {
           uTime: { value: 0 },
-          uColor: { value: new THREE.Color(0x9fd8ff) },
+          uColor: { value: new THREE.Color(0xff6b6b) },
         },
         vertexShader: [
           "attribute float aPhase; attribute float aSpeed; attribute float aSize;",
@@ -3813,10 +3864,10 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
         wire.scale.setScalar(pulse * 1.03 * fsScale);
         halo.scale.setScalar(3.6 * fsScale * (1 + Math.sin(t * (thinking ? 7 : 1.8)) * (thinking ? 0.18 : 0.05)));
         halo.material.opacity = thinking ? 0.3 : 0.16;
-        halo.material.color.setHex(thinking ? 0xf5a3c7 : 0x4CC9F0);
-        orbMat.uniforms.uColor.value.setHex(thinking ? 0xf5a3c7 : 0x4CC9F0);
+        halo.material.color.setHex(thinking ? 0xff6b6b : 0xff3131);
+        orbMat.uniforms.uColor.value.setHex(thinking ? 0xff6b6b : 0xff3131);
         orbMat.uniforms.uIntensity.value = thinking ? 2.4 : 1.5;
-        wireMat.color.setHex(thinking ? 0xf5a3c7 : 0x4CC9F0);
+        wireMat.color.setHex(thinking ? 0xff6b6b : 0xff3131);
 
         starMat.uniforms.uTime.value = t;
         for (const n of nebulas) {
@@ -3875,6 +3926,45 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
     })();
 
     /* ---------- init ---------- */
+    /* ============ imperial boot sequence (portfolio-style) ============ */
+    const bootLines = [
+      ['> initializing imperial systems ...', 'ok'],
+      ['> calibrating lightsaber firmware ...', 'ok'],
+      ['> loading neural core ........ [██████████] 100%', 'ok'],
+      ['> importing brain vault ....... [██████████] 100%', 'ok'],
+      ['> scanning for rebel scum ...... 0 found (suspicious)', 'warn'],
+      ['> patience for slow models ..... NOT FOUND', 'err'],
+      ['> falling back to the dark side ... OK', 'warn'],
+      ['> connecting agent fleet ........ [██████████] 100%', 'ok'],
+      ['> welcome to the empire. your p-values are now imperial property.', 'ok'],
+    ];
+    const bootEl = document.getElementById('boot');
+    const bootLinesEl = document.getElementById('boot-lines');
+    let bootDone = false;
+    function finishBoot() {
+      if (bootDone) return;
+      bootDone = true;
+      bootEl.classList.add('done');
+      setTimeout(() => bootEl.remove(), 700);
+    }
+    (function runBoot() {
+      let i = 0;
+      function next() {
+        if (i >= bootLines.length) { setTimeout(finishBoot, 400); return; }
+        const [text, cls] = bootLines[i];
+        const line = document.createElement('div');
+        line.className = 'line';
+        line.innerHTML = '<span class="' + cls + '">' + text + '</span>';
+        bootLinesEl.appendChild(line);
+        bootLinesEl.scrollTop = bootLinesEl.scrollHeight;
+        i++;
+        setTimeout(next, i === 3 ? 700 : 260);
+      }
+      next();
+    })();
+    document.getElementById('bootSkip').addEventListener('click', finishBoot);
+    bootEl.addEventListener('click', finishBoot);
+
     async function init() {
       updateGreeting();
       // settleAll, not Promise.all: one failing loader must not abort the others
