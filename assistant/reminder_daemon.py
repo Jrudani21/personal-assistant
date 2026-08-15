@@ -69,6 +69,7 @@ def show_toast(title: str, message: str) -> bool:
         r = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", _toast_script(title, message)],
             capture_output=True, timeout=15,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         if r.returncode == 0:
             return True
@@ -79,6 +80,7 @@ def show_toast(title: str, message: str) -> bool:
         subprocess.run(
             ["msg", "*", f"{title}: {message}"],
             capture_output=True, timeout=15,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return True
     except Exception:
@@ -116,7 +118,7 @@ def install() -> str:
         "/TR", f'"{runner}" "{script}"',
         "/SC", "ONLOGON", "/RL", "LIMITED", "/F",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode != 0:
         return f"Install failed: {result.stderr.strip() or result.stdout.strip()}"
     return (
@@ -129,6 +131,7 @@ def uninstall() -> str:
     result = subprocess.run(
         ["schtasks", "/Delete", "/TN", TASK_NAME, "/F"],
         capture_output=True, text=True, timeout=30,
+    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     if result.returncode != 0 and "not found" not in (result.stderr + result.stdout).lower():
         return f"Uninstall failed: {result.stderr.strip() or result.stdout.strip()}"

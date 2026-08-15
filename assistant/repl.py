@@ -46,6 +46,7 @@ def _ensure_started():
         cwd=_workspace(),
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         text=True, bufsize=1,
+    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     _out_queue = queue.Queue()
     threading.Thread(target=_reader_thread, args=(_proc, _out_queue), daemon=True).start()

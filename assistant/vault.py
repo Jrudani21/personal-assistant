@@ -121,6 +121,7 @@ def git_info() -> dict:
             r = subprocess.run(
                 ["git", "-C", str(vdir), *args],
                 capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             return r.stdout.strip() if r.returncode == 0 else None
         except Exception:
@@ -148,6 +149,7 @@ def git_status_text() -> str:
         r = subprocess.run(
             ["git", "-C", str(vdir), "status", "--short"],
             capture_output=True, text=True, timeout=10,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return r.stdout.strip() or "(clean)"
     except Exception as e:

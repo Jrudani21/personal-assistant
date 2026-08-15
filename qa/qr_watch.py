@@ -44,6 +44,7 @@ def render(qr_str: str):
 proc = subprocess.Popen(
     ["node", BRIDGE, "--pair-json", "--session", SESSION],
     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
 )
 seen = set()
 for line in proc.stdout:
