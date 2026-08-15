@@ -54,6 +54,7 @@ def _proc_alive(substr: str) -> bool:
             ["powershell", "-NoProfile", "-Command",
              f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -match '{substr}' }} | Measure-Object | Select-Object -ExpandProperty Count"],
             capture_output=True, text=True, timeout=20,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return out.stdout.strip().lstrip("0") != ""
     except Exception:
@@ -69,6 +70,7 @@ def _fleet_health() -> list[str]:
             capture_output=True, text=True, timeout=30,
             env={k: v for k, v in os.environ.items()
                  if k not in ("PYTHONPATH", "VIRTUAL_ENV", "PYTHONHOME")},
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         text = out.stdout + out.stderr
         if "dead" in text and "0 dead" not in text:

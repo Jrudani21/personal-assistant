@@ -74,6 +74,7 @@ def run_skill(name: str, args: str = "") -> str:
             r = subprocess.run(
                 [sys.executable, "-u", str(script), args],
                 capture_output=True, text=True, timeout=timeout, cwd=d,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             parts = []
             if r.stdout.strip():

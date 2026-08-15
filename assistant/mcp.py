@@ -67,6 +67,7 @@ def _start(name: str, cfg: dict) -> str:
             [_resolve_command(command)] + args,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             text=True, bufsize=1, encoding="utf-8", errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except Exception as e:
         return f"MCP server '{name}' failed to start: {e}"

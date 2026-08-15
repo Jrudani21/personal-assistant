@@ -66,6 +66,7 @@ def start(port: int) -> None:
         [py, str(code / "ken_service.py")],
         cwd=str(code), env=env,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     _port_file(port).write_text(json.dumps({"pid": proc.pid}), encoding="utf-8")
     print(f"sandbox starting on :{port} (pid {proc.pid})")

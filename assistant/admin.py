@@ -54,7 +54,7 @@ def admin_status():
     # Docker
     try:
         out = subprocess.run(["docker", "ps", "--format", "{{.Names}}: {{.Status}}"],
-                             capture_output=True, text=True, timeout=15).stdout
+                             capture_output=True, text=True, timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
         lines.append("Docker:\n" + (out.strip() or "  (none running)"))
     except Exception as e:
         lines.append(f"Docker: error ({e})")
@@ -72,7 +72,7 @@ def admin_crew_sweep():
     """Run a full system-crew sweep now; return the output tail."""
     try:
         proc = subprocess.run([PY, os.path.join(CREW, "crew.py")], capture_output=True,
-                              text=True, timeout=180, cwd=CAVE, encoding="utf-8", errors="replace")
+                              text=True, timeout=180, cwd=CAVE, encoding="utf-8", errors="replace", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return (proc.stdout or "")[-2500:]
     except subprocess.TimeoutExpired:
         return "Crew sweep timed out (>180s)"
@@ -83,7 +83,7 @@ def admin_crew_sweep():
 def admin_crew_member(name):
     try:
         proc = subprocess.run([PY, os.path.join(CREW, "crew.py"), name], capture_output=True,
-                              text=True, timeout=120, cwd=CAVE, encoding="utf-8", errors="replace")
+                              text=True, timeout=120, cwd=CAVE, encoding="utf-8", errors="replace", creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return (proc.stdout or "")[-1500:]
     except Exception as e:
         return f"Member {name} failed: {e}"
@@ -104,11 +104,11 @@ def admin_docker(action="list", name=None):
     try:
         if action == "list":
             out = subprocess.run(["docker", "ps", "--format", "{{.Names}} | {{.Status}} | {{.Ports}}"],
-                                 capture_output=True, text=True, timeout=15)
+                                 capture_output=True, text=True, timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             return out.stdout.strip() or "(no containers running)"
         if not name:
             return "No container name given."
-        out = subprocess.run(["docker", action, name], capture_output=True, text=True, timeout=60)
+        out = subprocess.run(["docker", action, name], capture_output=True, text=True, timeout=60, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return out.stdout.strip() or out.stderr.strip() or f"{action} {name}: ok"
     except Exception as e:
         return f"docker {action}: {e}"

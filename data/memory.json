@@ -71,7 +71,7 @@
     "updated_at": "2026-08-08T12:00:00"
   },
   "projects": {
-    "value": "weather gate scoring fix",
+    "value": "site_v2_interactivity",
     "facts": [
       "Maintains personal-assistant: a fully local AI assistant",
       "Maintains llm-finetune: fine-tuning a qwen2.5 variant for statistics",
@@ -114,50 +114,34 @@
       "10y day-of-year climatology with \u00b115d window",
       "monthly-anomaly ols warming trend with shrink-toward-zero",
       "daily_scan now scores pending predictions vs archive actuals",
-      "gate stuck at 0 scored fixed"
+      "gate stuck at 0 scored fixed",
+      "Deleted repos: 500-AI-Agents-Projects (fork), ken-fleet, linkedin-mcp-server",
+      "Canonical repo: Jrudani21/jurassic-park (public, OWN, not a fork)",
+      "LIVE RUNTIME still at E:\\Local\\projects\\500-AI-Agents-Projects",
+      "Repo went private \u2192 Pages deleted by the flip (free-plan Pages requires public repo) \u2192 went public again (user choice)",
+      "Mobile-friendly: global CSS block on all 5 pages \u2014 overflow-x:hidden, grids\u21921col, tables scroll in wrappers, 44px tap targets, 16px body font on phones",
+      "Interactive console v2: no-scroll auto-grow terminal, 9 quick-command buttons (help/staff/species/tour/t-rex/raptors/feed/power/nedry), dino ASCII art, tour quotes, power grid, feed outcomes, embryo counter (nedry steals up to 15)"
     ],
     "concepts": [
-      "tooling",
       "debugging",
-      "scheduling",
       "projects",
       "design",
-      "statistics",
       "strategy",
-      "data",
+      "testing",
+      "github",
+      "environment",
+      "tools",
+      "research",
+      "scheduling",
+      "deployment",
+      "statistics",
+      "logging",
       "bugs",
       "data_management",
-      "testing",
-      "logging",
-      "deployment",
-      "tools",
-      "research"
+      "tooling",
+      "data"
     ],
     "history": [
-      {
-        "value": "personal-assistant (local AI), llm-finetune (qwen statistics model), medicare-fraud-detector",
-        "as_of": "2026-08-08T12:00:00"
-      },
-      {
-        "value": "DeepSeek Cave setup with 34 repos merged into 7 family shrines",
-        "as_of": "2026-08-14T09:52:05.771469"
-      },
-      {
-        "value": "System Crew and task router implemented in DeepSeek Cave",
-        "as_of": "2026-08-14T09:52:05.779592"
-      },
-      {
-        "value": "Orchestra multi-agent system scaffolded",
-        "as_of": "2026-08-14T09:52:05.804761"
-      },
-      {
-        "value": "Self-maintenance system implemented",
-        "as_of": "2026-08-14T09:52:05.816989"
-      },
-      {
-        "value": "Portfolio v6 redesigned and deployed",
-        "as_of": "2026-08-14T09:52:16.227581"
-      },
       {
         "value": "Portfolio live on GitHub Pages",
         "as_of": "2026-08-14T09:52:16.235107"
@@ -213,11 +197,35 @@
       {
         "value": "climate prior implementation",
         "as_of": "2026-08-14T09:52:38.867752"
+      },
+      {
+        "value": "weather gate scoring fix",
+        "as_of": "2026-08-14T09:52:38.874752"
+      },
+      {
+        "value": "github_repo_consolidation",
+        "as_of": "2026-08-15T17:11:59.520994"
+      },
+      {
+        "value": "canonical_repo_setup",
+        "as_of": "2026-08-15T17:11:59.530876"
+      },
+      {
+        "value": "live_runtime_location",
+        "as_of": "2026-08-15T17:11:59.559333"
+      },
+      {
+        "value": "repo_visibility_change",
+        "as_of": "2026-08-15T17:11:59.611046"
+      },
+      {
+        "value": "site_v2_features",
+        "as_of": "2026-08-15T17:11:59.711942"
       }
     ],
-    "source": "daily/2026-08-12.md",
-    "distilled_at": "2026-08-14T09:52:38.874752",
-    "updated_at": "2026-08-14T09:52:38.874752",
+    "source": "daily/2026-08-14.md",
+    "distilled_at": "2026-08-15T17:11:59.749509",
+    "updated_at": "2026-08-15T17:11:59.749509",
     "tier": "semantic"
   },
   "second_brain": {
@@ -296,7 +304,7 @@
     "updated_at": "2026-08-13T10:42:05.881709"
   },
   "preferences": {
-    "value": "bot regulations and escalation rules established",
+    "value": "privacy_scrubbing",
     "facts": [
       "Keep only 3 Ollama models: deepseek-r1:7b, deepseek-r1:14b, nomic-embed-text",
       "Removed vllm (28GB), pytorch (36GB), langchain images",
@@ -316,17 +324,20 @@
       "253/253 tests green",
       "DEFAULT_VAULT fixed in vault.py",
       "agents.md added crew escalation rule for >2 failed fixes",
-      "bot_regulations.md created with money safety and fail-closed rules"
+      "bot_regulations.md created with money safety and fail-closed rules",
+      "Nightly cron renamed Jurassic Park site refresh: cd E:\\Local\\projects\\jurassic-park && FLEET_SITE_DIR=... python docs/generate_site.py",
+      "generate_site.py had 5 hardcoded E:\\Local\\... paths \u2192 now env-var driven + scrub() strips local paths/private repo names from data.js before commit"
     ],
     "concepts": [
-      "tooling",
-      "automation",
-      "process",
-      "preferences",
       "modeling",
-      "system",
+      "automation",
       "testing",
-      "tools"
+      "security",
+      "system",
+      "tooling",
+      "tools",
+      "process",
+      "preferences"
     ],
     "history": [
       {
@@ -364,11 +375,19 @@
       {
         "value": "Personal-assistant tests and configuration",
         "as_of": "2026-08-14T09:52:16.274733"
+      },
+      {
+        "value": "bot regulations and escalation rules established",
+        "as_of": "2026-08-14T09:52:26.885781"
+      },
+      {
+        "value": "site_refresh_cron",
+        "as_of": "2026-08-15T17:11:59.638224"
       }
     ],
-    "source": "daily/2026-08-12-weather-arb-debug.md",
-    "distilled_at": "2026-08-14T09:52:26.885781",
-    "updated_at": "2026-08-14T09:52:26.885781",
+    "source": "daily/2026-08-14.md",
+    "distilled_at": "2026-08-15T17:11:59.674472",
+    "updated_at": "2026-08-15T17:11:59.674472",
     "tier": "semantic"
   },
   "tools": {

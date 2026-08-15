@@ -46,7 +46,7 @@ def audit(port, url, width, height, label, token=None):
          "--remote-allow-origins=*",
          f"--user-data-dir={BASE}\\{label}", "--no-first-run", "--no-default-browser-check",
          "--hide-scrollbars", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     ws = None
     try:
         for _ in range(80):

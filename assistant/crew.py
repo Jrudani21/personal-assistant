@@ -16,6 +16,8 @@ standalone `crewai_demo.py` script at the project root.
 import json
 import os
 import re
+import time
+from pathlib import Path
 
 from pydantic import PrivateAttr
 
@@ -32,11 +34,58 @@ OLLAMA_BASE_URL = "http://localhost:11434"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 FAST_MODEL = "ollama/deepseek-r1:7b"
+
+# ---- cost/cache telemetry -----------------------------------------------
+# DeepSeek API returns usage in each chat completion: prompt_tokens,
+# completion_tokens, and prompt_cache_hit_tokens / prompt_cache_miss_tokens.
+# We can't reach the usage dashboard from here, so log every call's token
+# breakdown + estimated cost to a local JSONL file. Cost model (deepseek-chat
+# / v3.x, USD per 1M tokens, as of 2026-08):
+#   input (cache miss):      $0.27
+#   input (cache hit):       $0.07
+#   output:                  $1.10
+# These are the public list prices; update if DeepSeek changes them.
+COST_PER_1M = {"input_miss": 0.27, "input_hit": 0.07, "output": 1.10}
+TELEMETRY_FILE = Path(os.environ.get(
+    "CREW_TELEMETRY_FILE",
+    os.path.join(os.path.expanduser("~"), "AppData", "Local", "hermes", "logs", "crew_telemetry.jsonl"),
+))
+
+
+def log_usage(model: str, usage, agent: str = "unknown") -> dict:
+    """Record one API call's token/cost breakdown to the JSONL telemetry file.
+    Returns the usage dict for inline inspection; never raises (telemetry must
+    not break the pipeline)."""
+    rec = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "model": model,
+        "agent": agent,
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+        "completion_tokens": getattr(usage, "completion_tokens", 0) or 0,
+        "cache_hit_tokens": getattr(usage, "prompt_cache_hit_tokens", 0) or 0,
+        "cache_miss_tokens": getattr(usage, "prompt_cache_miss_tokens", 0) or 0,
+        "cache_hit_pct": None,
+        "est_cost_usd": None,
+    }
+    miss = rec["cache_miss_tokens"]
+    hit = rec["cache_hit_tokens"]
+    total_in = rec["prompt_tokens"]
+    if total_in:
+        rec["cache_hit_pct"] = round(100.0 * hit / total_in, 1)
+    rec["est_cost_usd"] = round(
+        (miss * COST_PER_1M["input_miss"] + hit * COST_PER_1M["input_hit"]
+         + rec["completion_tokens"] * COST_PER_1M["output"]) / 1e6, 6)
+    try:
+        TELEMETRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with TELEMETRY_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec) + "\n")
+    except Exception:
+        pass  # telemetry is best-effort
+    return rec
 # Local stand-in for the Claude Pro analysis step, used only when Claude is
 # unavailable. Its value is availability, not quality — see the measurements
 # below. Deliberately the same model as FAST_MODEL: qwen3-coder:30b was tried
 # first on the assumption that bigger is better here, and measured worse.
-#
 # Correctly identifying which product had higher revenue per unit, given the
 # figures pre-computed in the prompt (3 runs each, crowded Analyst prompt):
 #   qwen2.5:7b        2/3        4-11s   (deleted 08-10)
@@ -315,6 +364,13 @@ class DeepSeekLLM(BaseLLM):
         output = (response.choices[0].message.content or "").strip()
         if not output:
             raise RuntimeError("DeepSeek API returned empty output")
+        # telemetry: log token/cache/cost for this call (best-effort)
+        try:
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                log_usage(self.model, usage, agent=getattr(self, "_agent_name", "crew"))
+        except Exception:
+            pass
         return output
 
     def _call_local_fallback(self, prompt: str) -> str:

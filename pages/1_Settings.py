@@ -42,6 +42,7 @@ def _daemon_installed() -> bool:
         r = subprocess.run(
             ["schtasks", "/Query", "/TN", DAEMON_TASK],
             capture_output=True, text=True, timeout=15,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return r.returncode == 0
     except Exception:

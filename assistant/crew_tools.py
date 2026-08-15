@@ -62,6 +62,7 @@ def run_python_tool(code: str) -> str:
             capture_output=True,
             text=True,
             timeout=15,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         out = result.stdout.strip()
         if result.stderr.strip():

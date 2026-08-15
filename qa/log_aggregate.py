@@ -30,6 +30,8 @@ from pathlib import Path
 
 PA = Path(r"E:\Local\projects\personal-assistant")
 AGENTS = Path(r"E:\Local\projects\500-AI-Agents-Projects")
+CAVE = Path(r"E:\Local\projects\deepseek-cave")
+HERMES_SCRIPTS = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\Janak's PC\AppData\Local")) / "hermes" / "scripts"
 OUT = PA / "data" / "logs" / "eod_bundle.txt"
 
 
@@ -72,6 +74,7 @@ def _queue() -> str:
             capture_output=True, text=True, timeout=30,
             env={k: v for k, v in os.environ.items()
                  if k not in ("PYTHONPATH", "VIRTUAL_ENV", "PYTHONHOME")},
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return (r.stdout or r.stderr or "").strip()
     except Exception:
@@ -94,6 +97,39 @@ def _cron_runs() -> str:
         return "(cron info unavailable)"
 
 
+def _cron_outputs() -> str:
+    """Latest per-job cron output from output/<job_id>/<date>.md (today only)."""
+    try:
+        jobs_path = Path(os.environ.get("LOCALAPPDATA", "")) / "hermes" / "cron" / "jobs.json"
+        out_root = jobs_path.parent / "output"
+        d = json.loads(jobs_path.read_text(encoding="utf-8"))
+        jobs = d if isinstance(d, list) else d.get("jobs", [])
+        today = __import__("datetime").date.today().isoformat()
+        name_by_id = {j.get("id"): j.get("name", "?") for j in jobs}
+        parts = []
+        for jid, name in name_by_id.items():
+            jdir = out_root / jid
+            if not jdir.is_dir():
+                continue
+            todays = sorted(p for p in jdir.glob(f"{today}*.md"))
+            if not todays:
+                continue
+            body = todays[-1].read_text(encoding="utf-8", errors="replace")
+            # LLM-mode files carry the injected prompt; keep only the response.
+            if "## Response" in body:
+                body = body.split("## Response", 1)[1]
+            # strip the markdown header boilerplate, keep the payload
+            lines = body.splitlines()
+            keep = [l for l in lines if not (l.startswith("# ") or l.startswith("**Job ID") or l.startswith("**Run Time") or l.startswith("**Schedule") or l.startswith("**Mode") or l.startswith("**Status") or l.startswith("## Prompt"))]
+            payload = "\n".join(keep).strip()
+            if not payload or payload == "silent (empty output)":
+                continue
+            parts.append(f"--- {name} ---\n{payload[:600]}")
+        return "\n\n".join(parts) or "(no cron outputs today)"
+    except Exception:
+        return "(cron outputs unavailable)"
+
+
 def build() -> Path:
     sections = []
     sections.append(("UNIFIED FLEET LOG (fleet.jsonl)", _tail(PA / "data" / "logs" / "fleet.jsonl", 400)))
@@ -103,6 +139,14 @@ def build() -> Path:
         f"--- {p.name} ---\n{_tail(p, 25)}" for p in agent_logs
     ) or "(no agent logs)"
     sections.append(("AGENT LOGS", agent_txt))
+    # --- Background daemons & bots (2026-08-15: all processes covered) ---
+    sections.append(("SYSTEM MONITOR (deepseek-cave)", _tail(CAVE / "system-monitor.log", 60)))
+    sections.append(("GAME MODE STATE", _tail(PA / "data" / "game_mode_state.json", 15)))
+    sections.append(("LINKEDIN JOB SCAN", _tail(HERMES_SCRIPTS / "linkedin_job_scan.log", 60)))
+    sections.append(("PC HEALTH WATCHDOG", _tail(HERMES_SCRIPTS / "pc-health-watchdog.log", 30)))
+    sections.append(("WEATHER ARB SCANS", _tail(HERMES_SCRIPTS / "weather_arb.log", 40)))
+    sections.append(("BOTS CONFIG", _tail(PA / "data" / "bots.json", 30)))
+    sections.append(("BOTS STATE", _tail(PA / "data" / "bots_state.json", 30)))
     sections.append(("COST LEDGER (today)", _today_ledger()))
     sections.append(("WORK QUEUE + DLQ", _queue()))
     try:
@@ -118,6 +162,7 @@ def build() -> Path:
     except Exception:
         sections.append(("MEMORY DISTILL", "(unavailable)"))
     sections.append(("CRON RUNS (today)", _cron_runs()))
+    sections.append(("CRON OUTPUTS (today)", _cron_outputs()))
     sections.append(("FLEET REPORT ISSUES", _tail(PA / "data" / "fleet_report.md", 25)))
 
     parts = []

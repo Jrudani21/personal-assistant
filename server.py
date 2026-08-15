@@ -2099,7 +2099,7 @@ KEN_MOUNT = "/ken"
 def _tailscale(*args: str) -> str:
     try:
         r = subprocess.run([TAILSCALE_BIN, *args], capture_output=True,
-                           text=True, timeout=30)
+                           text=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return (r.stdout or r.stderr or "").strip()
     except Exception as e:
         return f"tailscale unavailable: {e}"

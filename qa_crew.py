@@ -47,6 +47,7 @@ def run_playwright() -> tuple[bool, str]:
     proc = subprocess.run(
         ["npx.cmd", "playwright", "test", "--reporter=list"],
         cwd=str(QA), env=env, capture_output=True, text=True, timeout=600,
+    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     out = (proc.stdout or "") + (proc.stderr or "")
     log(f"Playwright exit={proc.returncode}")
