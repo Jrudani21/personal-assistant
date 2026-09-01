@@ -275,6 +275,26 @@
       animation-duration: 4s;
     }
 
+    /* Speaking: distinct from thinking — a steady confident glow (not a
+       spin-up), with per-syllable pulses driven by --voice-amp (set inline,
+       0-1, from speechSynthesis onboundary events in JS). CSS fallback only;
+       the WebGL orb (window.KEN3D) has its own richer ring-based version. */
+    .orb.speaking .core {
+      animation: none;
+      transform: scale(calc(1 + var(--voice-amp, 0) * 0.16));
+      box-shadow: 0 0 calc(18px + var(--voice-amp, 0) * 22px) rgba(255, 49, 49, calc(.55 + var(--voice-amp, 0) * .4));
+      transition: transform 60ms ease-out, box-shadow 60ms ease-out;
+    }
+
+    .orb.speaking .ring1,
+    .orb.speaking .ring2,
+    .orb.speaking .ring3 {
+      animation-play-state: running;
+      animation-duration: 7s;
+      opacity: calc(0.6 + var(--voice-amp, 0) * 0.4);
+      transition: opacity 80ms ease-out;
+    }
+
     .orb.sm {
       width: 30px;
       height: 30px;
@@ -2031,6 +2051,7 @@
             behind this.</div>
           <div class="idle-actions">
             <button id="modeBtn" title="Toggle work/fun mode">💼 Work</button>
+            <button id="voiceBtn" title="Toggle spoken responses">🔊 Voice</button>
             <button id="minimizeBtn" title="Minimize to a small widget">— Minimize</button>
             <button id="fsBtn" title="Fullscreen showcase">⛶ Fullscreen</button>
           </div>
@@ -2567,6 +2588,22 @@
       localStorage.setItem("ken_mode", cur ? "fun" : "work");
       applyMode();
     };
+
+    /* ---------- voice output (spoken responses) ---------- */
+    function voiceOutputEnabled() {
+      return localStorage.getItem("ken_voice_output") !== "off"; // default ON
+    }
+    function applyVoiceOutput() {
+      const on = voiceOutputEnabled();
+      const btn = $("voiceBtn");
+      if (btn) btn.innerHTML = on ? "🔊 Voice" : "🔇 Voice";
+      if (!on && window.speechSynthesis) window.speechSynthesis.cancel();
+    }
+    $("voiceBtn").onclick = () => {
+      localStorage.setItem("ken_voice_output", voiceOutputEnabled() ? "off" : "on");
+      applyVoiceOutput();
+    };
+    applyVoiceOutput();
     applyMode();
     setInterval(applyMode, 60 * 1000); // re-evaluate every minute (hour rollover)
 
@@ -2671,6 +2708,7 @@
     /* ---------- chat sending ---------- */
     async function sendMessage(text, forceTools) {
       if (state.streaming || !text.trim()) return;
+      stopSpeaking(); // a new message interrupts KEN mid-sentence, same as talking over someone
       showChatView();
       const hint = $("msgs").querySelector(".idle-hint");
       if (hint) hint.remove();
@@ -2687,6 +2725,7 @@
         const last = $("msgs").lastElementChild;
         if (last && last.classList.contains("assistant") && last.dataset.finalized) {
           state.history.push({ role: "assistant", content: last.textContent });
+          speak(last.textContent);
         }
       } catch (e) {
         // Roll back the user message so history stays consistent with what failed.
@@ -3216,6 +3255,55 @@
         btn.textContent = "⏹";
         toast("Recording — click again to stop.");
       } catch (e) { toast("Mic unavailable: " + e.message); }
+    }
+
+    /* ---------- voice output (speaks the response, drives the orb) ---------- */
+    // Browser TTS only — speechSynthesis exposes no MediaStream/AudioBuffer
+    // to hook an AnalyserNode to in any browser, so true audio-amplitude
+    // reactivity isn't available client-side without a server /api/tts
+    // endpoint that returns real audio (doesn't exist here). onboundary
+    // fires once per spoken word with the source char index — that's the
+    // best real signal available, and close enough to read as "the orb is
+    // moving in time with the words" rather than a canned loop.
+    function setOrbSpeaking(on) {
+      const topOrb = $("topOrb"), idleOrb = $("idleOrb");
+      [topOrb, idleOrb].forEach(o => { if (o) o.classList.toggle("speaking", on); });
+      if (window.KEN3D) window.KEN3D.setSpeaking(on);
+      if (!on) {
+        [topOrb, idleOrb].forEach(o => { if (o) o.style.removeProperty("--voice-amp"); });
+      }
+    }
+    function pulseOrbVoice(amp) {
+      const v = amp == null ? 1 : amp;
+      const topOrb = $("topOrb"), idleOrb = $("idleOrb");
+      [topOrb, idleOrb].forEach(o => { if (o) o.style.setProperty("--voice-amp", v); });
+      if (window.KEN3D) window.KEN3D.pulseVoice(v);
+    }
+    let currentUtterance = null;
+    function speak(text) {
+      if (!voiceOutputEnabled() || !window.speechSynthesis || !text || !text.trim()) return;
+      window.speechSynthesis.cancel(); // one voice line at a time
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1.02;
+      utter.pitch = 0.92;              // slightly lower — reads less "assistant-chirpy"
+      utter.onstart = () => setOrbSpeaking(true);
+      utter.onboundary = (e) => {
+        if (e.name && e.name !== "word") return; // some engines also fire "sentence"
+        // Vary pulse strength a little by the upcoming word's length (rough
+        // proxy for syllable count / emphasis) instead of a flat 1.0 every
+        // time — reads less metronomic.
+        const rest = text.slice(e.charIndex, e.charIndex + 12);
+        const wlen = (rest.match(/^\S+/) || [""])[0].length;
+        pulseOrbVoice(Math.min(1, 0.55 + wlen * 0.08));
+      };
+      utter.onend = utter.onerror = () => { setOrbSpeaking(false); currentUtterance = null; };
+      currentUtterance = utter;
+      window.speechSynthesis.speak(utter);
+    }
+    function stopSpeaking() {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      setOrbSpeaking(false);
+      currentUtterance = null;
     }
 
     /* ---------- access / funnel (owner only) ---------- */
@@ -3836,7 +3924,19 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
       resize(); // initial size from the idle view
 
       let thinking = false;
-      window.KEN3D = { setThinking: (v) => { thinking = !!v; } };
+      // Speaking: voiceAmp is a 0-1 envelope, spiked by pulseVoice() on each
+      // speechSynthesis word-boundary event and exponentially decayed each
+      // frame in tick() — this is the closest honest approximation to real
+      // audio-reactivity available. speechSynthesis doesn't expose a
+      // MediaStream/AudioBuffer to the Web Audio API in any browser, so a
+      // true AnalyserNode-driven visualizer isn't possible without a
+      // server-side TTS endpoint returning actual audio (none exists here).
+      let speaking = false, voiceAmp = 0;
+      window.KEN3D = {
+        setThinking: (v) => { thinking = !!v; },
+        setSpeaking: (v) => { speaking = !!v; if (!v) voiceAmp = 0; },
+        pulseVoice: (v) => { voiceAmp = Math.max(voiceAmp, Math.min(1, v == null ? 1 : v)); },
+      };
 
       let raf = 0, lastT = 0, t = 0;
       function tick(now) {
@@ -3850,24 +3950,46 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
         mx += (tx - mx) * 0.045;
         my += (ty - my) * 0.045;
 
-        const spd = thinking ? 3.4 : 0.55;
+        // Voice envelope decays toward 0 every frame; pulseVoice() spikes it
+        // back up on each spoken word. Fast decay (~180ms half-life) so
+        // consecutive word-boundaries read as a rhythmic "talking" pulse
+        // train rather than a slow fade.
+        if (speaking) voiceAmp *= Math.pow(0.02, dt);
+
+        const spd = thinking ? 3.4 : (speaking ? 0.85 : 0.55);
         orb.rotation.x += dt * spd * 0.6;
         orb.rotation.y += dt * spd;
         wire.rotation.x += dt * spd * 0.4;
         wire.rotation.z += dt * spd * 0.5;
-        rings.forEach((r, i) => { r.rotation.z += dt * (0.12 + i * 0.05) * (thinking ? 3 : 1); });
+        // Speaking rings: steady rotation (not thinking's spin-up) but each
+        // ring's radius/opacity tracks voiceAmp directly — that's the "voice
+        // lines" moving in sync with speech, applied per-ring with a slight
+        // stagger (i * 0.35) so they don't pulse in perfect unison.
+        rings.forEach((r, i) => {
+          r.rotation.z += dt * (0.12 + i * 0.05) * (thinking ? 3 : 1);
+          if (speaking) {
+            const ringAmp = Math.max(0, voiceAmp - i * 0.12);
+            const baseRadius = 1.05 + i * 0.28;
+            r.scale.setScalar(1 + ringAmp * 0.14);
+            r.material.opacity = 0.1 + ringAmp * 0.55;
+          } else {
+            r.scale.setScalar(1);
+          }
+        });
 
         const fs = !!document.fullscreenElement;
-        const pulse = 1 + Math.sin(t * (thinking ? 9 : 2.2)) * (thinking ? 0.09 : 0.028);
+        const speakPulse = speaking ? voiceAmp * 0.05 : 0;
+        const pulse = 1 + Math.sin(t * (thinking ? 9 : 2.2)) * (thinking ? 0.09 : 0.028) + speakPulse;
         const fsScale = fs ? 1.9 : 1;
         orb.scale.setScalar(pulse * fsScale);
         wire.scale.setScalar(pulse * 1.03 * fsScale);
-        halo.scale.setScalar(3.6 * fsScale * (1 + Math.sin(t * (thinking ? 7 : 1.8)) * (thinking ? 0.18 : 0.05)));
-        halo.material.opacity = thinking ? 0.3 : 0.16;
-        halo.material.color.setHex(thinking ? 0xff6b6b : 0xff3131);
-        orbMat.uniforms.uColor.value.setHex(thinking ? 0xff6b6b : 0xff3131);
-        orbMat.uniforms.uIntensity.value = thinking ? 2.4 : 1.5;
-        wireMat.color.setHex(thinking ? 0xff6b6b : 0xff3131);
+        const haloVoiceBoost = speaking ? voiceAmp * 0.22 : 0;
+        halo.scale.setScalar(3.6 * fsScale * (1 + Math.sin(t * (thinking ? 7 : 1.8)) * (thinking ? 0.18 : 0.05) + haloVoiceBoost));
+        halo.material.opacity = thinking ? 0.3 : (speaking ? 0.16 + voiceAmp * 0.22 : 0.16);
+        halo.material.color.setHex(thinking ? 0xff6b6b : (speaking ? 0x59d9ff : 0xff3131));
+        orbMat.uniforms.uColor.value.setHex(thinking ? 0xff6b6b : (speaking ? 0x59d9ff : 0xff3131));
+        orbMat.uniforms.uIntensity.value = thinking ? 2.4 : (speaking ? 1.5 + voiceAmp * 0.9 : 1.5);
+        wireMat.color.setHex(thinking ? 0xff6b6b : (speaking ? 0x59d9ff : 0xff3131));
 
         starMat.uniforms.uTime.value = t;
         for (const n of nebulas) {
