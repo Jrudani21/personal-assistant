@@ -71,7 +71,7 @@
     "updated_at": "2026-08-08T12:00:00"
   },
   "projects": {
-    "value": "site_v2_interactivity",
+    "value": "unexecuted_bots",
     "facts": [
       "Maintains personal-assistant: a fully local AI assistant",
       "Maintains llm-finetune: fine-tuning a qwen2.5 variant for statistics",
@@ -120,80 +120,45 @@
       "LIVE RUNTIME still at E:\\Local\\projects\\500-AI-Agents-Projects",
       "Repo went private \u2192 Pages deleted by the flip (free-plan Pages requires public repo) \u2192 went public again (user choice)",
       "Mobile-friendly: global CSS block on all 5 pages \u2014 overflow-x:hidden, grids\u21921col, tables scroll in wrappers, 44px tap targets, 16px body font on phones",
-      "Interactive console v2: no-scroll auto-grow terminal, 9 quick-command buttons (help/staff/species/tour/t-rex/raptors/feed/power/nedry), dino ASCII art, tour quotes, power grid, feed outcomes, embryo counter (nedry steals up to 15)"
+      "Interactive console v2: no-scroll auto-grow terminal, 9 quick-command buttons (help/staff/species/tour/t-rex/raptors/feed/power/nedry), dino ASCII art, tour quotes, power grid, feed outcomes, embryo counter (nedry steals up to 15)",
+      "8 work orders executed and persistent queue fully drained",
+      "10/10 Playwright tests passed, 0 probe failures",
+      "produced an artificial intelligence briefing, exit 0",
+      "ops-boss, qa-lead, research-lead ran successfully",
+      "health-watch-standby and qa-tester-standby stayed idle due to primaries running",
+      "coordinators flagged STALE + TAKEOVER conditions due to 24h idle",
+      "fable-watch, market-watch, career-ops-standby never ran"
     ],
     "concepts": [
+      "github",
+      "bugs",
+      "deployment",
+      "fleet",
+      "design",
+      "coordinators",
+      "news",
+      "qa",
+      "summarizer",
+      "failover",
       "debugging",
       "projects",
-      "design",
-      "strategy",
-      "testing",
-      "github",
-      "environment",
-      "tools",
-      "research",
-      "scheduling",
-      "deployment",
-      "statistics",
-      "logging",
-      "bugs",
       "data_management",
+      "bots",
+      "strategy",
+      "tools",
+      "testing",
+      "scheduling",
+      "statistics",
+      "research",
       "tooling",
+      "environment",
+      "report",
+      "standby",
+      "scheduler",
+      "logging",
       "data"
     ],
     "history": [
-      {
-        "value": "Portfolio live on GitHub Pages",
-        "as_of": "2026-08-14T09:52:16.235107"
-      },
-      {
-        "value": "Nightly-learn dedup bug fixed",
-        "as_of": "2026-08-14T09:52:16.255003"
-      },
-      {
-        "value": "weather-arb bot debug session resolved",
-        "as_of": "2026-08-14T09:52:26.879647"
-      },
-      {
-        "value": "test suite passed after fixes",
-        "as_of": "2026-08-14T09:52:26.899792"
-      },
-      {
-        "value": "cache and ledger state updated",
-        "as_of": "2026-08-14T09:52:26.905792"
-      },
-      {
-        "value": "next steps and scheduling",
-        "as_of": "2026-08-14T09:52:26.912792"
-      },
-      {
-        "value": "incident protocol and logging updated",
-        "as_of": "2026-08-14T09:52:26.924851"
-      },
-      {
-        "value": "project pivot to polymarket shadow-whale copy-trading",
-        "as_of": "2026-08-14T09:52:38.824834"
-      },
-      {
-        "value": "streamlit dashboard implementation",
-        "as_of": "2026-08-14T09:52:38.832046"
-      },
-      {
-        "value": "fable round-3 improvements",
-        "as_of": "2026-08-14T09:52:38.839548"
-      },
-      {
-        "value": "kalshi expansion research",
-        "as_of": "2026-08-14T09:52:38.846565"
-      },
-      {
-        "value": "climate-mode regime adjustment",
-        "as_of": "2026-08-14T09:52:38.854145"
-      },
-      {
-        "value": "env-science crew findings",
-        "as_of": "2026-08-14T09:52:38.860752"
-      },
       {
         "value": "climate prior implementation",
         "as_of": "2026-08-14T09:52:38.867752"
@@ -221,11 +186,63 @@
       {
         "value": "site_v2_features",
         "as_of": "2026-08-15T17:11:59.711942"
+      },
+      {
+        "value": "site_v2_interactivity",
+        "as_of": "2026-08-15T17:11:59.749509"
+      },
+      {
+        "value": "github_repo_consolidation",
+        "as_of": "2026-08-16T05:30:45.672292"
+      },
+      {
+        "value": "canonical_repo_setup",
+        "as_of": "2026-08-16T05:30:45.682988"
+      },
+      {
+        "value": "live_runtime_location",
+        "as_of": "2026-08-16T05:30:45.691564"
+      },
+      {
+        "value": "repo_visibility_change",
+        "as_of": "2026-08-16T05:30:45.698566"
+      },
+      {
+        "value": "site_v2_features",
+        "as_of": "2026-08-16T05:30:45.721064"
+      },
+      {
+        "value": "site_v2_interactivity",
+        "as_of": "2026-08-16T05:30:45.728572"
+      },
+      {
+        "value": "fleet_scheduler_run",
+        "as_of": "2026-08-16T05:30:56.231406"
+      },
+      {
+        "value": "qa_suite_status",
+        "as_of": "2026-08-16T05:30:56.240282"
+      },
+      {
+        "value": "news_digest_output",
+        "as_of": "2026-08-16T05:30:56.253381"
+      },
+      {
+        "value": "coordinators_run",
+        "as_of": "2026-08-16T05:30:56.264143"
+      },
+      {
+        "value": "standby_status",
+        "as_of": "2026-08-16T05:30:56.274293"
+      },
+      {
+        "value": "fleet_report_flags",
+        "as_of": "2026-08-16T05:30:56.281419"
       }
     ],
-    "source": "daily/2026-08-14.md",
-    "distilled_at": "2026-08-15T17:11:59.749509",
-    "updated_at": "2026-08-15T17:11:59.749509",
+    "source": "daily/2026-08-15.md",
+    "distilled_at": "2026-08-16T05:30:56.297973",
+    "updated_at": "2026-08-16T05:30:56.297973",
     "tier": "semantic"
   },
   "second_brain": {
@@ -304,7 +321,7 @@
     "updated_at": "2026-08-13T10:42:05.881709"
   },
   "preferences": {
-    "value": "privacy_scrubbing",
+    "value": "tooling_choice",
     "facts": [
       "Keep only 3 Ollama models: deepseek-r1:7b, deepseek-r1:14b, nomic-embed-text",
       "Removed vllm (28GB), pytorch (36GB), langchain images",
@@ -326,18 +343,20 @@
       "agents.md added crew escalation rule for >2 failed fixes",
       "bot_regulations.md created with money safety and fail-closed rules",
       "Nightly cron renamed Jurassic Park site refresh: cd E:\\Local\\projects\\jurassic-park && FLEET_SITE_DIR=... python docs/generate_site.py",
-      "generate_site.py had 5 hardcoded E:\\Local\\... paths \u2192 now env-var driven + scrub() strips local paths/private repo names from data.js before commit"
+      "generate_site.py had 5 hardcoded E:\\Local\\... paths \u2192 now env-var driven + scrub() strips local paths/private repo names from data.js before commit",
+      "Nightly cron renamed 'Jurassic Park site refresh': cd E:\\Local\\projects\\jurassic-park && FLEET_SITE_DIR=... python docs/generate_site.py",
+      "qa/qa_runner.py used Playwright for testing"
     ],
     "concepts": [
       "modeling",
-      "automation",
-      "testing",
-      "security",
-      "system",
-      "tooling",
+      "preferences",
       "tools",
+      "testing",
       "process",
-      "preferences"
+      "automation",
+      "tooling",
+      "system",
+      "security"
     ],
     "history": [
       {
@@ -383,11 +402,23 @@
       {
         "value": "site_refresh_cron",
         "as_of": "2026-08-15T17:11:59.638224"
+      },
+      {
+        "value": "privacy_scrubbing",
+        "as_of": "2026-08-15T17:11:59.674472"
+      },
+      {
+        "value": "site_refresh_cron",
+        "as_of": "2026-08-16T05:30:45.705061"
+      },
+      {
+        "value": "privacy_scrubbing",
+        "as_of": "2026-08-16T05:30:45.714565"
       }
     ],
-    "source": "daily/2026-08-14.md",
-    "distilled_at": "2026-08-15T17:11:59.674472",
-    "updated_at": "2026-08-15T17:11:59.674472",
+    "source": "daily/2026-08-15.md",
+    "distilled_at": "2026-08-16T05:30:56.291420",
+    "updated_at": "2026-08-16T05:30:56.291420",
     "tier": "semantic"
   },
   "tools": {
