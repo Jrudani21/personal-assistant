@@ -221,8 +221,8 @@ with tab_rules:
             overlap = st.number_input("Chunk overlap (chars)", min_value=0, max_value=1000, step=25,
                                       value=int(config.get("rag_chunk_overlap", 150)), key="overlap")
         with c2:
-            sim = st.slider("Min similarity", 0.0, 1.0, 0.05,
-                            value=float(config.get("rag_min_similarity", 0.5)), key="sim")
+            sim = st.slider("Min similarity", 0.0, 1.0,
+                            value=float(config.get("rag_min_similarity", 0.5)), step=0.05, key="sim")
             rrf = st.number_input("RRF constant (k)", min_value=1, max_value=200, step=1,
                                   value=int(config.get("rag_rrf_k", 60)), key="rrf")
             topk = st.number_input("Search top-k", min_value=1, max_value=20, step=1,
