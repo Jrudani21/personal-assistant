@@ -86,12 +86,18 @@ def resolve(role: str) -> LLM:
     for ok, model, base_url in chain:
         if not ok:
             continue
-        prefix = "openai/" if base_url in (DS_URL, GM_URL) else ""
-        full_model = f"{prefix}{model}"
-        extra = {}
-        if base_url in (DS_URL, GM_URL) and ok is not True:
-            extra["api_key"] = ok
-        return LLM(model=full_model, base_url=base_url, **extra)
+        # "openai/" prefix routes non-Ollama endpoints through CrewAI/litellm as
+        # OpenAI-compatible calls against base_url (else litellm derives the
+        # provider from the model string and ignores base_url / fails auth).
+        # Apply to every non-local URL (was only DS_URL/GM_URL, so OpenRouter
+        # and SambaNova entries silently lost both the prefix and their key).
+        if base_url != OL_URL:
+            full_model = model if model.startswith("openai/") else f"openai/{model}"
+            extra: dict = {}
+            if ok is not True:  # a real API key (the guaranteed-local entry is ok=True)
+                extra["api_key"] = ok
+            return LLM(model=full_model, base_url=base_url, **extra)
+        return LLM(model=model, base_url=base_url)
 
     return LLM(model=chain[-1][1], base_url=chain[-1][2])
 

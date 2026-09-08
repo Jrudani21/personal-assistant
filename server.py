@@ -1401,8 +1401,14 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
             buf: list[str] = []
             started = False
             for piece in gen:
-                if attempt == 0 and not started and _looks_like_llm_error("".join(buf) + piece):
-                    break  # primary unusable from the start -> try next provider
+                # Any candidate that fails from its very first chunk (bad key,
+                # network down, rate limit) emits the error wrapper — detect and
+                # fall through to the next provider regardless of index. (Was
+                # gated on attempt==0, so a non-first candidate's early failure
+                # was streamed to the user as the final reply instead of
+                # failing over.)
+                if not started and _looks_like_llm_error("".join(buf) + piece):
+                    break  # this provider unusable from the start -> try next
                 started = True
                 buf.append(piece)
                 full_reply.append(piece)
@@ -1984,7 +1990,7 @@ async def status_overview(request: Request) -> dict:
 async def admin_action(body: AdminRequest) -> dict:
     params = {"action": body.action, "name": body.name,
               "source": body.source, "lines": body.lines}
-    out = await asyncio.to_thread(admin_mod.admin, params)
+    out = await asyncio.to_thread(admin_mod.admin, **params)
     return {"action": body.action, "output": out}
 
 
