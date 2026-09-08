@@ -14,7 +14,7 @@ import json
 
 HOME = r"C:\Users\Janak's PC"
 PROJECTS = r"E:\Local\projects"  # deepseek-cave/admin-bot live here since the 2026-08-11 drive migration
-CAVE = os.path.join(PROJECTS, "deepseek-cave")
+CAVE = os.path.join(PROJECTS, "_learning", "deepseek-cave")
 CREW = os.path.join(CAVE, "crew")
 CREW_LOG = os.path.join(CREW, "crew-log.md")
 LEARN_LOG = os.path.join(CAVE, "learn-log.md")

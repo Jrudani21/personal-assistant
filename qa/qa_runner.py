@@ -47,9 +47,15 @@ def ensure_sandbox() -> bool:
             return r.status == 200
     except Exception:
         pass
-    subprocess.run([sys.executable, str(SANDBOX), "start", "--port", str(PORT)],
-                   cwd=str(ROOT), capture_output=True, timeout=60,
-                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    try:
+        subprocess.run([sys.executable, str(SANDBOX), "start", "--port", str(PORT)],
+                       cwd=str(ROOT), capture_output=True, timeout=60,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except subprocess.TimeoutExpired:
+        # First-time sandbox build (copying the repo incl. any large dirs) can
+        # exceed 60s. Fail cleanly so the QA cron bot reports "sandbox failed to
+        # start" instead of crashing on an uncaught traceback.
+        return False
     for _ in range(12):
         time.sleep(5)
         try:

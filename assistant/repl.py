@@ -21,7 +21,7 @@ WORKER_SCRIPT = Path(__file__).resolve().parent / "repl_worker.py"
 
 _proc = None
 _out_queue = None
-_lock = threading.Lock()
+_lock = threading.RLock()  # reentrant: run_persistent() calls restart() while already holding it
 
 
 def _workspace() -> Path:
@@ -89,17 +89,18 @@ def run_persistent(code: str, timeout: float | None = None) -> str:
 
 def restart() -> str:
     global _proc, _out_queue
-    if _proc is not None:
-        try:
-            _proc.stdin.close()
-        except Exception:
-            pass
-        try:
-            _proc.terminate()
-        except Exception:
-            pass
-    _proc = None
-    _out_queue = None
+    with _lock:  # RLock: safe both from run_persistent() (already holding) and external callers
+        if _proc is not None:
+            try:
+                _proc.stdin.close()
+            except Exception:
+                pass
+            try:
+                _proc.terminate()
+            except Exception:
+                pass
+        _proc = None
+        _out_queue = None
     return "Python session restarted. All prior variables are gone."
 
 

@@ -34,11 +34,19 @@ def _port_file(port: int) -> Path:
 
 def start(port: int) -> None:
     SANDBOX_ROOT.mkdir(parents=True, exist_ok=True)
-    # Copy code (skip data/, .git, node_modules, dist)
+    # Copy code (skip data/, .git, node_modules, dist, backups — backups/ holds
+    # ~190MB of full snapshots the disposable sandbox never needs and copying
+    # them risks the QA subprocess timeout).
     code = SANDBOX_ROOT / "code"
     if not (code / "server.py").exists():
-        shutil.copytree(ROOT, code, ignore=shutil.ignore_patterns(
-            "data", ".git", "node_modules", "dist", "__pycache__", ".pytest_cache", "logs", ".deepcode",
+        if code.exists():
+            # A prior copy may have been interrupted (server.py never written),
+            # which would make copytree raise FileExistsError and wedge the
+            # sandbox until manually cleaned. Rebuild it.
+            shutil.rmtree(code, ignore_errors=True)
+        shutil.copytree(ROOT, code, dirs_exist_ok=True, ignore=shutil.ignore_patterns(
+            "data", ".git", "node_modules", "dist", "__pycache__", ".pytest_cache",
+            "logs", ".deepcode", "backups",
         ))
     # Fresh data dir. Do NOT pre-write .ken_users.json — the server's
     # _init_users() creates the owner from KEN_USERNAME/KEN_PASSWORD env,
