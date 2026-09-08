@@ -128,13 +128,14 @@ def admin_open_webui():
 
 
 # ---------- tool registration for the assistant ----------
-def admin(params: dict) -> str:
-    """Admin the AI fleet: status, crew sweeps, logs, docker, start Open WebUI."""
-    action = (params or {}).get("action", "status")
-    name = (params or {}).get("name")
-    source = (params or {}).get("source", "crew-log")
-    lines = (params or {}).get("lines", 40)
+def admin(action: str = "status", name: str | None = None,
+          source: str = "crew-log", lines: int = 40) -> str:
+    """Admin the AI fleet: status, crew sweeps, logs, docker, start Open WebUI.
 
+    Flat kwargs match the tool schema (get_schemas_extra) so the generic chat
+    tool-dispatch (`fn(**args)`) calls it correctly — previously it took a
+    single `params: dict`, which crashed from chat (only the REST endpoint
+    worked, because it hand-built the dict)."""
     if action == "status":
         return admin_status()
     if action == "crew_sweep":
