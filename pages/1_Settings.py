@@ -102,6 +102,11 @@ with tab_tools:
     )
 
     all_names = sorted(REGISTRY.keys())
+    # Sentinel for "no tools enabled". The allowlist schema uses [] = all-on
+    # (keeps config small), so "all disabled" needs a value that is truthy but
+    # matches no real tool name — tool_enabled() then returns False for every
+    # tool with zero changes to config.py / tools.py.
+    NONE_SENTINEL = "__none__"
     current = config.get("enabled_tools") or all_names  # [] = everything
 
     cols = st.columns([1, 3])
@@ -109,7 +114,7 @@ with tab_tools:
         _save("enabled_tools", [])
         st.rerun()
     if cols[1].button("🚫 Disable all", use_container_width=True):
-        _save("enabled_tools", [])
+        _save("enabled_tools", [NONE_SENTINEL])
         st.rerun()
 
     changes = {}
