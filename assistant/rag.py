@@ -239,9 +239,13 @@ def sync_knowledge() -> str:
     # content hash -> first-seen source THIS run, so re-scraped duplicates
     # collapse to a single entry even on the very first sync.
     seen_content: dict[str, str] = {}
+    # sources present on disk this run (for purge of deleted files)
+    seen: set[str] = set()
 
     added, updated, skipped = 0, 0, 0
     for path in sorted(kdir.glob("*.md")):
+        source = KNOWLEDGE_PREFIX + path.name
+        seen.add(source)
         try:
             text = path.read_text(encoding="utf-8")
         except Exception:
@@ -256,9 +260,8 @@ def sync_knowledge() -> str:
         if dup_source is not None:
             skipped += 1
             continue
-        seen_content[digest] = KNOWLEDGE_PREFIX + path.name
+        seen_content[digest] = source
 
-        source = KNOWLEDGE_PREFIX + path.name
         if indexed.get(source) == digest:
             continue  # unchanged since last sync
 
@@ -272,6 +275,13 @@ def sync_knowledge() -> str:
         else:
             added += 1
 
+    # Purge entries whose knowledge .md no longer exists on disk (mirrors
+    # sync_vault's stale-drop; matches this function's docstring). Only
+    # knowledge:-prefixed sources — never user-uploaded docs.
+    stale = set(indexed) - seen
+    if stale:
+        store = [c for c in store if c["source"] not in stale]
+
     _save_store(store)
     unique = len(seen_content)
     parts = []
@@ -281,6 +291,8 @@ def sync_knowledge() -> str:
         parts.append(f"{updated} changed")
     if skipped:
         parts.append(f"{skipped} duplicate{'' if skipped == 1 else 's'} skipped")
+    if stale:
+        parts.append(f"{len(stale)} removed")
     if not parts:
         return f"Knowledge base already up to date ({unique} unique files)."
     return f"Synced knowledge: {', '.join(parts)} ({unique} unique files)."
