@@ -27,7 +27,7 @@ CONFIG_FILE = Path(__file__).resolve().parent.parent / "data" / "config.json"
 DEFAULTS = {
     # ------------------------------------------------------------ setup
     "default_model": "",            # "" = auto-pick first model Ollama reports
-    "ollama_base_url": "http://localhost:11434",
+    "ollama_base_url": "http://127.0.0.1:1234",   # LM Studio (Ollama uninstalled 2026-09-01)
     "workspace_dir": "",            # "" = <project>/data/workspace
     "vault_dir": "",                # "" = env OBSIDIAN_VAULT, else ~/brain
     "knowledge_dir": "",            # "" = env KNOWLEDGE_DIR, else deepseek-cave/nightly-learn/knowledge
@@ -59,7 +59,7 @@ DEFAULTS = {
     "rag_rrf_k": 60,
     "rag_search_top_k": 4,
     "crew_fast_model": "ollama/qwen2.5:7b",
-    "crew_fallback_model": "ollama/qwen2.5:7b",
+    "crew_fallback_model": "openai/qwen/qwen3-8b",
     "crew_timeout_s": 180,          # DeepSeek analysis step timeout
     # ------------------------------------------------------------ voice
     "whisper_model": "base",        # faster-whisper size: tiny/base/small/medium/large-v3

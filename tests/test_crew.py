@@ -334,3 +334,87 @@ def test_run_deep_analysis_catches_exceptions(monkeypatch):
     result = crew.run_deep_analysis("anything")
     assert result.startswith("Deep analysis error:")
     assert "kickoff exploded" in result
+
+
+# ---------- local-fallback signal (crew_cache must never cache a local run) ----------
+
+class _FakeLLM:
+    def __init__(self, base_url):
+        self.base_url = base_url
+
+
+class _FakeAgent:
+    def __init__(self, base_url):
+        self.llm = _FakeLLM(base_url)
+
+
+class _FakeCrew:
+    """Minimal stand-in for a Crew: only `.agents` and `.kickoff()` are read."""
+
+    def __init__(self, base_url):
+        # Reproduce exactly what CrewAI stores for a local LLM: base_url is kept
+        # as handed (orchestra.OL_URL already carries /v1) and the "openai/"
+        # provider prefix is stripped off the model string.
+        self.agents = [_FakeAgent(base_url)]
+        self.kickoff = lambda: "a report body"
+
+
+def test_local_fallback_detected_on_local_crew():
+    c = _FakeCrew(crew.orchestra.OL_URL)
+    assert crew._used_local_fallback(c) is True
+
+
+def test_local_fallback_not_flagged_on_cloud_crew():
+    c = _FakeCrew("https://api.deepseek.com")
+    assert crew._used_local_fallback(c) is False
+
+
+def test_local_fallback_tolerates_stub_crew_without_agents():
+    """The tests above stub build_crew with kickoff-only objects; the detector
+    must not turn a successful run into an AttributeError."""
+    assert crew._used_local_fallback(object()) is False
+
+
+def test_real_chain_falling_through_to_local_is_detected(monkeypatch):
+    """The last entry of every MoE chain is the local guarantee. A key-less
+    chain must resolve to something recognizable as local — this exercises the
+    real resolve() + real Agent construction, not the fake crew."""
+    local_only = {
+        role: [(True, "ollama/deepseek-r1:8b", crew.orchestra.OL_URL)]
+        for role in ("fetcher", "quant", "analyst", "reporter")
+    }
+    monkeypatch.setattr(crew.orchestra, "CHAINS", local_only)
+    assert crew._used_local_fallback(crew.build_crew("compare A and B")) is True
+
+    cloud_only = {
+        role: [("sk-test-key", "deepseek-chat", "https://api.deepseek.com")]
+        for role in ("fetcher", "quant", "analyst", "reporter")
+    }
+    monkeypatch.setattr(crew.orchestra, "CHAINS", cloud_only)
+    assert crew._used_local_fallback(crew.build_crew("compare A and B")) is False
+
+
+def test_run_deep_analysis_does_not_cache_local_fallback_run(monkeypatch):
+    local_crew = _FakeCrew(crew.orchestra.OL_URL)
+    monkeypatch.setattr(crew, "build_crew",
+                        lambda raw_input, reasoning_llm=None: local_crew)
+    recorded = {}
+    monkeypatch.setattr(crew.crew_cache, "store",
+                        lambda raw_input, result, used_fallback: recorded.update(
+                            used_fallback=used_fallback))
+
+    assert crew.run_deep_analysis("anything") == "a report body"
+    assert recorded["used_fallback"] is True
+
+
+def test_run_deep_analysis_caches_when_no_agent_ran_local(monkeypatch):
+    cloud_crew = _FakeCrew("https://api.deepseek.com")
+    monkeypatch.setattr(crew, "build_crew",
+                        lambda raw_input, reasoning_llm=None: cloud_crew)
+    recorded = {}
+    monkeypatch.setattr(crew.crew_cache, "store",
+                        lambda raw_input, result, used_fallback: recorded.update(
+                            used_fallback=used_fallback))
+
+    assert crew.run_deep_analysis("anything") == "a report body"
+    assert recorded["used_fallback"] is False

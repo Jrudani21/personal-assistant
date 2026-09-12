@@ -5,7 +5,7 @@ every time. This cache makes an identical (whitespace-insensitive) input
 return the stored report instantly.
 
 Two deliberate rules:
-- Only results produced by the Claude analysis step are cached. A
+- Only results produced by a cloud analysis step are cached. A
   local-fallback result can misstate numeric comparisons (measured ~1 in 3
   runs), so it is never cached — a wrong cached answer wearing the authority
   of a verified analysis would be worse than no cache at all.
