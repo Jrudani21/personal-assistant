@@ -66,6 +66,37 @@ def test_recent_entries_include_facts_and_sort_newest_first(tmp_path, monkeypatc
     assert entries[1]["facts"] == ["old fact"]
 
 
+def test_recent_entries_newest_first_survives_identical_timestamps(tmp_path, monkeypatch):
+    """Regression for the flaky ordering tests.
+
+    The stored format carries microseconds, but Windows' clock only advances every
+    ~15.6ms, so consecutive writes really do share an `updated_at` (measured 47% of
+    trials). `sorted(reverse=True)` is stable, so equal timestamps kept the original
+    (oldest-first) order and "newest first" failed ~40% of runs. Freezing the clock
+    makes that deterministic instead of probabilistic.
+    """
+    import datetime as _dt
+
+    monkeypatch.setattr(memory, "MEMORY_FILE", tmp_path / "memory.json")
+
+    # Capture the real class BEFORE patching: `memory.datetime` IS the datetime
+    # module, so patching its `datetime` attribute also rebinds `_dt.datetime` here —
+    # calling `_dt.datetime(...)` inside now() would then recurse into _FixedNow.
+    real_datetime = _dt.datetime
+
+    class _FixedNow:
+        @staticmethod
+        def now():
+            return real_datetime(2026, 9, 12, 16, 0, 0, 0)   # every write identical
+
+    monkeypatch.setattr(memory.datetime, "datetime", _FixedNow)
+    for key in ("first", "second", "third"):
+        memory.remember(key, key)
+
+    assert [e["key"] for e in memory.recent_entries(limit=10)] == ["third", "second", "first"]
+    assert [k for k, _ in memory.recent(limit=10)] == ["third", "second", "first"]
+
+
 def test_recent_entries_respects_limit(tmp_path, monkeypatch):
     monkeypatch.setattr(memory, "MEMORY_FILE", tmp_path / "memory.json")
     for i in range(5):
