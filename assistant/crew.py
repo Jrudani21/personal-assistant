@@ -5,10 +5,10 @@ Code CLI step after Claude Pro was cancelled (2026-08-09) and the local
 qwen2.5/qwen3-coder models were removed in the model cleanup (2026-08-10).
 
 Per-agent model routing via assistant.orchestra (MoE-style fallback chains):
-  Fetcher:  DeepSeek → Gemini free → local tool-calling 7b
-  Quant:    DeepSeek → Gemini free → local tool-calling 7b
-  Analyst:  Gemini free → DeepSeek → local 14b
-  Reporter: DeepSeek → Gemini free → local 8b
+  Fetcher:  DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3-8b
+  Quant:    DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3-8b
+  Analyst:  Gemini free → DeepSeek → OpenRouter free → SambaNova free → local qwen3-8b
+  Reporter: DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3-8b
 
 Shared by the `deep_analysis` chat tool (assistant/tools.py) and the
 standalone `crewai_demo.py` script at the project root.
@@ -30,10 +30,13 @@ from . import tools as _tools
 from . import config as _config
 from . import orchestra
 
-OLLAMA_BASE_URL = "http://localhost:11434"
+# LM Studio's OpenAI-compatible server (Ollama was uninstalled 2026-09-01; this
+# constant's name is historical). The trailing /v1 is required: CrewAI passes
+# base_url through to the OpenAI client without appending anything.
+OLLAMA_BASE_URL = "http://127.0.0.1:1234/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-FAST_MODEL = "ollama/deepseek-r1:7b"
+FAST_MODEL = "openai/qwen/qwen3-8b"
 
 # ---- cost/cache telemetry -----------------------------------------------
 # DeepSeek API returns usage in each chat completion: prompt_tokens,
@@ -99,7 +102,7 @@ def log_usage(model: str, usage, agent: str = "unknown") -> dict:
 # arithmetic right 3/3, and still inverted the comparison every time once the
 # same numbers sat among unrelated statistics prose. Bigger did not help;
 # prose synthesis with distractors is the weakness, not arithmetic.
-FALLBACK_REASONING_MODEL = "ollama/deepseek-r1:7b"
+FALLBACK_REASONING_MODEL = "openai/qwen/qwen3-8b"
 
 
 _FAILURE_MARKERS = (
@@ -375,7 +378,8 @@ class DeepSeekLLM(BaseLLM):
 
     def _call_local_fallback(self, prompt: str) -> str:
         fallback_model = _config.get("crew_fallback_model", FALLBACK_REASONING_MODEL)
-        fallback = LLM(model=fallback_model, base_url=OLLAMA_BASE_URL)
+        fallback = LLM(model=fallback_model, base_url=OLLAMA_BASE_URL,
+                       api_key=orchestra.LOCAL_API_KEY)
         return fallback.call(prompt)
 
     def supports_function_calling(self) -> bool:
@@ -505,6 +509,33 @@ def build_crew(raw_input: str, reasoning_llm=None) -> Crew:
     )
 
 
+def _used_local_fallback(crew_obj) -> bool:
+    """True when any agent's resolved LLM landed on the guaranteed-local Ollama
+    entry of its chain (assistant/orchestra.py).
+
+    The MoE chains fall through to a local model silently — deliberately, so a
+    run always completes — but crew_cache must NOT cache such a result: a
+    locally-produced analysis can misstate numeric comparisons, and a cached
+    answer carries the authority of the verified path for 7 days. Reading the
+    resolved LLMs back off the crew is the only honest signal available, since
+    resolve() returns the LLM and never reports which chain entry it used.
+
+    Two measured traps: CrewAI strips the provider prefix off the model string it
+    stores, and on this path it hands base_url to the OpenAI client unchanged (it
+    does NOT append /v1 — see orchestra.OL_URL). So match the base URL by prefix,
+    and never by the model string.
+
+    Defensive by design: anything without `.agents` (a stubbed crew in a test,
+    or a future non-Crew caller) counts as non-fallback.
+    """
+    for agent in getattr(crew_obj, "agents", None) or []:
+        llm = getattr(agent, "llm", None)
+        base_url = str(getattr(llm, "base_url", "") or "")
+        if base_url.startswith(orchestra.OL_URL):
+            return True
+    return False
+
+
 def run_deep_analysis(raw_input: str) -> str:
     """Runs the fetch -> verify -> analyze -> report pipeline. Each agent
     gets the best available model via the MoE orchestra. Results are
@@ -516,9 +547,10 @@ def run_deep_analysis(raw_input: str) -> str:
         )
 
     try:
-        result = str(build_crew(raw_input).kickoff())
+        crew_obj = build_crew(raw_input)
+        result = str(crew_obj.kickoff())
     except Exception as e:
         return f"Deep analysis error: {e}"
 
-    crew_cache.store(raw_input, result, used_fallback=False)
+    crew_cache.store(raw_input, result, used_fallback=_used_local_fallback(crew_obj))
     return result

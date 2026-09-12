@@ -8,6 +8,7 @@ faster-whisper>=1.0
 pyttsx3>=2.90
 rank_bm25>=0.2
 crewai>=1.15
+openai>=1.0
 pytest>=8.0
 scikit-learn>=1.5
 statsmodels>=0.14
