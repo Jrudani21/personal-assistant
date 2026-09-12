@@ -1,0 +1,17 @@
+#!/bin/sh
+# Blocks a commit when gitleaks finds a secret in the staged changes.
+# Bypass for a confirmed false positive: git commit --no-verify
+GL="${GITLEAKS_BIN:-$LOCALAPPDATA/ken/tools/gitleaks.exe}"
+[ -x "$GL" ] || GL="$HOME/AppData/Local/ken/tools/gitleaks.exe"
+if [ ! -x "$GL" ]; then
+  echo "pre-commit: gitleaks not found, skipping secret scan" >&2
+  exit 0
+fi
+"$GL" git --staged --redact --no-banner .
+if [ $? -ne 0 ]; then
+  echo "" >&2
+  echo "pre-commit BLOCKED: gitleaks flagged a secret in these staged changes." >&2
+  echo "Fix it, or use 'git commit --no-verify' if it is a confirmed false positive." >&2
+  exit 1
+fi
+exit 0
