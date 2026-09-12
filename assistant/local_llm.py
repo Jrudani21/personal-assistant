@@ -119,7 +119,7 @@ def chat_model() -> str:
     for mid, mtype in _served_models():
         if mid and mtype != "embeddings":
             return mid
-    return "qwen/qwen3-8b"
+    return "qwen/qwen3.5-9b"
 
 
 # --------------------------------------------------------------------------- #
