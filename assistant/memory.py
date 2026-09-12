@@ -157,17 +157,37 @@ def list_memory() -> dict:
     return {k: _coerce(v) for k, v in _load().items()}
 
 
+def _newest_first(items):
+    """Sort (key, value) pairs newest-first, DETERMINISTICALLY.
+
+    Timestamps are not a total order here. The stored format carries microseconds,
+    but this machine's clock only advances every ~15.6ms, so two quick writes get an
+    IDENTICAL `updated_at` — measured 28/60 consecutive `remember()` calls (47%).
+    `sorted(..., reverse=True)` is stable, so on a tie it keeps the original order,
+    which is OLDEST first — and "newest first" then fails about half the time. That
+    was the flaky test; the test was right and the sort was wrong.
+
+    Tie-break on insertion position: dicts preserve insertion order, so when the
+    timestamps are equal the later-inserted key IS the more recent write. A key that
+    is re-`remember`ed keeps its original position but gets a fresh timestamp, so
+    genuine updates are still ordered by time.
+    """
+    return [kv for _, kv in sorted(
+        enumerate(items), key=lambda iv: (_updated_at(iv[1][1]), iv[0]), reverse=True
+    )]
+
+
 def recent(limit: int = 30) -> list[tuple[str, str]]:
     """The most recently updated facts, newest first, capped at `limit`.
     Used by the system prompt so memory stays bounded under prompt crowding."""
-    items = sorted(_load().items(), key=lambda kv: _updated_at(kv[1]), reverse=True)
+    items = _newest_first(_load().items())
     return [(k, _coerce(v)) for k, v in items[:limit]]
 
 
 def recent_entries(limit: int = 30) -> list[dict]:
     """Full structured entries, newest first, capped at `limit`. Richer than
     `recent` for prompt injection: includes facts and concepts when present."""
-    items = sorted(_load().items(), key=lambda kv: _updated_at(kv[1]), reverse=True)
+    items = _newest_first(_load().items())
     out = []
     for k, v in items[:limit]:
         out.append({
