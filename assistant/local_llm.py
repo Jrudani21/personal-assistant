@@ -37,7 +37,7 @@ from . import config as _config
 
 LMSTUDIO_DEFAULT = "http://127.0.0.1:1234/v1"   # note the /v1 — required, see below
 OLLAMA_DEFAULT = "http://localhost:11434"
-PROBE_TIMEOUT_S = 3
+PROBE_TIMEOUT_S = 1
 #: OpenAI-compatible clients insist on a non-empty key; the local server ignores it.
 LOCAL_API_KEY = "lm-studio"
 
@@ -150,8 +150,18 @@ def resolve_model(requested: str) -> str:
 
     The config still carries Ollama-era names (`nomic-embed-text`, `qwen2.5:7b`),
     and LM Studio serves different ids (`text-embedding-nomic-embed-text-v1.5`).
-    Exact match wins; otherwise a containment match either way; otherwise the
-    request is passed through unchanged so the server's own error still names it.
+    Exact match wins; otherwise a containment match.
+
+    An unmatched request is passed through UNCHANGED — and note what that means on
+    LM Studio, because it is not what an earlier version of this docstring claimed:
+    the server does NOT error on an unknown model id, it answers from whatever is
+    resident. Measured (adversarial review, 2026-09-12): `bogus-model-xyz` returned
+    HTTP 200 and the identical 768-dim vector to the real embedder, and a chat call
+    with a bogus id answered as `qwen/qwen3-8b`. So a typo'd model name yields
+    plausible output from the wrong model with no signal anywhere. Raising instead
+    was considered and rejected: /api/v0/models lists LOADED instances, so a
+    legitimate installed-but-unloaded id would start erroring. Treat a passthrough
+    as untrusted output, not as a validated one.
     """
     if backend() != "lmstudio":
         return requested
@@ -164,8 +174,10 @@ def resolve_model(requested: str) -> str:
         if stem and (stem in mid.lower()
                      or mid.lower().split("/")[-1].split(":")[0] == stem)
     ]
-    # Shortest wins: when LM Studio exposes both "model" and "model:2" (a second
-    # loaded instance), prefer the plain id.
+    # Shortest wins, to avoid the ":N" instance suffix — NOT because the shorter id
+    # is better. Measured 2026-09-12: the plain id was the NOT-loaded instance and
+    # ":2" was the loaded one. The suffix is an instance counter that appears when
+    # `lms load` stacks a second copy, not a quality marker.
     return sorted(matches, key=len)[0] if matches else requested
 
 
@@ -199,14 +211,20 @@ def _to_openai_messages(messages: list[dict]) -> list[dict]:
     "Invalid 'messages' in payload", and it only happens on the SECOND round of a
     tool loop, i.e. exactly when a tool has been used.
 
-    Ids are paired positionally: tool results follow the assistant turn that asked
-    for them, so the pending ids are consumed in order.
+    Results are matched to calls by tool NAME, not by position. They are produced by
+    separate invocations and can come back in any order; a positional match silently
+    attaches a result to the wrong call, and LM Studio accepts that without
+    complaint (measured: reverse-order and cross-round mis-pairs both returned 200).
     """
     out: list[dict] = []
-    pending_ids: list[str] = []
+    pending: list[tuple[str, str]] = []   # (call_id, tool_name) awaiting a result
     for i, m in enumerate(messages):
         role = m.get("role")
         if role == "assistant" and m.get("tool_calls"):
+            # A new tool-call turn invalidates anything still pending: those calls
+            # can no longer be answered, and pairing their ids with this round's
+            # results would attach the wrong output to the wrong tool.
+            pending.clear()
             calls = []
             for j, call in enumerate(m["tool_calls"]):
                 fn = call.get("function", {}) or {}
@@ -216,12 +234,22 @@ def _to_openai_messages(messages: list[dict]) -> list[dict]:
                 call_id = call.get("id") or f"call_{i}_{j}"
                 calls.append({"id": call_id, "type": "function",
                               "function": {"name": fn.get("name", ""), "arguments": args}})
-                pending_ids.append(call_id)
+                pending.append((call_id, str(fn.get("name", ""))))
             out.append({"role": "assistant", "content": m.get("content") or None,
                         "tool_calls": calls})
         elif role == "tool":
-            call_id = m.get("tool_call_id") or (pending_ids.pop(0) if pending_ids
-                                                else "call_unknown")
+            call_id = m.get("tool_call_id")
+            name = str(m.get("name") or "")
+            if call_id:
+                pending[:] = [p for p in pending if p[0] != call_id]
+            elif pending:
+                idx = next((k for k, (_, n) in enumerate(pending) if n and n == name), 0)
+                call_id = pending.pop(idx)[0]
+            else:
+                # Nothing to attach this to — the OpenAI shape has no way to express
+                # an orphan tool result. Kept as a placeholder rather than dropped so
+                # the content still reaches the model.
+                call_id = "call_unknown"
             out.append({"role": "tool", "tool_call_id": call_id,
                         "content": m.get("content") if m.get("content") is not None else ""})
         else:
@@ -233,6 +261,22 @@ def _client():
     from openai import OpenAI
     # LM Studio ignores the key's value, but the SDK insists on a non-empty one.
     return OpenAI(base_url=lmstudio_base(), api_key=api_key())
+
+
+def _is_tool_support_error(e: Exception) -> bool:
+    """True only for "this server/model cannot do tool calls".
+
+    Exists so the tools-less retry in chat()/chat_stream() cannot swallow a
+    transient 500 or a timeout and silently turn a tool-capable turn into a
+    tools-less one.
+    """
+    text = f"{type(e).__name__}: {e}".lower()
+    if "tool" not in text:
+        return False
+    return any(marker in text for marker in (
+        "does not support", "not supported", "unsupported", "no tool",
+        "tool_choice", "tools is not", "invalid tool", "tool template",
+    ))
 
 
 def _ollama_shape(message) -> dict:
@@ -249,33 +293,56 @@ def _ollama_shape(message) -> dict:
     return {"role": "assistant", "content": message.content or "", "tool_calls": calls or None}
 
 
-def chat(model: str, messages: list[dict], tools: list[dict] | None = None) -> dict:
-    """Non-streaming chat. Returns {"message": {"content", "tool_calls"}}."""
+def _ollama_opts(opts: dict) -> dict:
+    """Translate OpenAI-style call options into Ollama's `options` dict.
+
+    Without this a caller passing `max_tokens=` would TypeError on the Ollama
+    branch, which is why the earlier migration silently dropped those parameters
+    instead of forwarding them.
+    """
+    mapping = {"max_tokens": "num_predict", "temperature": "temperature", "top_p": "top_p"}
+    converted = {mapping[k]: v for k, v in opts.items() if k in mapping}
+    if not converted:
+        return opts
+    rest = {k: v for k, v in opts.items() if k not in mapping}
+    rest["options"] = {**converted, **(rest.get("options") or {})}
+    return rest
+
+
+def chat(model: str, messages: list[dict], tools: list[dict] | None = None, **opts) -> dict:
+    """Non-streaming chat. Returns {"message": {"content", "tool_calls"}}.
+
+    `**opts` are forwarded to the OpenAI client (e.g. `max_tokens`, `temperature`),
+    and translated to Ollama's `options` on the fallback branch.
+    """
     if backend() == "ollama":
         import ollama
-        return ollama.chat(model=model, messages=messages, tools=tools)
+        return ollama.chat(model=model, messages=messages, tools=tools,
+                           **_ollama_opts(dict(opts)))
 
     client = _client()
     model = resolve_model(model)
     kwargs = {"tools": tools} if tools else {}
     messages = _to_openai_messages(messages)
     try:
-        resp = client.chat.completions.create(model=model, messages=messages, **kwargs)
-    except Exception:
-        if not kwargs:
+        resp = client.chat.completions.create(model=model, messages=messages,
+                                              **kwargs, **opts)
+    except Exception as e:
+        if not kwargs or not _is_tool_support_error(e):
             raise
-        # Some local models have no tool template at all. Degrade to a plain
-        # completion rather than failing the whole turn.
-        resp = client.chat.completions.create(model=model, messages=messages)
+        # Degrade to a plain completion ONLY when the model/server genuinely has no
+        # tool support (see _is_tool_support_error).
+        resp = client.chat.completions.create(model=model, messages=messages, **opts)
     return {"message": _ollama_shape(resp.choices[0].message)}
 
 
-def chat_stream(model: str, messages: list[dict], tools: list[dict] | None = None):
+def chat_stream(model: str, messages: list[dict], tools: list[dict] | None = None, **opts):
     """Streaming chat. Yields `ollama`-shaped chunks; a final chunk carries
     `tool_calls` (accumulated from deltas) when the model asked for tools."""
     if backend() == "ollama":
         import ollama
-        yield from ollama.chat(model=model, messages=messages, tools=tools, stream=True)
+        yield from ollama.chat(model=model, messages=messages, tools=tools,
+                               stream=True, **_ollama_opts(dict(opts)))
         return
 
     client = _client()
@@ -284,11 +351,12 @@ def chat_stream(model: str, messages: list[dict], tools: list[dict] | None = Non
     messages = _to_openai_messages(messages)
     try:
         stream = client.chat.completions.create(
-            model=model, messages=messages, stream=True, **kwargs)
-    except Exception:
-        if not kwargs:
+            model=model, messages=messages, stream=True, **kwargs, **opts)
+    except Exception as e:
+        if not kwargs or not _is_tool_support_error(e):
             raise
-        stream = client.chat.completions.create(model=model, messages=messages, stream=True)
+        stream = client.chat.completions.create(model=model, messages=messages,
+                                                stream=True, **opts)
 
     # OpenAI streams tool calls as fragments keyed by index; name and arguments
     # both arrive split across deltas, so accumulate by index.

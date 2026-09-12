@@ -137,14 +137,21 @@ def main() -> int:
     STATE.write_text(json.dumps({p: {"ok": r["ok"]} for p, r in results.items()},
                                 indent=2), encoding="utf-8")
 
-    # Ollama local check (not API-keyed)
-    import urllib.request
+    # Local model server check (not API-keyed).
+    # Was Ollama's native /api/tags, which LM Studio does not serve — so this logged
+    # ok=False every night while the local tier was in fact healthy. Now it asks the
+    # shared transport, which probes LM Studio first and a live Ollama second. The
+    # results KEY stays "ollama" on purpose: it is a schema identifier that downstream
+    # log readers may key on, and renaming it would break them silently.
     try:
-        with urllib.request.urlopen("http://localhost:11434/api/tags", timeout=5) as r:
-            ollama_ok = r.status == 200
-    except Exception:
-        ollama_ok = False
-    results["ollama"] = {"ok": ollama_ok, "detail": "local"}
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from assistant import local_llm
+        local_name = local_llm.backend(refresh=True)
+        results["ollama"] = {"ok": local_name != "none", "detail": local_llm.describe()}
+    except Exception as e:
+        results["ollama"] = {"ok": False, "detail": f"probe failed: {e}"}
 
     for a in alerts:
         print(a)

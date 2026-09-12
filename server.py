@@ -10,15 +10,16 @@ package. Nothing in `assistant/*` is modified; this server only:
 
 Model provider: DeepSeek's hosted OpenAI-compatible API (KEN_ADDENDUM_deepseek_api.md).
 Chat completions and tool-calling for the primary model go straight to
-https://api.deepseek.com — NOT through assistant/llm.py's Ollama-only
-stream_chat (that call is hardcoded to `ollama.chat`, and assistant/* is
-off-limits to edit). This server implements an equivalent OpenAI-style
+https://api.deepseek.com. This server implements its own OpenAI-style
 tool-calling loop for DeepSeek, reusing the same system prompt
 (`llm._system_prompt()`), the same tool registry/schemas, and the same
-observation logging the Ollama loop uses — only the transport differs.
+observation logging as the local loop — only the transport differs.
+Historically this loop existed because `assistant/llm.py` was hardcoded to
+`ollama.chat`; since 2026-09-12 that module goes through assistant/local_llm
+(LM Studio / OpenAI-compatible), so both loops now share one transport shape.
 If DeepSeek is unusable from the start of a turn (network down, 401,
-429, ...), the turn retries once against a free local Ollama model via
-the *existing* assistant/llm.py loop, unchanged.
+429, ...), the turn retries once against the local model via the
+*existing* assistant/llm.py loop (which now goes through assistant/local_llm).
 
 Run:
     py -3.12 -m uvicorn server:app --port 8756 --reload
@@ -110,8 +111,6 @@ BLUESMINDS_MODEL = os.environ.get("KEN_BLUESMINDS_MODEL", "meta/llama-3.1-70b-in
 # Free local fallback: used automatically when DeepSeek is unusable from the
 # start (no key, network down, 401, 429, ...). Override with KEN_FALLBACK_MODEL.
 FALLBACK_MODEL = os.environ.get("KEN_FALLBACK_MODEL", "qwen3:8b")
-OLLAMA_HOST = "http://localhost:11434"
-OLLAMA_TIMEOUT_S = 2
 
 _deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL) if DEEPSEEK_API_KEY else None
 
@@ -841,10 +840,17 @@ def _ollama_up() -> bool:
     """True when ANY local model server answers — LM Studio (the healthy tier on
     this machine) or a live Ollama. This used to probe Ollama's native /api/tags
     only, so with Ollama gone it reported the local fallback as unavailable even
-    though LM Studio was serving."""
+    though LM Studio was serving.
+
+    `refresh=True` is required, not optional: backend() memoizes into a module
+    global that no other live caller refreshes, so a sticky verdict would pin
+    "down" for the whole process if the server booted before LM Studio was ready
+    (and would keep reporting "up" after it died). This is only called from
+    /api/health and the per-turn gate, i.e. exactly where a live answer matters.
+    """
     try:
         from assistant import local_llm as _local
-        return _local.backend() != "none"
+        return _local.backend(refresh=True) != "none"
     except Exception:
         return False
 
@@ -1506,9 +1512,10 @@ async def chat(request: Request, req: ChatRequest) -> EventSourceResponse:
 # ---------------------------------------------------------------------------
 # /api/deep-analysis  (STREAMING, SSE)
 #
-# Runs the real 4-agent crew (assistant/crew.py), whose Analyst stage already
-# targets the DeepSeek API (assistant.crew.DeepSeekLLM) with a local Ollama
-# fallback — no change needed there. The sync `run_deep_analysis` call runs
+# Runs the real 4-agent crew (assistant/crew.py), whose per-role models are chosen
+# by assistant/orchestra (DeepSeek → OpenRouter → SambaNova → Gemini, with the
+# local model as the last resort in every chain — see orchestra.resolve()). The
+# sync `run_deep_analysis` call runs
 # in a worker thread; because per-task progress hooks are not exposed by the
 # assistant module, the server emits an honest coarse progress (`fetch`
 # running at start, `report` done at end) rather than fabricating per-stage
@@ -1540,7 +1547,9 @@ async def _sse_deep_analysis(req: DeepAnalysisRequest) -> AsyncGenerator[dict, N
             # The real signal recorded by the crew (which chain entry each agent
             # resolved to). The previous check sniffed the result text for a phrase
             # the pipeline never emits, so it reported False regardless.
-            local_fallback = bool(getattr(crew, "LAST_USED_LOCAL_FALLBACK", False))
+            # Thread-local accessor: this worker thread recorded it itself, so the
+            # value cannot be another request's routing.
+            local_fallback = crew.last_used_local_fallback()
             q.put(("stage", {"stage": "report", "status": "done", "ms": ms, "note": ""}))
             q.put(("done", {
                 "findings": result,

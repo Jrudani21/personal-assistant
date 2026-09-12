@@ -20,7 +20,6 @@ CREW_LOG = os.path.join(CREW, "crew-log.md")
 LEARN_LOG = os.path.join(CAVE, "learn-log.md")
 SYS_MON_LOG = os.path.join(CAVE, "system-monitor.log")
 PY = r"C:\Users\Janak's PC\AppData\Local\Programs\Python\Python312\python.exe"  # Python install itself, not moved
-OLLAMA = "http://localhost:11434"
 
 
 def _port_open(port, host="127.0.0.1", timeout=1.5):
@@ -36,13 +35,20 @@ def admin_status():
     """Live status of the whole fleet as a readable string."""
     import requests
     lines = []
-    # Ollama
+    # Local model server — LM Studio on this machine, or a live Ollama elsewhere.
+    # This used to GET Ollama's native /api/tags, which LM Studio does not serve, so
+    # this REGISTERED TOOL told the user "Ollama: DOWN" while LM Studio was answering
+    # every request. Ask the shared transport instead.
     try:
-        r = requests.get(f"{OLLAMA}/api/tags", timeout=3)
-        models = [m["name"] for m in r.json().get("models", [])]
-        lines.append(f"Ollama: UP ({len(models)} models: {', '.join(models)})")
-    except Exception:
-        lines.append("Ollama: DOWN")
+        from . import local_llm as _local
+        if _local.backend(refresh=True) == "none":
+            lines.append(f"Local model server: DOWN ({_local.describe()})")
+        else:
+            models = [m.get("model") for m in _local.list_models().get("models", [])]
+            detail = f" ({len(models)} models: {', '.join(models)})" if models else ""
+            lines.append(f"Local model server: UP — {_local.describe()}{detail}")
+    except Exception as e:
+        lines.append(f"Local model server: status check failed ({e})")
     # Apps
     apps = {
         "KEN / Personal Assistant (8756)": 8756,

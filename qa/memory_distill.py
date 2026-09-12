@@ -85,7 +85,16 @@ def _ollama_chat(model: str, prompt: str, max_tokens: int = 1500) -> str:
     """
     from assistant import local_llm
     target = model or local_llm.chat_model()
-    reply = local_llm.chat(target, [{"role": "user", "content": prompt}])
+    # The parameters the old urllib body sent MUST be forwarded explicitly now, and
+    # they are not cosmetic: an adversarial review (2026-09-12) measured 297 of 313
+    # completion tokens going to reasoning with nothing bounding the call, and a
+    # truncated JSON array makes _parse_facts() return [] — so the nightly job writes
+    # nothing and reports success. The OpenAI SDK's own 600s default also replaced
+    # the old 300s cap. (No equivalent of Ollama's think:false exists on this
+    # transport; it is not needed, because LM Studio returns the answer in `content`
+    # and puts the trace in `reasoning_content`.)
+    reply = local_llm.chat(target, [{"role": "user", "content": prompt}],
+                           max_tokens=max_tokens, temperature=0.1)
     return reply["message"].get("content", "")
 
 

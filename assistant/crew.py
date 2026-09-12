@@ -16,6 +16,7 @@ standalone `crewai_demo.py` script at the project root.
 import json
 import os
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -536,18 +537,26 @@ def _used_local_fallback(crew_obj) -> bool:
     return False
 
 
-#: Whether the most recent run_deep_analysis produced its report on the local
-#: model. Callers (server.py's guardrail payload) read this. It exists because the
-#: alternative — sniffing the result text for a marker phrase the pipeline never
-#: emits — reported False no matter what actually ran.
-LAST_USED_LOCAL_FALLBACK = False
+#: Whether THIS thread's most recent run_deep_analysis produced its report on the
+#: local model. Thread-local, not a module attribute: server.py runs each request in
+#: its own worker thread and reads this from that same thread, so thread-local is
+#: exact — a shared attribute let two concurrent requests report each other's routing
+#: (and, worse, let one thread's flag decide the other's cache write). Measured by
+#: adversarial review 2026-09-12.
+_TLS = threading.local()
+
+
+def last_used_local_fallback() -> bool:
+    """Whether THIS thread's most recent run_deep_analysis fell back to the local model."""
+    return bool(getattr(_TLS, "used_local_fallback", False))
 
 
 def run_deep_analysis(raw_input: str) -> str:
     """Runs the fetch -> verify -> analyze -> report pipeline. Each agent
     gets the best available model via the MoE orchestra. Results are
     cached (7-day TTL) to avoid re-running identical topics."""
-    global LAST_USED_LOCAL_FALLBACK
+    # Reset first: a cached hit or a failure must not report a PREVIOUS run's routing.
+    _TLS.used_local_fallback = False
     cached = crew_cache.get_cached(raw_input)
     if cached is not None:
         return cached + (
@@ -560,6 +569,9 @@ def run_deep_analysis(raw_input: str) -> str:
     except Exception as e:
         return f"Deep analysis error: {e}"
 
-    LAST_USED_LOCAL_FALLBACK = _used_local_fallback(crew_obj)
-    crew_cache.store(raw_input, result, used_fallback=LAST_USED_LOCAL_FALLBACK)
+    # The cache decision uses a LOCAL value, never the thread-local indirectly: the
+    # store must reflect this run no matter what else is happening on other threads.
+    used_local = _used_local_fallback(crew_obj)
+    _TLS.used_local_fallback = used_local
+    crew_cache.store(raw_input, result, used_fallback=used_local)
     return result
