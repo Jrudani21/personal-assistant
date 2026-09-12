@@ -405,6 +405,9 @@ def test_run_deep_analysis_does_not_cache_local_fallback_run(monkeypatch):
 
     assert crew.run_deep_analysis("anything") == "a report body"
     assert recorded["used_fallback"] is True
+    # server.py's guardrail payload reads this module global; it must reflect
+    # reality (it used to sniff the result text for a phrase that never appears).
+    assert crew.LAST_USED_LOCAL_FALLBACK is True
 
 
 def test_run_deep_analysis_caches_when_no_agent_ran_local(monkeypatch):
@@ -418,3 +421,4 @@ def test_run_deep_analysis_caches_when_no_agent_ran_local(monkeypatch):
 
     assert crew.run_deep_analysis("anything") == "a report body"
     assert recorded["used_fallback"] is False
+    assert crew.LAST_USED_LOCAL_FALLBACK is False

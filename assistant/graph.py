@@ -1,4 +1,4 @@
-"""Graph search over the second-brain Graphiti knowledge graph (Neo4j + Ollama)."""
+"""Graph search over the second-brain Graphiti knowledge graph (Neo4j + the local model)."""
 import asyncio
 
 from graphiti_core import Graphiti
@@ -7,29 +7,41 @@ from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 
+from . import config as _config
+from . import local_llm
+
 NEO4J_URI = "bolt://localhost:7687"
 NEO4J_USER = "neo4j"
 NEO4J_PASSWORD = "graphitipass123"
 
-OLLAMA_BASE_URL = "http://localhost:11434/v1"
-EXTRACTION_MODEL = "deepseek-r1-16k:7b"  # deepseek-r1:7b w/ num_ctx=16384 (default 4096 too small for extraction prompts)
-EMBED_MODEL = "nomic-embed-text"
+# Graphiti wants an OpenAI-style endpoint, so it rides the shared local transport
+# instead of hardcoding Ollama's :11434 and Ollama-only model tags (neither of
+# which exists on this machine any more).
+EMBED_MODEL_ALIAS = "nomic-embed-text"   # resolved to whatever the backend serves
 
 
-def _build_client() -> Graphiti:
+def build_client() -> Graphiti:
+    """Build a Graphiti client on the same local transport as the rest of the app.
+
+    Override the extraction model with the `graph_extraction_model` config key —
+    graph extraction wants strict JSON, which a small thinking model is not
+    necessarily good at.
+    """
+    base_url = local_llm.lmstudio_base()
+    model = str(_config.get("graph_extraction_model", "") or "") or local_llm.chat_model()
     llm_config = LLMConfig(
-        api_key="ollama",
-        model=EXTRACTION_MODEL,
-        small_model=EXTRACTION_MODEL,
-        base_url=OLLAMA_BASE_URL,
+        api_key=local_llm.api_key(),
+        model=model,
+        small_model=model,
+        base_url=base_url,
     )
     llm_client = OpenAIGenericClient(config=llm_config, structured_output_mode="json_schema")
     embedder = OpenAIEmbedder(
         config=OpenAIEmbedderConfig(
-            api_key="ollama",
-            embedding_model=EMBED_MODEL,
+            api_key=local_llm.api_key(),
+            embedding_model=local_llm.resolve_model(EMBED_MODEL_ALIAS),
             embedding_dim=768,
-            base_url=OLLAMA_BASE_URL,
+            base_url=base_url,
         )
     )
     cross_encoder = OpenAIRerankerClient(config=llm_config)
@@ -40,7 +52,7 @@ def _build_client() -> Graphiti:
 
 
 async def _search(query: str, top_k: int) -> list[str]:
-    graphiti = _build_client()
+    graphiti = build_client()
     try:
         results = await graphiti.search(query)
         return [r.fact for r in results[:top_k]]
