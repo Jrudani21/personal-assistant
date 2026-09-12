@@ -6,26 +6,16 @@ import asyncio, datetime, os, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from assistant import graph as _graph
 from assistant import vault
-from graphiti_core import Graphiti
-from graphiti_core.llm_client.config import LLMConfig
-from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
-from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
-from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.nodes import EpisodeType
 
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_PASSWORD = "graphitipass123"
-OLLAMA_BASE = "http://localhost:11434/v1"
-EXTRACTION_MODEL = "deepseek-r1-16k:7b"
-EMBED_MODEL = "nomic-embed-text"
 
 def build_graphiti():
-    llm_config = LLMConfig(api_key="ollama", model=EXTRACTION_MODEL, small_model=EXTRACTION_MODEL, base_url=OLLAMA_BASE)
-    llm = OpenAIGenericClient(config=llm_config, structured_output_mode="json_schema")
-    embedder = OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key="ollama", embedding_model=EMBED_MODEL, embedding_dim=768, base_url=OLLAMA_BASE))
-    reranker = OpenAIRerankerClient(config=llm_config)
-    return Graphiti(NEO4J_URI, "neo4j", NEO4J_PASSWORD, llm_client=llm, embedder=embedder, cross_encoder=reranker)
+    """Reuse assistant.graph's client: one place owns the local endpoint, the model
+    ids and the credentials, so this script and the search path cannot drift apart
+    (they had: both hardcoded Ollama's :11434 and Ollama-only model tags)."""
+    return _graph.build_client()
 
 async def main():
     notes = vault.list_notes()

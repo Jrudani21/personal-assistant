@@ -38,6 +38,8 @@ from . import config as _config
 LMSTUDIO_DEFAULT = "http://127.0.0.1:1234/v1"   # note the /v1 — required, see below
 OLLAMA_DEFAULT = "http://localhost:11434"
 PROBE_TIMEOUT_S = 3
+#: OpenAI-compatible clients insist on a non-empty key; the local server ignores it.
+LOCAL_API_KEY = "lm-studio"
 
 #: Verdicts are cached because every call would otherwise pay a probe.
 _BACKEND: str | None = None
@@ -100,6 +102,24 @@ def describe() -> str:
     if name == "ollama":
         return f"Ollama at {ollama_base()}"
     return f"no local server (probed LM Studio {lmstudio_base()} and Ollama {ollama_base()})"
+
+
+def api_key() -> str:
+    """Key for any OpenAI-compatible client pointed at the local server."""
+    return str(_config.get("lmstudio_api_key", LOCAL_API_KEY) or LOCAL_API_KEY)
+
+
+def chat_model() -> str:
+    """The chat model to use when the caller expresses no preference: an explicit
+    config override, else the first chat-capable model the live backend serves —
+    never an embedding model, which cannot answer a chat call."""
+    override = str(_config.get("local_chat_model", "") or "")
+    if override:
+        return override
+    for mid, mtype in _served_models():
+        if mid and mtype != "embeddings":
+            return mid
+    return "qwen/qwen3-8b"
 
 
 # --------------------------------------------------------------------------- #
@@ -212,7 +232,7 @@ def _to_openai_messages(messages: list[dict]) -> list[dict]:
 def _client():
     from openai import OpenAI
     # LM Studio ignores the key's value, but the SDK insists on a non-empty one.
-    return OpenAI(base_url=lmstudio_base(), api_key=str(_config.get("lmstudio_api_key", "lm-studio")))
+    return OpenAI(base_url=lmstudio_base(), api_key=api_key())
 
 
 def _ollama_shape(message) -> dict:

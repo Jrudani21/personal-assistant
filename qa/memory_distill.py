@@ -71,28 +71,22 @@ def _note_hash(text: str) -> str:
 
 
 def _ollama_chat(model: str, prompt: str, max_tokens: int = 1500) -> str:
-    """Call Ollama NATIVE /api/chat (local, free).
+    """Call the local model through the shared transport (assistant.local_llm).
 
-    NOTE (2026-08-14): use /api/chat, NOT /v1/chat/completions — the /v1
-    path on this box returns EMPTY content for qwen3:8b (thinking mode eats
-    the budget / content lands elsewhere). /api/chat with think:false gives
-    clean answers. Verified: 'Reply with exactly: OK' -> 'OK'.
+    Was a hand-rolled urllib POST to Ollama's NATIVE /api/chat, which does not exist
+    on this machine any more (Ollama uninstalled 2026-09-01) — LM Studio answers
+    /api/chat with HTTP 200 and an error body, so this silently produced nothing.
+    Name kept for call-site compatibility; it no longer speaks Ollama.
+
+    The old note here ("prefer /api/chat — the /v1 path returns EMPTY content for
+    qwen3:8b, thinking mode eats the budget") described *Ollama's* /v1 shim, not
+    LM Studio's OpenAI endpoint: verified on LM Studio that content comes back
+    normally with and without /no_think.
     """
-    body = json.dumps({
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": False,
-        "think": False,
-        "options": {"temperature": 0.1, "num_predict": max_tokens},
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        f"{OLLAMA_BASE}/api/chat",
-        data=body,
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=300) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    return data.get("message", {}).get("content", "")
+    from assistant import local_llm
+    target = model or local_llm.chat_model()
+    reply = local_llm.chat(target, [{"role": "user", "content": prompt}])
+    return reply["message"].get("content", "")
 
 
 def _parse_facts(raw: str) -> list[dict]:

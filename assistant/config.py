@@ -59,7 +59,7 @@ DEFAULTS = {
     "rag_min_similarity": 0.5,
     "rag_rrf_k": 60,
     "rag_search_top_k": 4,
-    "crew_fast_model": "ollama/qwen2.5:7b",
+    "crew_fast_model": "openai/qwen/qwen3-8b",   # unreferenced; value kept honest
     "crew_fallback_model": "openai/qwen/qwen3-8b",
     "crew_timeout_s": 180,          # DeepSeek analysis step timeout
     # ------------------------------------------------------------ voice

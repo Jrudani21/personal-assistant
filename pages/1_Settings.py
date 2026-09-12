@@ -283,7 +283,7 @@ with tab_rules:
 # ⚙️ SETUP
 # ---------------------------------------------------------------------------
 with tab_setup:
-    st.subheader("Model & Ollama")
+    st.subheader("Model & local server")
     if _local_ok:
         st.success(f"✅ Local server reachable — {_local_desc} — {len(_models)} model(s) available.")
         idx = _models.index(config.get("default_model")) if config.get("default_model") in _models else 0

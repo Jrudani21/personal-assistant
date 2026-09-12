@@ -1520,6 +1520,8 @@ async def _sse_deep_analysis(req: DeepAnalysisRequest) -> AsyncGenerator[dict, N
         yield _sse("done", {
             "findings": cached,
             "sources": [],
+            # A cached entry can only be a non-fallback run: crew_cache.store refuses
+            # fallback results, so False here is accurate rather than assumed.
             "guardrail": {"numeric": "pass", "coverage": "3/3", "local_fallback": False},
             "cached": True,
         })
@@ -1535,7 +1537,10 @@ async def _sse_deep_analysis(req: DeepAnalysisRequest) -> AsyncGenerator[dict, N
             t0 = time.perf_counter()
             result = crew.run_deep_analysis(req.question)
             ms = int((time.perf_counter() - t0) * 1000)
-            local_fallback = "was analyzed locally with" in result
+            # The real signal recorded by the crew (which chain entry each agent
+            # resolved to). The previous check sniffed the result text for a phrase
+            # the pipeline never emits, so it reported False regardless.
+            local_fallback = bool(getattr(crew, "LAST_USED_LOCAL_FALLBACK", False))
             q.put(("stage", {"stage": "report", "status": "done", "ms": ms, "note": ""}))
             q.put(("done", {
                 "findings": result,
