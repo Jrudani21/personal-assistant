@@ -838,9 +838,13 @@ def _schema_map() -> dict[str, dict]:
 # Ollama reachability (fallback path only)
 # ---------------------------------------------------------------------------
 def _ollama_up() -> bool:
+    """True when ANY local model server answers — LM Studio (the healthy tier on
+    this machine) or a live Ollama. This used to probe Ollama's native /api/tags
+    only, so with Ollama gone it reported the local fallback as unavailable even
+    though LM Studio was serving."""
     try:
-        r = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=OLLAMA_TIMEOUT_S)
-        return r.status_code == 200
+        from assistant import local_llm as _local
+        return _local.backend() != "none"
     except Exception:
         return False
 

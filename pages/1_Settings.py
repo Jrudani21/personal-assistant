@@ -78,14 +78,16 @@ def _daemon_uninstall() -> str:
         return f"Uninstall failed: {e}"
 
 
-# Ollama reachability (best-effort — settings must work with Ollama down too).
+# Local model server reachability (best-effort — settings must work without it too).
 try:
-    import ollama
-    _models = [m["model"] for m in ollama.list().get("models", [])]
-    _ollama_ok = True
+    from assistant import local_llm as _local_llm
+    _models = [m["model"] for m in _local_llm.list_models().get("models", [])]
+    _local_ok = True
+    _local_desc = _local_llm.describe()
 except Exception:
     _models = []
-    _ollama_ok = False
+    _local_ok = False
+    _local_desc = "no local model server"
 
 tab_tools, tab_rules, tab_setup, tab_data = st.tabs(
     ["🧰 Tools", "📜 Rules & Behavior", "⚙️ Setup", "💾 Data"]
@@ -282,8 +284,8 @@ with tab_rules:
 # ---------------------------------------------------------------------------
 with tab_setup:
     st.subheader("Model & Ollama")
-    if _ollama_ok:
-        st.success(f"✅ Ollama reachable — {len(_models)} model(s) available.")
+    if _local_ok:
+        st.success(f"✅ Local server reachable — {_local_desc} — {len(_models)} model(s) available.")
         idx = _models.index(config.get("default_model")) if config.get("default_model") in _models else 0
         model = st.selectbox("Default chat model", _models, index=idx, key="def_model")
         if st.button("Save", key="save_def_model", use_container_width=True):

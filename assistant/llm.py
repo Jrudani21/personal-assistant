@@ -1,11 +1,11 @@
-"""Ollama chat wrapper with a tool-calling loop. Runs 100% local, no API cost."""
+"""Local chat wrapper with a tool-calling loop. Runs fully locally — LM Studio via
+assistant.local_llm, or a live Ollama where one runs — at no API cost."""
 import datetime
 import json
 import re
 
-import ollama
-
 from . import config as _config
+from . import local_llm as _local
 from . import memory, observations, reminders
 from . import tools as _tools
 
@@ -15,11 +15,11 @@ _OVERFLOW_RE = re.compile(r"prompt too long; exceeded (?:max )?context length", 
 def _describe_error(e: Exception) -> str:
     if _OVERFLOW_RE.search(str(e)):
         return "This chat is too long for the model's context window. Start a new chat, or ask a shorter question."
-    return f"Error talking to Ollama: {e}"
+    return f"Error talking to the local model ({_local.backend()}): {e}"
 
 BASE_SYSTEM_PROMPT = (
-    "You are Janak's personal AI assistant, running fully locally via Ollama "
-    "(no API cost). Be direct and concise. Use tools when you need current "
+    "You are Janak's personal AI assistant, running fully locally on this "
+    "machine's own model (no API cost). Be direct and concise. Use tools when you need current "
     "info, math, or file access. Use 'remember' whenever the user shares a "
     "durable fact/preference about themselves. "
     "Never invent tool results — call the tool. "
@@ -68,7 +68,7 @@ def run_chat(model: str, history: list[dict], on_tool_call=None):
 
     for _ in range(max_rounds):
         try:
-            response = ollama.chat(model=model, messages=messages, tools=_tools.get_schemas())
+            response = _local.chat(model=model, messages=messages, tools=_tools.get_schemas())
         except Exception as e:
             return _describe_error(e)
         msg = response["message"]
@@ -102,7 +102,8 @@ def stream_chat(model: str, history: list[dict], on_tool_call=None):
 
     for round_num in range(max_rounds):
         try:
-            stream = ollama.chat(model=model, messages=messages, tools=_tools.get_schemas(), stream=True)
+            stream = _local.chat_stream(model=model, messages=messages,
+                                        tools=_tools.get_schemas())
         except Exception as e:
             yield f"\n\n_{_describe_error(e)}_"
             return

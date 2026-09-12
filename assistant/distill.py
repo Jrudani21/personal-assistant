@@ -16,11 +16,13 @@ Guardrails:
 import json
 import re
 
-import ollama
+from . import local_llm as _local
 
 from . import memory, observations
 
-DEFAULT_MODEL_PRIORITY = ("deepseek-r1:7b", "deepseek-r1:14b", "deepseek-r1:1.5b")
+# Local chat models to prefer, best first. The LM Studio id comes first; the
+# others remain for hosts that still run Ollama.
+DEFAULT_MODEL_PRIORITY = ("qwen/qwen3-8b", "deepseek-r1:14b", "deepseek-r1:7b")
 MAX_NEW_KEYS = 5
 KEY_RE = re.compile(r"^[a-z0-9_]{1,48}$")
 
@@ -41,7 +43,7 @@ DISTILL_SYSTEM_PROMPT = (
 
 def _pick_model() -> str | None:
     try:
-        available = {m["model"] for m in ollama.list().get("models", [])}
+        available = {m["model"] for m in _local.list_models().get("models", [])}
     except Exception:
         available = set()
     for candidate in DEFAULT_MODEL_PRIORITY:
@@ -107,7 +109,7 @@ def distill(model: str | None = None, limit: int = 40) -> str:
 
     activity = _format_observations(entries)
     try:
-        response = ollama.chat(
+        response = _local.chat(
             model=model,
             messages=[
                 {"role": "system", "content": DISTILL_SYSTEM_PROMPT},

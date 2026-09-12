@@ -14,7 +14,7 @@ Design notes:
   precise "last N", so the cache is reused across many turns instead of
   re-summarizing on every single message once past the threshold.
 """
-import ollama
+from . import local_llm as _local
 
 from . import sessions
 
@@ -51,7 +51,7 @@ def _safe_cut_index(messages: list[dict], target: int) -> int:
 def _summarize(model: str, messages: list[dict]) -> str | None:
     convo = "\n".join(f"{m['role']}: {m.get('content', '')}" for m in messages if m.get("content"))
     try:
-        response = ollama.chat(
+        response = _local.chat(
             model=model,
             messages=[
                 {"role": "system", "content": SUMMARY_PROMPT},
