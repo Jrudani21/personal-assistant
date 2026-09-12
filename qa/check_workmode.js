@@ -8,8 +8,11 @@ const { chromium } = require("@playwright/test");
 
   // Login first (get a session cookie), then load the app.
   await page.goto("http://127.0.0.1:8756/");
-  await page.locator("#pwForm input[name=username]").fill("janak");
-  await page.locator("#pwForm input[name=password]").fill("4ExnN1I-vyKTvZsH");
+  const TEST_USER = process.env.KEN_TEST_USER || "janak";
+  const TEST_PW = process.env.KEN_TEST_PASSWORD;
+  if (!TEST_PW) { console.error("Set KEN_TEST_PASSWORD before running this script."); process.exit(1); }
+  await page.locator("#pwForm input[name=username]").fill(TEST_USER);
+  await page.locator("#pwForm input[name=password]").fill(TEST_PW);
   await page.locator("#pwForm button[type=submit]").click();
   await page.waitForSelector("#sidebar", { timeout: 20000 }).catch(() => {});
 
