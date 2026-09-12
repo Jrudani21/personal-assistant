@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 
 import numpy as np
-import ollama
+from . import local_llm as _local
 from pypdf import PdfReader
 from rank_bm25 import BM25Okapi
 
@@ -155,7 +155,7 @@ def ingest(filename: str, raw: bytes) -> str:
     chunks = _chunk(text)
     store = [c for c in _load_store() if c["source"] != filename]  # replace prior version
     for chunk in chunks:
-        emb = ollama.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
+        emb = _local.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
         store.append({"source": filename, "text": chunk, "embedding": emb})
     _save_store(store)
     return f"Ingested {filename}: {len(chunks)} chunks."
@@ -201,7 +201,7 @@ def sync_vault() -> str:
         was_indexed = source in indexed
         store = [c for c in store if c["source"] != source]
         for chunk in _chunk(text):
-            emb = ollama.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
+            emb = _local.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
             store.append({"source": source, "text": chunk, "embedding": emb, "hash": digest})
         if was_indexed:
             updated += 1
@@ -268,7 +268,7 @@ def sync_knowledge() -> str:
         was_indexed = source in indexed
         store = [c for c in store if c["source"] != source]
         for chunk in _chunk(text):
-            emb = ollama.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
+            emb = _local.embeddings(model=_embed_model(), prompt=chunk)["embedding"]
             store.append({"source": source, "text": chunk, "embedding": emb, "hash": digest})
         if was_indexed:
             updated += 1
@@ -316,7 +316,7 @@ def search_documents(query: str, top_k: int | None = None) -> str:
     if not store:
         return "No documents uploaded yet."
 
-    q_emb = np.array(ollama.embeddings(model=_embed_model(), prompt=query)["embedding"])
+    q_emb = np.array(_local.embeddings(model=_embed_model(), prompt=query)["embedding"])
     cosine_scores = []
     for c in store:
         e = np.array(c["embedding"])

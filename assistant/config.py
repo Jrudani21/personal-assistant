@@ -27,7 +27,8 @@ CONFIG_FILE = Path(__file__).resolve().parent.parent / "data" / "config.json"
 DEFAULTS = {
     # ------------------------------------------------------------ setup
     "default_model": "",            # "" = auto-pick first model Ollama reports
-    "ollama_base_url": "http://127.0.0.1:1234",   # LM Studio (Ollama uninstalled 2026-09-01)
+    "ollama_base_url": "http://localhost:11434",  # for hosts that run a real Ollama
+    "lmstudio_base_url": "http://127.0.0.1:1234/v1",  # LM Studio OpenAI API — /v1 required
     "workspace_dir": "",            # "" = <project>/data/workspace
     "vault_dir": "",                # "" = env OBSIDIAN_VAULT, else ~/brain
     "knowledge_dir": "",            # "" = env KNOWLEDGE_DIR, else deepseek-cave/nightly-learn/knowledge

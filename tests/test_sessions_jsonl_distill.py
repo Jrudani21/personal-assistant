@@ -136,7 +136,8 @@ def _fake_ollama(monkeypatch, content):
         calls["model"] = model
         calls["messages"] = messages
         return {"message": {"content": content}}
-    monkeypatch.setattr(distill.ollama, "chat", fake_chat)
+    # Distill now talks to assistant.local_llm (LM Studio), not the ollama package.
+    monkeypatch.setattr(distill._local, "chat", fake_chat)
     return calls
 
 
@@ -203,5 +204,5 @@ def test_distill_ollama_error_is_graceful(tmp_path, monkeypatch):
     observations.append("web_search", {"query": "x"}, "y")
     def boom(model, messages, **kwargs):
         raise RuntimeError("ollama down")
-    monkeypatch.setattr(distill.ollama, "chat", boom)
+    monkeypatch.setattr(distill._local, "chat", boom)
     assert "Distillation failed" in distill.distill()
