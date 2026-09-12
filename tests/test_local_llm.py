@@ -49,19 +49,41 @@ def test_openai_messages_translate_ollama_tool_history():
     assert "name" not in out[3]
 
 
-def test_openai_messages_pair_multiple_tool_calls_positionally():
+def test_openai_messages_match_tool_results_by_name_not_position():
+    """Results can return in any order. A positional match attaches a result to the
+    WRONG call, and the server accepts that silently (measured: reverse-order and
+    cross-round mis-pairs both answered HTTP 200)."""
     history = [
         {"role": "assistant", "content": "",
          "tool_calls": [
              {"function": {"name": "a", "arguments": {"x": 1}}},
              {"function": {"name": "b", "arguments": {"y": 2}}},
          ]},
-        {"role": "tool", "content": "1", "name": "a"},
-        {"role": "tool", "content": "2", "name": "b"},
+        {"role": "tool", "content": "RESULT_B", "name": "b"},   # reversed order
+        {"role": "tool", "content": "RESULT_A", "name": "a"},
     ]
     out = local_llm._to_openai_messages(history)
-    ids = [c["id"] for c in out[0]["tool_calls"]]
-    assert [out[1]["tool_call_id"], out[2]["tool_call_id"]] == ids
+    ids = {c["function"]["name"]: c["id"] for c in out[0]["tool_calls"]}
+    assert out[1]["tool_call_id"] == ids["b"] and out[1]["content"] == "RESULT_B"
+    assert out[2]["tool_call_id"] == ids["a"] and out[2]["content"] == "RESULT_A"
+
+
+def test_openai_messages_clear_unanswered_ids_on_a_new_tool_round():
+    """A second tool-call turn invalidates ids the first round never answered, so a
+    stale id can't be paired with the new round's result."""
+    history = [
+        {"role": "assistant", "content": "",
+         "tool_calls": [{"function": {"name": "a", "arguments": {}}},
+                        {"function": {"name": "b", "arguments": {}}}]},
+        {"role": "tool", "content": "A", "name": "a"},           # b never answered
+        {"role": "assistant", "content": "",
+         "tool_calls": [{"function": {"name": "c", "arguments": {}}}]},
+        {"role": "tool", "content": "C", "name": "c"},
+    ]
+    out = local_llm._to_openai_messages(history)
+    round2_id = out[2]["tool_calls"][0]["id"]
+    assert out[3]["tool_call_id"] == round2_id
+    assert out[3]["content"] == "C"
 
 
 def test_openai_messages_keeps_plain_turns_untouched():

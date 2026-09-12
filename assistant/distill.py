@@ -115,6 +115,12 @@ def distill(model: str | None = None, limit: int = 40) -> str:
                 {"role": "system", "content": DISTILL_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Recent assistant activity:\n\n{activity}"},
             ],
+            # Bounded on purpose: this call parses JSON, so an unbounded generation
+            # (the OpenAI SDK default is 600s, and a thinking model can spend most of
+            # its budget on the trace) truncates the array and _parse_facts returns
+            # [] — a silent "nothing to learn" from a call that actually ran.
+            max_tokens=2000,
+            temperature=0.1,
         )
         reply = response["message"].get("content", "")
     except Exception as e:

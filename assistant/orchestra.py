@@ -120,14 +120,11 @@ def resolve(role: str) -> LLM:
             extra["api_key"] = ok
         return LLM(model=full_model, base_url=base_url, **extra)
 
-    # Unreachable for the shipped chains (their last entry is always truthy);
-    # kept as a floor for a caller that passes a key-less chain.
-    last_model, last_url = chain[-1][1], chain[-1][2]
-    if not last_model.startswith("openai/"):
-        last_model = f"openai/{last_model}"
-    if last_url == OL_URL:
-        return LLM(model=last_model, base_url=last_url, api_key=LOCAL_API_KEY)
-    return LLM(model=last_model, base_url=last_url)
+    # Unreachable for the shipped chains (their last entry is always truthy). A
+    # caller-supplied key-less chain used to get an LLM with NO api_key here, which
+    # litellm then satisfies from ambient environment credentials — or fails at call
+    # time, far away from the cause. Fail at the source instead.
+    raise RuntimeError(f"no usable entry in the chain for role {role!r}")
 
 
 def status() -> str:
