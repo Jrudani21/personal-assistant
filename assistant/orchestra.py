@@ -42,7 +42,7 @@ LOCAL_API_KEY = "lm-studio"
 # reached over the OpenAI-compatible path so it carries no "ollama/"-style prefix.
 # It is a THINKING model: the trace lands in reasoning_content and content can come
 # back empty, so prompts to it want a trailing " /no_think".
-LOCAL_MODEL = "qwen/qwen3-8b"
+LOCAL_MODEL = "qwen/qwen3.5-9b"
 
 # ── Fallback chains per agent role ──────────────────────────────────────
 # Each entry: (condition, model, base_url)

@@ -22,7 +22,12 @@ from . import memory, observations
 
 # Local chat models to prefer, best first. The LM Studio id comes first; the
 # others remain for hosts that still run Ollama.
-DEFAULT_MODEL_PRIORITY = ("qwen/qwen3-8b", "deepseek-r1:14b", "deepseek-r1:7b")
+# Only the live model belongs here. The previous entries ("deepseek-r1:14b",
+# "deepseek-r1:7b") were Ollama-era names, and Ollama no longer runs on this box
+# (port 11434 dead). resolve_model() passes an unmatched id through UNCHANGED, and
+# LM Studio answers a bogus id from whatever model is resident with HTTP 200 — so a
+# dead fallback name produced plausible output from the wrong model, silently.
+DEFAULT_MODEL_PRIORITY = ("qwen/qwen3.5-9b",)
 MAX_NEW_KEYS = 5
 KEY_RE = re.compile(r"^[a-z0-9_]{1,48}$")
 

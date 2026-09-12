@@ -5,10 +5,10 @@ Code CLI step after Claude Pro was cancelled (2026-08-09) and the local
 qwen2.5/qwen3-coder models were removed in the model cleanup (2026-08-10).
 
 Per-agent model routing via assistant.orchestra (MoE-style fallback chains):
-  Fetcher:  DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3-8b
-  Quant:    DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3-8b
-  Analyst:  Gemini free → DeepSeek → OpenRouter free → SambaNova free → local qwen3-8b
-  Reporter: DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3-8b
+  Fetcher:  DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3.5-9b
+  Quant:    DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3.5-9b
+  Analyst:  Gemini free → DeepSeek → OpenRouter free → SambaNova free → local qwen3.5-9b
+  Reporter: DeepSeek → OpenRouter free → SambaNova free → Gemini free → local qwen3.5-9b
 
 Shared by the `deep_analysis` chat tool (assistant/tools.py) and the
 standalone `crewai_demo.py` script at the project root.
@@ -37,7 +37,7 @@ from . import orchestra
 OLLAMA_BASE_URL = "http://127.0.0.1:1234/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-FAST_MODEL = "openai/qwen/qwen3-8b"
+FAST_MODEL = "openai/qwen/qwen3.5-9b"
 
 # ---- cost/cache telemetry -----------------------------------------------
 # DeepSeek API returns usage in each chat completion: prompt_tokens,
@@ -103,7 +103,7 @@ def log_usage(model: str, usage, agent: str = "unknown") -> dict:
 # arithmetic right 3/3, and still inverted the comparison every time once the
 # same numbers sat among unrelated statistics prose. Bigger did not help;
 # prose synthesis with distractors is the weakness, not arithmetic.
-FALLBACK_REASONING_MODEL = "openai/qwen/qwen3-8b"
+FALLBACK_REASONING_MODEL = "openai/qwen/qwen3.5-9b"
 
 
 _FAILURE_MARKERS = (
