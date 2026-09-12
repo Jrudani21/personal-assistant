@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Verify the LIVE server serves the owner-gated ken.html (after login)."""
 import http.cookiejar
+import os
 import json
 import urllib.request
 import urllib.error
@@ -19,7 +20,12 @@ def req(path, method="GET", data=None):
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()
 
-s, _ = req("/api/login", "POST", {"username": "janak", "password": "4ExnN1I-vyKTvZsH"})
+TEST_USER = os.environ.get("KEN_TEST_USER", "janak")
+TEST_PW = os.environ.get("KEN_TEST_PASSWORD")
+if not TEST_PW:
+    raise SystemExit("Set KEN_TEST_PASSWORD before running this gate (no credentials in the repo).")
+
+s, _ = req("/api/login", "POST", {"username": TEST_USER, "password": TEST_PW})
 print("login:", s)
 s, html = req("/")
 print("root with session:", s)
