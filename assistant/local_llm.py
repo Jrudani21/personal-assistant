@@ -309,20 +309,32 @@ def _ollama_opts(opts: dict) -> dict:
     return rest
 
 
-def chat(model: str, messages: list[dict], tools: list[dict] | None = None, **opts) -> dict:
+def chat(model: str, messages: list[dict], tools: list[dict] | None = None,
+         think: bool | None = None, **opts) -> dict:
     """Non-streaming chat. Returns {"message": {"content", "tool_calls"}}.
 
     `**opts` are forwarded to the OpenAI client (e.g. `max_tokens`, `temperature`),
     and translated to Ollama's `options` on the fallback branch.
+
+    `think=False` turns off the model's chain-of-thought. Measured 2026-09-13 on
+    LM Studio 5.x + qwen3.5-9b: `reasoning_effort="none"` in the request body is the
+    ONLY form that works (chat_template_kwargs {enable_thinking|thinking: false} and a
+    "/no_think" prompt suffix are all no-ops, and CoT was ~98% of generated tokens, so
+    with it on a caller can burn its whole budget and get empty content). Ollama has a
+    native `think` flag, so the same argument maps to both backends. Left as None the
+    server default applies, so existing callers are unaffected.
     """
     if backend() == "ollama":
         import ollama
+        extra = {} if think is None else {"think": think}
         return ollama.chat(model=model, messages=messages, tools=tools,
-                           **_ollama_opts(dict(opts)))
+                           **extra, **_ollama_opts(dict(opts)))
 
     client = _client()
     model = resolve_model(model)
     kwargs = {"tools": tools} if tools else {}
+    if think is False:
+        kwargs["extra_body"] = {"reasoning_effort": "none"}
     messages = _to_openai_messages(messages)
     try:
         resp = client.chat.completions.create(model=model, messages=messages,
