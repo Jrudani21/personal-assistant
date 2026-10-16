@@ -31,10 +31,13 @@ MAX_TOOL_ROUNDS = 6
 MAX_MEMORY_FACTS = 30  # cap on facts injected into the system prompt (prompt crowding)
 
 
-def _system_prompt() -> str:
+def _system_prompt(guest: bool = False) -> str:
+    """guest=True: base prompt only, no owner memory or reminders."""
     base = _config.get("system_prompt", BASE_SYSTEM_PROMPT)
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %A")
     prompt = f"{base}\n\nCurrent date/time: {now}. Use this to resolve relative dates (\"tomorrow\", \"in 2 hours\") — do not guess or use your training cutoff."
+    if guest:
+        return prompt
     facts = memory.recent_entries(int(_config.get("max_memory_facts", MAX_MEMORY_FACTS)))
     if facts:
         lines = []
@@ -59,11 +62,11 @@ def _system_prompt() -> str:
     return prompt
 
 
-def run_chat(model: str, history: list[dict], on_tool_call=None):
+def run_chat(model: str, history: list[dict], on_tool_call=None, guest: bool = False):
     """history: list of {'role': 'user'|'assistant', 'content': str}.
     Returns the final assistant reply text. Streams nothing; used for a
     simple request/response Streamlit turn."""
-    messages = [{"role": "system", "content": _system_prompt()}] + history
+    messages = [{"role": "system", "content": _system_prompt(guest)}] + history
     max_rounds = int(_config.get("max_tool_rounds", MAX_TOOL_ROUNDS))
 
     for _ in range(max_rounds):
@@ -93,11 +96,11 @@ def run_chat(model: str, history: list[dict], on_tool_call=None):
     return "Reached max tool-call rounds without a final answer."
 
 
-def stream_chat(model: str, history: list[dict], on_tool_call=None):
+def stream_chat(model: str, history: list[dict], on_tool_call=None, guest: bool = False):
     """Generator version: yields text chunks as they're generated so the
     UI can render them live. Tool-call rounds execute synchronously
     in between (they have no visible content to stream)."""
-    messages = [{"role": "system", "content": _system_prompt()}] + history
+    messages = [{"role": "system", "content": _system_prompt(guest)}] + history
     max_rounds = int(_config.get("max_tool_rounds", MAX_TOOL_ROUNDS))
 
     for round_num in range(max_rounds):

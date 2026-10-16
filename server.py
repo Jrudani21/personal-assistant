@@ -360,7 +360,7 @@ def _principal_for(supplied: str | None) -> dict | None:
         return {"role": "owner", "name": "owner"}
     for g in _active_guests():
         if secrets.compare_digest(supplied, g.get("token", "")):
-            return {"role": "guest", "name": g.get("name", "guest")}
+            return {"role": "guest", "name": g.get("name", "guest"), "id": g.get("id", "")}
     return None
 
 
@@ -774,6 +774,10 @@ GUEST_BLOCKED_PATH_PREFIXES = (
     "/api/config",        # every other setting
     "/api/tools/toggle",  # enabling a blocked tool is the escalation path
     "/api/admin",         # docker / process control
+    # owner-private data
+    "/api/chats", "/api/memory", "/api/vault", "/api/documents", "/api/backups",
+    "/api/knowledge", "/api/users", "/api/tasks", "/api/reminders",
+    "/api/deep-analysis",  # crew agents use document, file and code tools
 )
 
 GUEST_BLOCKED_TOOLS = {
@@ -785,6 +789,12 @@ GUEST_BLOCKED_TOOLS = {
     "admin", "query_sql", "transcribe_file",
     # destructive data ops
     "forget", "clear_tasks", "clear_crew_cache",
+    # owner-private data
+    "recall", "remember", "distill_memory", "recent_activity", "backup_data",
+    "search_documents", "sync_knowledge", "sync_vault", "mcp_list_tools",
+    "list_tasks", "add_task", "complete_task",
+    "list_reminders", "remind_me", "cancel_reminder",
+    "deep_analysis",  # the crew runs document, file and code tools outside the guest tool filter
 }
 
 
@@ -1137,8 +1147,8 @@ async def _iter_queue(q: queue.Queue, thread: threading.Thread) -> AsyncGenerato
 # tool_start/tool_end timing wrapper _chat_worker installs on REGISTRY
 # still fires transparently.
 # ---------------------------------------------------------------------------
-def _deepseek_stream_chat(model: str, history: list[dict]):
-    messages = [{"role": "system", "content": llm._system_prompt()}] + history
+def _deepseek_stream_chat(model: str, history: list[dict], guest: bool = False):
+    messages = [{"role": "system", "content": llm._system_prompt(guest=guest)}] + history
 
     for _round in range(llm.MAX_TOOL_ROUNDS):
         try:
@@ -1200,7 +1210,7 @@ def _deepseek_stream_chat(model: str, history: list[dict]):
 # Free cloud fallbacks (Bluesminds / Groq / OpenRouter) — OpenAI-compatible
 # ---------------------------------------------------------------------------
 def _openai_compat_stream_chat(client, model: str, history: list[dict],
-                               label: str, use_tools: bool = False):
+                               label: str, use_tools: bool = False, guest: bool = False):
     """Streaming tool-loop for any OpenAI-compatible provider (free tiers).
 
     Mirrors _deepseek_stream_chat but tolerates no tool support (free llama
@@ -1208,7 +1218,7 @@ def _openai_compat_stream_chat(client, model: str, history: list[dict],
     Errors yield error-text, which the runner's _looks_like_llm_error check
     converts into a fallthrough to the next candidate.
     """
-    messages = [{"role": "system", "content": llm._system_prompt()}] + history
+    messages = [{"role": "system", "content": llm._system_prompt(guest=guest)}] + history
     if not client:
         yield f"\n\n_Error: no client for {label}_"
         return
@@ -1340,7 +1350,7 @@ _CHAT_LOCK = threading.Lock()
 
 
 def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
-                 q: queue.Queue) -> None:
+                 q: queue.Queue, guest: bool = False) -> None:
     """Run the real assistant loop; push (event, payload) tuples onto q."""
     turn_id = uuid.uuid4().hex[:12]
     saved_registry = dict(tools.REGISTRY)
@@ -1387,26 +1397,26 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
         # Once any real content has streamed, the turn stays committed to that
         # provider — a mid-stream error surfaces to the client as-is.
         candidates: list[tuple[str, object]] = []
-        if HERMES_A2A_ENABLED:
+        if HERMES_A2A_ENABLED and not guest:  # A2A peer holds owner context
             candidates.append(("hermes-a2a", _hermes_stream(history, chat.get("id", ""))))
-        candidates.append((model, _deepseek_stream_chat(model, history)))
+        candidates.append((model, _deepseek_stream_chat(model, history, guest)))
         # Free cloud tiers (all probe-verified 2026-08-13): Bluesminds ->
         # Groq -> OpenRouter, then local Ollama last. Each yields error-text on
         # failure, which the runner converts into fallthrough to the next.
         if _bluesminds_client:
             candidates.append((BLUESMINDS_MODEL,
                                _openai_compat_stream_chat(_bluesminds_client, BLUESMINDS_MODEL,
-                                                          history, "Bluesminds")))
+                                                          history, "Bluesminds", guest=guest)))
         if _groq_client:
             candidates.append((GROQ_MODEL,
                                _openai_compat_stream_chat(_groq_client, GROQ_MODEL,
-                                                          history, "Groq")))
+                                                          history, "Groq", guest=guest)))
         if _openrouter_client:
             candidates.append((OPENROUTER_MODEL,
                                _openai_compat_stream_chat(_openrouter_client, OPENROUTER_MODEL,
-                                                          history, "OpenRouter")))
+                                                          history, "OpenRouter", guest=guest)))
         if FALLBACK_MODEL:
-            candidates.append((FALLBACK_MODEL, llm.stream_chat(FALLBACK_MODEL, history, on_tool_call=None)))
+            candidates.append((FALLBACK_MODEL, llm.stream_chat(FALLBACK_MODEL, history, on_tool_call=None, guest=guest)))
         for attempt, (candidate, gen) in enumerate(candidates):
             buf: list[str] = []
             started = False
@@ -1452,7 +1462,13 @@ def _chat_worker(model: str, history: list[dict], enabled: set[str], chat: dict,
         tools.SCHEMAS = saved_schemas
 
 
-async def _sse_chat(req: ChatRequest, role: str = "owner") -> AsyncGenerator[dict, None]:
+# chat_id -> non-owner principal that created it. ponytail: in-memory, so a
+# non-owner's chat id stops resuming after a restart (they get a new chat).
+_CHAT_OWNERS: dict[str, str] = {}
+
+
+async def _sse_chat(req: ChatRequest, role: str = "owner",
+                    who: str = "owner") -> AsyncGenerator[dict, None]:
     if not req.messages:
         yield _sse("error", {"message": "messages must not be empty."})
         return
@@ -1464,18 +1480,22 @@ async def _sse_chat(req: ChatRequest, role: str = "owner") -> AsyncGenerator[dic
         yield _sse("error", {"message": "Neither DeepSeek nor local Ollama is reachable."})
         return
 
+    guest = role != "owner"
     chat = None
-    if req.chat_id and _valid_chat_id(req.chat_id):
+    if req.chat_id and _valid_chat_id(req.chat_id) and (
+            not guest or _CHAT_OWNERS.get(req.chat_id) == who):
         try:
             chat = sessions.load(req.chat_id)
         except FileNotFoundError:
             chat = None
     if chat is None:
         chat = sessions.new_chat()
+        if guest:
+            _CHAT_OWNERS[chat["id"]] = who
 
     history = [m.model_dump() for m in req.messages]
     enabled = set(req.enabled_tools)
-    if role != "owner":
+    if guest:
         # Server-side, not a UI nicety: the client sends enabled_tools, so a
         # guest could otherwise just ask for run_python in the request body.
         enabled -= GUEST_BLOCKED_TOOLS
@@ -1483,7 +1503,7 @@ async def _sse_chat(req: ChatRequest, role: str = "owner") -> AsyncGenerator[dic
 
     def run() -> None:
         with _CHAT_LOCK:
-            _chat_worker(MODEL, history, enabled, chat, q)
+            _chat_worker(MODEL, history, enabled, chat, q, guest)
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
@@ -1506,7 +1526,8 @@ async def chat(request: Request, req: ChatRequest) -> EventSourceResponse:
                     f"Daily request limit reached ({_DAILY_USER_CAP} today). Try again tomorrow."
                 ),
             )
-    return EventSourceResponse(_sse_chat(req, role), ping=15)
+    who = f"{role}:{principal.get('id') or principal.get('name', '?')}"
+    return EventSourceResponse(_sse_chat(req, role, who), ping=15)
 
 
 # ---------------------------------------------------------------------------

@@ -138,8 +138,7 @@ def test_config_surface_is_blocked_for_guests(path):
 
 
 @pytest.mark.parametrize("path", [
-    "/api/chat", "/api/memory", "/api/vault/notes", "/api/tasks",
-    "/api/chats", "/api/documents", "/api/tools",
+    "/api/chat", "/api/tools", "/api/whoami", "/api/voice/speak",
 ])
 def test_normal_surface_is_open_to_guests(path):
     assert server._guest_blocked(path) is False
@@ -167,7 +166,7 @@ def test_read_file_is_blocked_because_it_would_expose_the_token_store():
 
 @pytest.mark.parametrize("tool", [
     "calculator", "web_search", "weather", "wikipedia_summary",
-    "search_documents", "remember", "add_task", "deep_analysis",
+    "fetch_webpage", "get_datetime",
 ])
 def test_safe_tools_stay_available_to_guests(tool):
     assert tool not in server.GUEST_BLOCKED_TOOLS
