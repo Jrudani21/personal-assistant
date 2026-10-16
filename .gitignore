@@ -1,5 +1,4 @@
 data/*
-!data/memory.json
 backups/
 __pycache__/
 *.pyc
@@ -15,3 +14,5 @@ _retool_ken_theme.py
 # secrets — never commit
 .env
 assets/whatsapp_qr.png
+.pytest_cache/
+SECURITY.local.md
