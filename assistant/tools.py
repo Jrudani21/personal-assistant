@@ -1,14 +1,20 @@
 """Tool implementations + schemas for the assistant's tool-calling loop."""
 import ast
+import ipaddress
 import json
 import operator
 import datetime
+import socket
 import sqlite3
+import threading
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
+import urllib3.util.connection
 from ddgs import DDGS
+from urllib3.util import parse_url
 
 from . import backup
 from . import config as _config
@@ -232,11 +238,85 @@ class _TextExtractor(HTMLParser):
             self.parts.append(data)
 
 
+_MAX_REDIRECTS = 5
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _is_public(addr: str) -> bool:
+    ip = ipaddress.ip_address(addr.split("%", 1)[0])
+    if ip.version == 6:
+        if ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        elif ip in _NAT64:
+            ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return ip.is_global and not ip.is_multicast
+
+
+def _resolve_public(host: str, port: int) -> list[str]:
+    """All addresses for host; ValueError unless every one is public."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        raise ValueError(f"refusing unresolvable host {host}") from None
+    addrs = [i[4][0] for i in infos]
+    if not addrs or not all(_is_public(a) for a in addrs):
+        raise ValueError(f"refusing non-public address for {host}")
+    return addrs
+
+
+def _check_url(url: str) -> None:
+    if any(c.isspace() or ord(c) < 32 or c == "\\" for c in url):
+        raise ValueError("refusing malformed URL")
+    try:
+        u = parse_url(url)
+    except Exception:
+        raise ValueError("refusing malformed URL") from None
+    if u.scheme not in ("http", "https") or not u.host:
+        raise ValueError("refusing non-http(s) URL")
+    if u.auth is not None:
+        raise ValueError("refusing URL with credentials")
+    _resolve_public(u.host.strip("[]"), u.port or (443 if u.scheme == "https" else 80))
+
+
+# Connect-time check: while fetch_webpage runs on this thread, urllib3 only
+# connects to addresses that pass _resolve_public, so the address validated is
+# the address used.
+_guard = threading.local()
+_ORIG_CREATE_CONNECTION = urllib3.util.connection.create_connection
+
+
+def _guarded_create_connection(address, *args, **kwargs):
+    if not getattr(_guard, "active", False):
+        return _ORIG_CREATE_CONNECTION(address, *args, **kwargs)
+    host, port = address
+    err = None
+    for ip in _resolve_public(host.strip("[]"), port):
+        try:
+            return _ORIG_CREATE_CONNECTION((ip, port), *args, **kwargs)
+        except OSError as e:
+            err = e
+    raise err
+
+
+urllib3.util.connection.create_connection = _guarded_create_connection
+
+
 def fetch_webpage(url: str) -> str:
     """Fetch a URL and return its readable text (ragflow/awesome-llm-apps
-    research: deep doc understanding — read web content directly)."""
+    research: deep doc understanding — read web content directly).
+    Public http(s) hosts only; redirects are followed and re-checked."""
     try:
-        r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0 (PersonalAssistant local)"})
+        _guard.active = True
+        for _ in range(_MAX_REDIRECTS + 1):
+            _check_url(url)
+            r = requests.get(url, timeout=20, allow_redirects=False,
+                             headers={"User-Agent": "Mozilla/5.0 (PersonalAssistant local)"})
+            location = r.headers.get("Location") if r.status_code in (301, 302, 303, 307, 308) else None
+            if not location:
+                break
+            url = urljoin(url, location)
+        else:
+            return f"Fetch error: more than {_MAX_REDIRECTS} redirects"
         if r.status_code != 200:
             return f"Fetch error: HTTP {r.status_code}"
         parser = _TextExtractor()
@@ -249,6 +329,8 @@ def fetch_webpage(url: str) -> str:
         return text.strip() or "(no readable text found on that page)"
     except Exception as e:
         return f"Fetch error: {e}"
+    finally:
+        _guard.active = False
 
 
 def transcribe_file(path: str) -> str:
