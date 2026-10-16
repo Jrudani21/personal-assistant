@@ -59,7 +59,7 @@ Needs Ollama running (`ollama serve`) with at least one model pulled
 - Structured memory (facts + concepts per entry) and observation capture: every tool call is logged to `data/observations.jsonl`, retrievable via the `recent_activity` tool
 - Memory distillation: `distill_memory` tool + sidebar button learn durable facts from the assistant's own activity (new keys only, never overwrites)
 - Append-only JSONL chats: messages are O(1) appended to `<id>.jsonl` instead of rewriting the whole chat file per turn; a tiny `<id>.meta.json` sidecar holds title/compaction cache. Legacy `.json` chats migrate on first save
-- Git-backed memory: `data/memory.json` is versioned in the repo (audit trail / revert)
+- Local memory: `data/memory.json` is gitignored (personal profile facts); back it up with the rest of `data/`
 - Local snapshot backups: the whole `data/` folder is snapshotted into `backups/` (timestamped, keeps newest 10, auto once per day on app start, or on demand via sidebar button / `backup_data` tool) — a local history independent of GitHub. Set the `BACKUP_DIR` env var to a cloud-synced folder to mirror snapshots there instead.
 
 ## Reminder daemon (optional)
