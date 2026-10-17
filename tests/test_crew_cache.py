@@ -7,7 +7,8 @@ from assistant import crew_cache
 
 
 @pytest.fixture(autouse=True)
-def _clean_cache_file():
+def _clean_cache_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(crew_cache, "CACHE_FILE", tmp_path / "crew_cache.json")
     crew_cache.clear()
     yield
     crew_cache.clear()

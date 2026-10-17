@@ -8,10 +8,11 @@ from tests.conftest import FakeTaskOutput
 
 
 @pytest.fixture(autouse=True)
-def _no_crew_cache(monkeypatch):
+def _no_crew_cache(monkeypatch, tmp_path):
     """Keep the on-disk deep-analysis cache out of unit tests: always miss on
     read, and drop whatever a test wrote. Cache behavior has its own test
     module (test_crew_cache.py)."""
+    monkeypatch.setattr(crew.crew_cache, "CACHE_FILE", tmp_path / "crew_cache.json")
     monkeypatch.setattr(crew.crew_cache, "get_cached", lambda *a, **k: None)
     yield
     crew.crew_cache.clear()
