@@ -3493,7 +3493,7 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
     sb("sbLogout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.href = location.pathname; };
     // Owner-private panels (chats, brain, memory, tasks, docs, deep analysis)
     // are hidden for non-owners; the API 403s them too.
-    const OWNER_ONLY_UI = ["sbChats", "sbBrain", "sbMemory", "sbTasks", "sbDocs", "sbDeep",
+    const OWNER_ONLY_UI = ["sbChats", "sbBrain", "sbMemory", "sbTasks", "sbDocs", "sbDeep", "qaDeep",
       "chatsBtn", "brainBtn", "memBtn", "tasksBtn", "docsBtn", "daBtn", "sbChatList",
       '[data-open="chatsScrim"]', '[data-open="brainScrim"]', '[data-open="memScrim"]',
       '[data-open="tasksScrim"]', '[data-open="docsScrim"]', '[data-open="daScrim"]'];

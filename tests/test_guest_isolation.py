@@ -360,7 +360,7 @@ def test_guest_default_prompt_has_no_owner_name(env):
 
 # ---------- web UI ----------
 
-OWNER_ONLY_UI_IDS = ["sbChats", "sbBrain", "sbMemory", "sbTasks", "sbDocs", "sbDeep",
+OWNER_ONLY_UI_IDS = ["sbChats", "sbBrain", "sbMemory", "sbTasks", "sbDocs", "sbDeep", "qaDeep",
                      "chatsBtn", "brainBtn", "memBtn", "tasksBtn", "docsBtn", "daBtn"]
 
 
