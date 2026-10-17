@@ -16,3 +16,4 @@ _retool_ken_theme.py
 assets/whatsapp_qr.png
 .pytest_cache/
 SECURITY.local.md
+*-audit.md
