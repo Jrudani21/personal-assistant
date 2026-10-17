@@ -551,13 +551,14 @@ def last_used_local_fallback() -> bool:
     return bool(getattr(_TLS, "used_local_fallback", False))
 
 
-def run_deep_analysis(raw_input: str) -> str:
+def run_deep_analysis(raw_input: str, use_cache: bool = True) -> str:
     """Runs the fetch -> verify -> analyze -> report pipeline. Each agent
     gets the best available model via the MoE orchestra. Results are
-    cached (7-day TTL) to avoid re-running identical topics."""
+    cached (7-day TTL) to avoid re-running identical topics.
+    use_cache=False neither reads nor writes the cache."""
     # Reset first: a cached hit or a failure must not report a PREVIOUS run's routing.
     _TLS.used_local_fallback = False
-    cached = crew_cache.get_cached(raw_input)
+    cached = crew_cache.get_cached(raw_input) if use_cache else None
     if cached is not None:
         return cached + (
             "\n\n---\n_(Cached result.)_"
@@ -573,5 +574,6 @@ def run_deep_analysis(raw_input: str) -> str:
     # store must reflect this run no matter what else is happening on other threads.
     used_local = _used_local_fallback(crew_obj)
     _TLS.used_local_fallback = used_local
-    crew_cache.store(raw_input, result, used_fallback=used_local)
+    if use_cache:
+        crew_cache.store(raw_input, result, used_fallback=used_local)
     return result

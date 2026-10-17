@@ -27,13 +27,18 @@ BASE_SYSTEM_PROMPT = (
     "sources inline like [1], [2] matching the tool output's numbering."
 )
 
+GUEST_SYSTEM_PROMPT = (
+    "You are KEN, a helpful AI assistant. Be direct and concise. Use tools when "
+    "you need current info or math. Never invent tool results — call the tool."
+)
+
 MAX_TOOL_ROUNDS = 6
 MAX_MEMORY_FACTS = 30  # cap on facts injected into the system prompt (prompt crowding)
 
 
 def _system_prompt(guest: bool = False) -> str:
-    """guest=True: base prompt only, no owner memory or reminders."""
-    base = _config.get("system_prompt", BASE_SYSTEM_PROMPT)
+    """guest=True: neutral base prompt only, no owner config, memory or reminders."""
+    base = GUEST_SYSTEM_PROMPT if guest else _config.get("system_prompt", BASE_SYSTEM_PROMPT)
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M %A")
     prompt = f"{base}\n\nCurrent date/time: {now}. Use this to resolve relative dates (\"tomorrow\", \"in 2 hours\") — do not guess or use your training cutoff."
     if guest:
@@ -88,7 +93,8 @@ def run_chat(model: str, history: list[dict], on_tool_call=None, guest: bool = F
                 args = json.loads(args or "{}")
             fn = _tools.get_registry().get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
-            observations.append(name, args, result)
+            if not guest:  # activity log feeds owner memory
+                observations.append(name, args, result)
             if on_tool_call:
                 on_tool_call(name, args, result)
             messages.append({"role": "tool", "content": str(result), "name": name})
@@ -138,7 +144,8 @@ def stream_chat(model: str, history: list[dict], on_tool_call=None, guest: bool 
                 args = json.loads(args or "{}")
             fn = _tools.get_registry().get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
-            observations.append(name, args, result)
+            if not guest:  # activity log feeds owner memory
+                observations.append(name, args, result)
             if on_tool_call:
                 on_tool_call(name, args, result)
             messages.append({"role": "tool", "content": str(result), "name": name})

@@ -3491,12 +3491,20 @@ document.querySelectorAll(".suggest-chip").forEach(chip => {
     sb("sbSettings").onclick = () => { loadAccess(); openPanel("settingsScrim"); };
     sb("sbStatus").onclick = () => { loadStatus(); openPanel("statusScrim"); };
     sb("sbLogout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.href = location.pathname; };
+    // Owner-private panels (chats, brain, memory, tasks, docs, deep analysis)
+    // are hidden for non-owners; the API 403s them too.
+    const OWNER_ONLY_UI = ["sbChats", "sbBrain", "sbMemory", "sbTasks", "sbDocs", "sbDeep",
+      "chatsBtn", "brainBtn", "memBtn", "tasksBtn", "docsBtn", "daBtn", "sbChatList",
+      '[data-open="chatsScrim"]', '[data-open="brainScrim"]', '[data-open="memScrim"]',
+      '[data-open="tasksScrim"]', '[data-open="docsScrim"]', '[data-open="daScrim"]'];
     // Owner-only sidebar items (Fleet, Users, Settings, Status — they expose
     // internal health / management / the funnel publish switch). Hidden for
     // every non-owner account; the API also 403s them.
     api("/api/whoami").then(d => {
       if (d.role === "owner") {
         for (const id of ["sbFleet", "sbUsers", "sbSettings", "sbStatus"]) sb(id).style.display = "";
+      } else {
+        for (const sel of OWNER_ONLY_UI) document.querySelectorAll(sel[0] === "[" ? sel : "#" + sel).forEach(el => el.style.display = "none");
       }
     }).catch(() => {});
     // Render the chat list into the sidebar (same data as the Chats panel).

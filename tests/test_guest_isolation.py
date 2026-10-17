@@ -106,7 +106,7 @@ PRIVATE_TOOLS = [
     "recall", "remember", "distill_memory", "search_documents", "sync_knowledge",
     "sync_vault", "list_tasks", "add_task", "complete_task", "cancel_reminder",
     "list_reminders", "remind_me", "recent_activity", "backup_data", "mcp_list_tools",
-    "deep_analysis",
+    "deep_analysis", "list_skills",
 ]
 
 
@@ -250,3 +250,132 @@ def test_guest_chat_strips_private_tools(env, providers):
     _chat(None, "guest", "guest:abc", tools_=["recall", "calculator", "list_reminders"])
     offered = {s["function"]["name"] for s in providers.client.requests[-1].get("tools") or []}
     assert offered == {"calculator"}
+
+
+# ---------- deep-analysis cache ----------
+
+def test_crew_cache_skipped_when_disabled(monkeypatch):
+    crew = pytest.importorskip("assistant.crew")
+    calls = []
+    monkeypatch.setattr(crew.crew_cache, "get_cached", lambda *a, **k: calls.append("get") or "OWNER REPORT")
+    monkeypatch.setattr(crew.crew_cache, "store", lambda *a, **k: calls.append("store"))
+    monkeypatch.setattr(crew, "build_crew", lambda *a, **k: SimpleNamespace(kickoff=lambda: "fresh"))
+    monkeypatch.setattr(crew, "_used_local_fallback", lambda c: False)
+    assert crew.run_deep_analysis("q", use_cache=False) == "fresh"
+    assert calls == []
+    # Default (owner) path still uses the cache.
+    assert crew.run_deep_analysis("q").startswith("OWNER REPORT")
+
+
+def test_non_owner_deep_analysis_bypasses_cache(env, monkeypatch):
+    crew = pytest.importorskip("assistant.crew")
+    import json
+    monkeypatch.setattr(server.crew_cache, "get_cached", lambda *a, **k: "OWNER REPORT")
+    seen = {}
+    monkeypatch.setattr(crew, "run_deep_analysis",
+                        lambda q, **kw: seen.update(kw) or "fresh")
+    req = server.DeepAnalysisRequest(question="same question")
+    events = asyncio.run(_collect(server._sse_deep_analysis(req, owner=False)))
+    done = [json.loads(e["data"]) for e in events if e["event"] == "done"]
+    assert done[0]["findings"] == "fresh" and done[0]["cached"] is False
+    assert seen == {"use_cache": False}
+
+
+def test_guest_deep_analysis_route_never_touches_cache(env, monkeypatch):
+    touched = []
+    monkeypatch.setattr(server.crew_cache, "get_cached", lambda *a, **k: touched.append(1))
+    r = _client().post("/api/deep-analysis", json={"question": "x"}, headers=_hdr(env.guest))
+    assert r.status_code == 403 and touched == []
+
+
+# ---------- activity log ----------
+
+class ToolCallClient(FakeClient):
+    """First request asks for one calculator call, later requests answer."""
+
+    def _create(self, **kw):
+        self.requests.append(kw)
+        if len(self.requests) == 1:
+            fn = SimpleNamespace(name="calculator", arguments='{"expression": "1+1"}')
+            tc = SimpleNamespace(index=0, id="c1", function=fn)
+            delta = SimpleNamespace(content=None, tool_calls=[tc])
+        else:
+            delta = SimpleNamespace(content="2", tool_calls=None)
+        return iter([SimpleNamespace(choices=[SimpleNamespace(delta=delta)])])
+
+
+@pytest.mark.parametrize("guest,expected", [(True, 0), (False, 1)])
+def test_activity_log_only_records_owner_tool_calls(env, providers, monkeypatch, guest, expected):
+    logged = []
+    monkeypatch.setattr(server.observations, "append", lambda *a, **k: logged.append(a))
+    monkeypatch.setattr(server, "_deepseek_client", ToolCallClient())
+    q = queue.Queue()
+    server._chat_worker(server.MODEL, [{"role": "user", "content": "1+1?"}],
+                        {"calculator"}, sessions.new_chat(), q, guest=guest)
+    assert len(logged) == expected
+
+    logged.clear()
+    list(server._openai_compat_stream_chat(ToolCallClient(), "m",
+                                           [{"role": "user", "content": "1+1?"}],
+                                           "Groq", use_tools=True, guest=guest))
+    assert len(logged) == expected
+
+
+@pytest.mark.parametrize("guest,expected", [(True, 0), (False, 1)])
+def test_local_loop_activity_log_only_records_owner(env, monkeypatch, guest, expected):
+    logged = []
+    monkeypatch.setattr(llm.observations, "append", lambda *a, **k: logged.append(a))
+    call = {"function": {"name": "calculator", "arguments": {"expression": "1+1"}}}
+    replies = iter([{"message": {"content": "", "tool_calls": [call]}},
+                    {"message": {"content": "2"}}])
+    monkeypatch.setattr(llm._local, "chat", lambda **kw: next(replies))
+    llm.run_chat("m", [{"role": "user", "content": "hi"}], guest=guest)
+    assert len(logged) == expected
+
+    logged.clear()
+    streams = iter([iter([{"message": {"content": "", "tool_calls": [call]}}]),
+                    iter([{"message": {"content": "2"}}])])
+    monkeypatch.setattr(llm._local, "chat_stream", lambda **kw: next(streams))
+    list(llm.stream_chat("m", [{"role": "user", "content": "hi"}], guest=guest))
+    assert len(logged) == expected
+
+
+# ---------- base prompt ----------
+
+def test_guest_prompt_ignores_custom_and_owner_name(env, monkeypatch):
+    real_get = llm._config.get
+    monkeypatch.setattr(llm._config, "get",
+                        lambda k, d=None: "CUSTOM OWNER PROMPT" if k == "system_prompt" else real_get(k, d))
+    guest = llm._system_prompt(guest=True)
+    assert "CUSTOM OWNER PROMPT" not in guest
+    assert "Janak" not in guest
+    assert "Current date/time:" in guest
+    assert llm._system_prompt().startswith("CUSTOM OWNER PROMPT")
+
+
+def test_guest_default_prompt_has_no_owner_name(env):
+    assert "Janak" not in llm._system_prompt(guest=True)
+    assert llm._system_prompt().startswith(llm.BASE_SYSTEM_PROMPT)
+
+
+# ---------- web UI ----------
+
+OWNER_ONLY_UI_IDS = ["sbChats", "sbBrain", "sbMemory", "sbTasks", "sbDocs", "sbDeep",
+                     "chatsBtn", "brainBtn", "memBtn", "tasksBtn", "docsBtn", "daBtn"]
+
+
+@pytest.mark.parametrize("who", ["owner", "guest"])
+def test_ui_hides_owner_panels_for_non_owners(env, who):
+    import re
+    tok = OWNER if who == "owner" else env.guest
+    r = _client().get("/", headers=_hdr(tok))
+    assert r.status_code == 200
+    html = r.text
+    m = re.search(r"const OWNER_ONLY_UI = \[(.*?)\];", html, re.S)
+    assert m, "OWNER_ONLY_UI list missing"
+    listed = set(re.findall(r'"([^"]+)"', m.group(1)))
+    assert set(OWNER_ONLY_UI_IDS) <= listed
+    for scrim in ("chatsScrim", "brainScrim", "memScrim", "tasksScrim", "docsScrim", "daScrim"):
+        assert f'[data-open="{scrim}"]' in m.group(1)
+    # Hidden only on the non-owner branch of the whoami check.
+    assert re.search(r'if \(d\.role === "owner"\) \{[^}]*\} else \{[^}]*OWNER_ONLY_UI', html)

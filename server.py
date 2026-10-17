@@ -795,6 +795,7 @@ GUEST_BLOCKED_TOOLS = {
     "list_tasks", "add_task", "complete_task",
     "list_reminders", "remind_me", "cancel_reminder",
     "deep_analysis",  # the crew runs document, file and code tools outside the guest tool filter
+    "list_skills",
 }
 
 
@@ -1200,7 +1201,8 @@ def _deepseek_stream_chat(model: str, history: list[dict], guest: bool = False):
                 args = {}
             fn = tools.REGISTRY.get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
-            observations.append(name, args, result)
+            if not guest:  # activity log feeds owner memory
+                observations.append(name, args, result)
             messages.append({"role": "tool", "tool_call_id": c["id"], "content": str(result)})
 
     yield "\n\n_Reached max tool-call rounds without a final answer._"
@@ -1275,7 +1277,8 @@ def _openai_compat_stream_chat(client, model: str, history: list[dict],
                 args = {}
             fn = tools.REGISTRY.get(name)
             result = fn(**args) if fn else f"Unknown tool: {name}"
-            observations.append(name, args, result)
+            if not guest:  # activity log feeds owner memory
+                observations.append(name, args, result)
             messages.append({"role": "tool", "tool_call_id": c["id"], "content": str(result)})
 
     yield "\n\n_Reached max tool-call rounds without a final answer._"
@@ -1542,8 +1545,10 @@ async def chat(request: Request, req: ChatRequest) -> EventSourceResponse:
 # running at start, `report` done at end) rather than fabricating per-stage
 # timings. Cache is checked first so cached runs return instantly.
 # ---------------------------------------------------------------------------
-async def _sse_deep_analysis(req: DeepAnalysisRequest) -> AsyncGenerator[dict, None]:
-    cached = crew_cache.get_cached(req.question)
+async def _sse_deep_analysis(req: DeepAnalysisRequest,
+                             owner: bool = True) -> AsyncGenerator[dict, None]:
+    # The cache is owner-only: non-owners neither read nor write it.
+    cached = crew_cache.get_cached(req.question) if owner else None
     if cached is not None:
         yield _sse("done", {
             "findings": cached,
@@ -1563,7 +1568,8 @@ async def _sse_deep_analysis(req: DeepAnalysisRequest) -> AsyncGenerator[dict, N
                              "note": "starting deep-analysis pipeline"}))
             from assistant import crew  # lazy: crewai is a heavy optional dep
             t0 = time.perf_counter()
-            result = crew.run_deep_analysis(req.question)
+            result = (crew.run_deep_analysis(req.question) if owner
+                      else crew.run_deep_analysis(req.question, use_cache=False))
             ms = int((time.perf_counter() - t0) * 1000)
             # The real signal recorded by the crew (which chain entry each agent
             # resolved to). The previous check sniffed the result text for a phrase
@@ -1605,7 +1611,7 @@ async def deep_analysis(req: DeepAnalysisRequest, request: Request) -> EventSour
                     f"Daily request limit reached ({_DAILY_USER_CAP} today). Try again tomorrow."
                 ),
             )
-    return EventSourceResponse(_sse_deep_analysis(req), ping=15)
+    return EventSourceResponse(_sse_deep_analysis(req, role == "owner"), ping=15)
 
 
 # ---------------------------------------------------------------------------
