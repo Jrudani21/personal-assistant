@@ -9,6 +9,7 @@ closest reproduction available without the device.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ from playwright.sync_api import sync_playwright
 
 import server
 
-DEFAULT_URL = f"https://janak.tailda4f11.ts.net/ken/?token={server.ACCESS_TOKEN}"
+DEFAULT_URL = f"{os.environ.get('KEN_URL', 'http://127.0.0.1:8756').rstrip('/')}/ken/?token={server.ACCESS_TOKEN}"
 SHOT_DIR = Path(__file__).resolve().parent / "data" / "iphone_shots"
 
 

@@ -8,6 +8,7 @@ shipped fix).
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -20,7 +21,7 @@ import server
 
 BASE = Path(__file__).resolve().parent
 KEN_HTML = BASE / "ken.html"
-URL = f"https://janak.tailda4f11.ts.net/ken/?token={server.ACCESS_TOKEN}"
+URL = f"{os.environ.get('KEN_URL', 'http://127.0.0.1:8756').rstrip('/')}/ken/?token={server.ACCESS_TOKEN}"
 
 
 def main() -> int:
